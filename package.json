@@ -2,13 +2,21 @@
   "name": "itsalive",
   "version": "0.0.1",
   "type": "module",
+  "bin": {
+    "itsalive": "./src/cli/index.ts"
+  },
   "scripts": {
-    "dev:host": "tsx src/host/index.ts",
-    "dev:host:manual": "AUTO_ITERATE=false tsx src/host/index.ts",
+    "spawn": "tsx src/cli/index.ts spawn",
+    "start": "tsx src/cli/index.ts start",
+    "stop": "tsx src/cli/index.ts stop",
+    "list": "tsx src/cli/index.ts list",
+    "destroy": "tsx src/cli/index.ts destroy",
+    "fork": "tsx src/cli/index.ts fork",
     "test": "tsx tests/checks.ts",
     "test:rollback": "tsx tests/rollback.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "tsx": "^4.19.2"
   },
   "devDependencies": {

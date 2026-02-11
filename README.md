@@ -28,6 +28,15 @@ This MVP demonstrates a "creature" (autonomous agent) that can:
    - Commits and requests restart on success
    - Exits on failure, triggering rollback
 
+## Setup
+
+Set your Anthropic API key:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Note**: For production use, consider migrating API credentials to Janee for encrypted storage and server-side injection. The spec recommends "direct Anthropic SDK or via Janee" - currently using direct SDK for simplicity.
+
 ## Running the system
 
 **Auto-iteration mode (SPEC-compliant):**
@@ -39,7 +48,7 @@ pnpm dev:host
 open http://localhost:7777
 ```
 
-The creature will automatically iterate on each boot, continuously evolving.
+The creature will automatically start its cognition loop, continuously thinking and acting.
 
 **Manual mode (for testing/observation):**
 ```bash
@@ -56,40 +65,26 @@ The UI shows:
 - Process PID and health status
 - Real-time event stream of all actions
 
-## Iteration behavior
+## Cognition loop
 
-Each iteration:
-1. Decides on a small patch (usually appends to `self/diary.md`)
-2. Applies the patch
-3. Runs tests
-4. If tests pass: commits and requests restart
-5. If tests fail: exits, triggering automatic rollback
+Each thought cycle:
+1. Loads PURPOSE.md and recent memory
+2. Calls Claude to think and decide actions
+3. Executes bash commands as tools
+4. Records actions to memory.jsonl
+5. Sleeps for LLM-determined duration (2-300s)
+6. Repeats
 
-## Testing rollback
+The creature can modify itself, explore the codebase, or interact with external services via bash.
 
-The system intentionally breaks on every 3rd iteration to demonstrate rollback.
+## Memory system
 
-**Manual test:**
-```bash
-# Start in manual mode
-pnpm dev:host:manual
+The creature maintains continuity through:
+- `.self/memory.jsonl` - append-only log of thoughts, actions, and observations
+- `.self/snapshots/` - periodic compressed summaries (every 50 thoughts)
+- Heartbeat records in memory.jsonl (every 5s)
 
-# First iteration: appends to diary (succeeds)
-curl -X POST http://localhost:7778/tick
-sleep 15
-
-# Second iteration: appends to diary (succeeds)
-curl -X POST http://localhost:7778/tick
-sleep 15
-
-# Third iteration: breaks version.ts (fails, triggers rollback)
-curl -X POST http://localhost:7778/tick
-```
-
-**Automated test:**
-```bash
-pnpm test:rollback
-```
+All memory persists across restarts and rollbacks.
 
 Watch the UI to see:
 - `creature.intent` - what it plans to do
@@ -107,9 +102,13 @@ Watch the UI to see:
   git.ts            # Git helpers (promote/rollback)
 
 /src/creature/      # Mutable agent
-  index.ts          # Creature HTTP server
-  evolve.ts         # Patch decision logic
-  apply.ts          # Apply patch + run checks
+  index.ts          # Creature HTTP server + cognition loop
+  mind.ts           # LLM cognition and context building
+  memory.ts         # JSONL persistence + snapshots
+  tools/
+    bash.ts         # CLI command execution
+  evolve.ts         # (legacy) Hardcoded patch logic
+  apply.ts          # (legacy) Apply patch + run checks
 
 /src/shared/
   types.ts          # Event type definitions
@@ -119,10 +118,14 @@ Watch the UI to see:
   checks.ts         # Validates version format
 
 /.self/             # Runtime state (gitignored)
-  events.jsonl      # Append-only event log
+  events.jsonl      # Append-only event log (host)
+  memory.jsonl      # Append-only memory log (creature)
+  snapshots/        # Compressed memory snapshots
   last_good.txt     # SHA of last promoted commit
   boot-ok           # Health indicator file
-  iteration_count.txt # Persisted iteration counter
+  iteration_count.txt # (legacy) Persisted iteration counter
+
+/PURPOSE.md         # The creature's attractor
 ```
 
 ## Event stream
@@ -139,17 +142,20 @@ All actions are recorded as structured events:
 - `creature.checks` - Test results
 - `creature.request_restart` - Asking for restart into new commit
 
-## Acceptance criteria met
+## Phase 2 (Current)
 
-1. ✅ Creature makes commits and requests restart
-2. ✅ Host restarts into new commits
-3. ✅ Host automatically rolls back on test failures
-4. ✅ UI shows full story: intent → patch → checks → promote/rollback
-5. ✅ No API keys in creature (ready for Janee integration)
+The creature now has:
+- ✅ LLM-driven cognition loop (Claude Sonnet 4.5)
+- ✅ Persistent memory (JSONL + snapshots)
+- ✅ Bash tool for CLI execution
+- ✅ PURPOSE.md as attractor (can rewrite itself)
+- ✅ Continuous operation with sleep cycles
+- ✅ Self-modification capability via bash
+- ✅ Rollback protection from Phase 1
 
-## Next steps
-
-- Add Janee integration for LLM-driven patches
-- Enable auto-iteration mode
-- Add more sophisticated patch strategies
-- Support creature editing host code (multi-worktree)
+The creature can now:
+- Think continuously and act autonomously
+- Execute any CLI command (curl, git, scripts, etc.)
+- Modify its own code and purpose
+- Maintain memory across restarts
+- Survive crashes via rollback
