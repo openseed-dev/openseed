@@ -5,7 +5,7 @@ const MEMORY_DIR = ".self";
 const MEMORY_FILE = `${MEMORY_DIR}/memory.jsonl`;
 const SNAPSHOTS_DIR = `${MEMORY_DIR}/snapshots`;
 const SNAPSHOT_INTERVAL = 50;
-const CONTEXT_WINDOW = 200;
+const CONTEXT_WINDOW = 50;
 
 export interface MemoryRecord {
   t: string;

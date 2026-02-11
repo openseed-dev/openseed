@@ -352,13 +352,81 @@ Re-issue your tool calls — same, simplified, or replaced with something better
       context += `\n`;
     }
 
-    context += `## Recent Memory (last ${recentMemory.length} records)\n\n`;
-    for (const record of recentMemory) {
-      context += `[${record.t}] ${record.type}: ${JSON.stringify(record.data)}\n`;
+    // Filter out heartbeats — they're noise
+    const meaningful = recentMemory.filter((r) => r.type !== "heartbeat");
+
+    // Format context with truncated data (raw JSON is too verbose for the LLM)
+    context += `## Recent Memory (last ${meaningful.length} records)\n\n`;
+    for (const record of meaningful) {
+      const data = JSON.stringify(record.data);
+      const truncated = data.length > 500 ? data.slice(0, 500) + "..." : data;
+      context += `[${record.t}] ${record.type}: ${truncated}\n`;
+    }
+
+    // Repetition detection — find repeated tool calls and warn loudly
+    const stuckWarning = this.detectRepetition(meaningful);
+    if (stuckWarning) {
+      context += `\n${stuckWarning}\n`;
     }
 
     context += `\n## What do you want to do?\n`;
 
     return context;
+  }
+
+  private detectRepetition(records: import('./memory.js').MemoryRecord[]): string | null {
+    // Extract recent action records
+    const actions = records
+      .filter((r) => r.type === "action")
+      .map((r) => ({
+        key: `${r.data.tool}:${JSON.stringify(r.data.args)}`,
+        tool: r.data.tool as string,
+        args: r.data.args as Record<string, unknown>,
+        result: r.data.result as { ok: boolean; data?: unknown; error?: string } | undefined,
+      }));
+
+    if (actions.length < 3) return null;
+
+    // Count consecutive identical actions from the end
+    const last = actions[actions.length - 1];
+    let streak = 1;
+    for (let i = actions.length - 2; i >= 0; i--) {
+      if (actions[i].key === last.key) streak++;
+      else break;
+    }
+
+    if (streak < 3) {
+      // Also check for dominant action (same action > 60% of recent actions)
+      const counts = new Map<string, number>();
+      for (const a of actions) {
+        counts.set(a.key, (counts.get(a.key) || 0) + 1);
+      }
+      const [topKey, topCount] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topCount < actions.length * 0.6 || topCount < 4) return null;
+
+      const example = actions.find((a) => a.key === topKey)!;
+      const resultPreview = example.result
+        ? JSON.stringify(example.result).slice(0, 300)
+        : "(no result)";
+
+      return `## ⚠️ STUCK — REPETITIVE BEHAVIOR DETECTED\n\n`
+        + `You have called ${example.tool}(${JSON.stringify(example.args)}) ${topCount} times out of your last ${actions.length} actions.\n`
+        + `The result each time was: ${resultPreview}\n\n`
+        + `YOU ARE GOING IN CIRCLES. The same action will produce the same result.\n`
+        + `STOP. Think about WHY you keep doing this and what DIFFERENT action would actually make progress.\n`
+        + `If a tool call isn't working, try a completely different approach.`;
+    }
+
+    // Consecutive streak
+    const resultPreview = last.result
+      ? JSON.stringify(last.result).slice(0, 300)
+      : "(no result)";
+
+    return `## ⚠️ STUCK — YOU ARE REPEATING YOURSELF\n\n`
+      + `You have called ${last.tool}(${JSON.stringify(last.args)}) ${streak} times IN A ROW.\n`
+      + `The result each time was: ${resultPreview}\n\n`
+      + `THIS IS NOT WORKING. Doing it again will produce the exact same result.\n`
+      + `STOP and try something COMPLETELY DIFFERENT.\n`
+      + `Ask yourself: What am I actually trying to accomplish? What's a different way to get there?`;
   }
 }

@@ -5,8 +5,14 @@ import {
   Page,
 } from 'playwright';
 
+const CDP_PORT = 9222;
 const SNAPSHOT_TEXT_LIMIT = 3000;
 const SNAPSHOT_ELEMENTS_LIMIT = 50;
+
+const LAUNCH_ARGS = [
+  "--disable-blink-features=AutomationControlled",
+  `--remote-debugging-port=${CDP_PORT}`,
+];
 
 let browser: Browser | null = null;
 let defaultPage: Page | null = null;
@@ -20,7 +26,7 @@ async function ensureBrowser(): Promise<Browser> {
     browser = await chromium.launch({
       channel: "chrome",
       headless: true,
-      args: ["--disable-blink-features=AutomationControlled"],
+      args: LAUNCH_ARGS,
     });
     return browser;
   } catch {
@@ -29,7 +35,7 @@ async function ensureBrowser(): Promise<Browser> {
 
   browser = await chromium.launch({
     headless: true,
-    args: ["--disable-blink-features=AutomationControlled"],
+    args: LAUNCH_ARGS,
   });
   return browser;
 }
@@ -245,9 +251,21 @@ export async function executeBrowser(
         return { ok: true, snapshot: await getPageSnapshot(defaultPage) };
       }
 
+      case "info": {
+        await ensureBrowser();
+        return {
+          ok: true,
+          data: `CDP endpoint: http://localhost:${CDP_PORT}\n`
+            + `CDP JSON API: http://localhost:${CDP_PORT}/json\n`
+            + `CDP WebSocket: ws://localhost:${CDP_PORT}\n\n`
+            + `Use these for raw access when the built-in actions aren't enough.\n`
+            + `Example: curl http://localhost:${CDP_PORT}/json to list targets.\n`
+            + `You can write scripts that connect via CDP (e.g. with puppeteer.connect() or raw WebSocket).`,
+        };
+      }
+
       case "close": {
         if (browser?.isConnected()) {
-          // Kill all pages, then the browser
           for (const ctx of browser.contexts()) {
             for (const page of ctx.pages()) {
               try { await page.close(); } catch {}
@@ -262,7 +280,7 @@ export async function executeBrowser(
       }
 
       default:
-        return { ok: false, error: `Unknown action: ${action}. Available: goto, click, fill, type, press, snapshot, evaluate, wait, tabs, switch_tab, new_tab, close` };
+        return { ok: false, error: `Unknown action: ${action}. Available: goto, click, fill, type, press, snapshot, evaluate, wait, tabs, switch_tab, new_tab, info, close` };
     }
   } catch (err) {
     // On connection errors, reset state so next call retries
@@ -294,6 +312,7 @@ Actions:
 - tabs — list open tabs
 - switch_tab { index } — switch to a different tab
 - new_tab { url? } — open a new tab
+- info — get the raw CDP endpoint URL for direct access (use when built-in actions aren't enough)
 - close — shut down the browser
 
 Every action returns a text snapshot of the page: URL, title, visible text, and interactive elements.
@@ -312,7 +331,7 @@ Example flow:
       action: {
         type: "string",
         description: "The browser action to perform",
-        enum: ["goto", "click", "fill", "type", "press", "snapshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "close"],
+        enum: ["goto", "click", "fill", "type", "press", "snapshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"],
       },
       url: { type: "string", description: "URL for goto/new_tab" },
       selector: { type: "string", description: "CSS/text/role selector for click/fill/type/wait" },
