@@ -329,9 +329,7 @@ export class Host {
     .event.host-promote { border-left-color: #0f0; }
     .event.host-rollback { border-left-color: #f33; background: #1a0808; }
     .event.creature-boot { border-left-color: #58f; }
-    .event.creature-proposal { border-left-color: #c8f; }
     .event.creature-intent { border-left-color: #fa0; }
-    .event.creature-intent.critiqued { border-left-color: #fd0; }
     .event.creature-tool-call { border-left-color: #0af; }
     .event.creature-tool-call.browser { border-left-color: #a6e; }
     .event.creature-tool-call.fail { border-left-color: #f55; }
@@ -339,16 +337,13 @@ export class Host {
     .event .type.host { color: #666; }
     .event .type.promote { color: #0f0; }
     .event .type.rollback { color: #f33; }
-    .event .type.proposal { color: #c8f; }
     .event .type.intent { color: #fa0; }
-    .event .type.critiqued { color: #fd0; }
     .event .type.tool { color: #0af; }
     .event .type.tool.browser { color: #a6e; }
     .event .type.tool.fail { color: #f55; }
     .event .type.boot { color: #58f; }
 
     .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
-    .proposal-text { color: #dbd; margin-left: 4px; white-space: pre-wrap; }
     .thought-summary { cursor: pointer; }
     .thought-summary:hover { text-decoration: underline; }
     .thought-body { display: none; margin-top: 6px; padding: 8px; background: #0d0d0d; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #aaa; font-size: 12px; max-height: 300px; overflow-y: auto; }
@@ -390,21 +385,15 @@ export class Host {
       let cls = t.replace(/\\./g, '-');
       let body = '';
 
-      if (t === 'creature.proposal') {
-        const summary = summarize(ev.text, 120);
-        const full = ev.text || '';
-        const id = 'p' + Date.now() + Math.random().toString(36).slice(2,6);
-        body = '<span class="type proposal">proposed</span>'
-          + '<span class="proposal-text thought-summary" onclick="toggleThought(\\''+id+'\\')"> — ' + esc(summary) + '</span>'
-          + '<div class="thought-body" id="'+id+'">' + esc(full) + '</div>';
-      } else if (t === 'creature.intent') {
-        const label = ev.critiqued ? 'revised' : 'intent';
-        const cls2 = ev.critiqued ? 'critiqued' : 'intent';
-        cls += ev.critiqued ? ' critiqued' : '';
+      if (t === 'creature.intent') {
+        const turns = ev.turns || 1;
+        const acts = ev.actions || 0;
+        const badge = '<span class="tool-ms">' + turns + 't/' + acts + 'a</span>';
         const summary = summarize(ev.text, 120);
         const full = ev.text || '';
         const id = 'i' + Date.now() + Math.random().toString(36).slice(2,6);
-        body = '<span class="type ' + cls2 + '">' + label + '</span>'
+        body = '<span class="type intent">think</span>'
+          + badge
           + '<span class="intent-text thought-summary" onclick="toggleThought(\\''+id+'\\')"> — ' + esc(summary) + '</span>'
           + '<div class="thought-body" id="'+id+'">' + esc(full) + '</div>';
       } else if (t === 'creature.tool_call') {

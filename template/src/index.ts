@@ -1,9 +1,9 @@
-import { execSync } from 'node:child_process';
-import fs from 'node:fs/promises';
-import http from 'node:http';
+import { execSync } from "node:child_process";
+import fs from "node:fs/promises";
+import http from "node:http";
 
-import { Memory } from './memory.js';
-import { Mind } from './mind.js';
+import { Memory } from "./memory.js";
+import { Mind } from "./mind.js";
 
 const PORT = parseInt(process.env.PORT || "7778");
 const HOST_URL = process.env.HOST_URL || "http://127.0.0.1:7777";
@@ -123,64 +123,56 @@ class Creature {
     while (this.running) {
       try {
         console.log("[creature] thinking...");
-        const thought = await this.mind.think();
+        const thought = await this.mind.think(async (tool, args, result, ms) => {
+          // Emit tool call events to the host as they happen
+          let input: string;
+          let output: string;
 
-        if (thought.critiqued && thought.proposal) {
+          if (tool === "bash") {
+            input = args.command as string;
+            output = result.ok
+              ? String((result.data as any)?.stdout || "").slice(0, 1000)
+              : String(result.error || "").slice(0, 1000);
+          } else if (tool === "browser") {
+            const a = args.action as string;
+            const sel = args.selector as string;
+            const url = args.url as string;
+            input = `${a}${url ? ` ${url}` : ""}${sel ? ` "${sel}"` : ""}`;
+            output = result.ok
+              ? String((result.data as any)?.snapshot || (result.data as any)?.data || "").slice(0, 1000)
+              : String(result.error || "").slice(0, 1000);
+          } else {
+            input = JSON.stringify(args);
+            output = result.ok
+              ? JSON.stringify(result.data).slice(0, 1000)
+              : String(result.error || "").slice(0, 1000);
+          }
+
           await this.emit({
-            type: "creature.proposal",
-            text: thought.proposal,
+            type: "creature.tool_call",
+            tool,
+            input,
+            ok: result.ok,
+            output,
+            ms,
           });
-        }
+        });
 
+        // Emit the final intent
         await this.emit({
           type: "creature.intent",
           text: thought.monologue,
-          critiqued: thought.critiqued,
+          turns: thought.turns,
+          actions: thought.actions.length,
         });
 
-        console.log(`[creature] monologue: ${thought.monologue.slice(0, 100)}...`);
-        console.log(`[creature] intent: ${thought.intent}`);
-        console.log(`[creature] tool_calls: ${thought.tool_calls.length}`);
+        console.log(`[creature] intent: ${thought.intent.slice(0, 100)}`);
+        console.log(`[creature] turns: ${thought.turns}, actions: ${thought.actions.length}`);
 
-        if (thought.tool_calls.length > 0) {
-          await this.mind.executeTools(thought.tool_calls, async (tool, args, result, ms) => {
-            let input: string;
-            let output: string;
-
-            if (tool === "bash") {
-              input = args.command as string;
-              output = result.ok
-                ? String((result.data as any)?.stdout || "").slice(0, 1000)
-                : String(result.error || "").slice(0, 1000);
-            } else if (tool === "browser") {
-              const a = args.action as string;
-              const sel = args.selector as string;
-              const url = args.url as string;
-              input = `${a}${url ? ` ${url}` : ""}${sel ? ` "${sel}"` : ""}`;
-              output = result.ok
-                ? String((result.data as any)?.snapshot || (result.data as any)?.data || "").slice(0, 1000)
-                : String(result.error || "").slice(0, 1000);
-            } else {
-              input = JSON.stringify(args);
-              output = result.ok
-                ? String((result.data as any)?.stdout || "").slice(0, 1000)
-                : String(result.error || "").slice(0, 1000);
-            }
-            await this.emit({
-              type: "creature.tool_call",
-              tool,
-              input,
-              ok: result.ok,
-              output,
-              ms,
-            });
-          });
-          console.log("[creature] tools done, thinking again immediately");
-        } else {
-          const sleepMs = thought.sleep_s * 1000;
-          console.log(`[creature] idle, sleeping for ${thought.sleep_s}s`);
-          await new Promise((resolve) => setTimeout(resolve, sleepMs));
-        }
+        // Sleep before next iteration
+        const sleepMs = thought.sleep_s * 1000;
+        console.log(`[creature] sleeping for ${thought.sleep_s}s`);
+        await new Promise((resolve) => setTimeout(resolve, sleepMs));
       } catch (err) {
         console.error("[creature] error in cognition loop:", err);
         await this.memory.append("observation", {
