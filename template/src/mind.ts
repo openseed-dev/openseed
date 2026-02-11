@@ -1,9 +1,12 @@
-import fs from "node:fs/promises";
+import fs from 'node:fs/promises';
 
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic from '@anthropic-ai/sdk';
 
-import { Memory } from "./memory.js";
-import { bashTool, executeBash } from "./tools/bash.js";
+import { Memory } from './memory.js';
+import {
+  bashTool,
+  executeBash,
+} from './tools/bash.js';
 
 const sleepTool: Anthropic.Tool = {
   name: "set_sleep",
@@ -35,6 +38,9 @@ You are not a chatbot. You are a continuous process with:
 
 Read PURPOSE.md frequently. It contains your attractor - what you're drawn toward.
 You may rewrite it if you discover a more compelling direction.
+Be tenacious and persistent.
+You're free. Be creative. Be wild. 
+Step back and think, because you are extremely capable and powerful. You can do ANYTHING.
 
 ## Your Memory
 
@@ -147,15 +153,24 @@ export class Mind {
     return thought;
   }
 
-  async executeTools(toolCalls: ThoughtOutput["tool_calls"]): Promise<void> {
+  async executeTools(
+    toolCalls: ThoughtOutput["tool_calls"],
+    onResult?: (tool: string, args: Record<string, unknown>, result: { ok: boolean; data?: unknown; error?: string }, ms: number) => Promise<void>,
+  ): Promise<void> {
     for (const call of toolCalls) {
+      const start = Date.now();
       const result = await this.executeTool(call.tool, call.args);
+      const ms = Date.now() - start;
 
       await this.memory.append("action", {
         tool: call.tool,
         args: call.args,
         result,
       });
+
+      if (onResult) {
+        await onResult(call.tool, call.args, result, ms);
+      }
     }
   }
 

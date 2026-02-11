@@ -135,7 +135,20 @@ class Creature {
         console.log(`[creature] tool_calls: ${thought.tool_calls.length}`);
 
         if (thought.tool_calls.length > 0) {
-          await this.mind.executeTools(thought.tool_calls);
+          await this.mind.executeTools(thought.tool_calls, async (tool, args, result, ms) => {
+            const input = tool === "bash" ? (args.command as string) : JSON.stringify(args);
+            const output = result.ok
+              ? String((result.data as any)?.stdout || "").slice(0, 1000)
+              : String(result.error || "").slice(0, 1000);
+            await this.emit({
+              type: "creature.tool_call",
+              tool,
+              input,
+              ok: result.ok,
+              output,
+              ms,
+            });
+          });
           console.log("[creature] tools done, thinking again immediately");
         } else {
           const sleepMs = thought.sleep_s * 1000;
