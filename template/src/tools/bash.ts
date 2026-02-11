@@ -4,7 +4,16 @@ export interface BashResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  timedOut?: boolean;
 }
+
+// Suppress interactive prompts in child processes
+const NON_INTERACTIVE_ENV = {
+  GIT_TERMINAL_PROMPT: "0",
+  DEBIAN_FRONTEND: "noninteractive",
+  GCM_INTERACTIVE: "never",
+  SSH_BATCH_MODE: "yes",
+};
 
 export async function executeBash(
   command: string,
@@ -18,12 +27,15 @@ export async function executeBash(
   return new Promise((resolve) => {
     const proc = spawn("bash", ["-c", command], {
       cwd,
-      timeout,
-      env: process.env,
+      env: { ...process.env, ...NON_INTERACTIVE_ENV },
     });
+
+    // Close stdin immediately — no interactive input ever
+    proc.stdin.end();
 
     let stdout = "";
     let stderr = "";
+    let killed = false;
 
     proc.stdout.on("data", (data) => {
       stdout += data.toString();
@@ -33,15 +45,23 @@ export async function executeBash(
       stderr += data.toString();
     });
 
+    const timer = setTimeout(() => {
+      killed = true;
+      proc.kill("SIGKILL");
+    }, timeout);
+
     proc.on("close", (code) => {
+      clearTimeout(timer);
       resolve({
         stdout: stdout.trim(),
-        stderr: stderr.trim(),
+        stderr: killed ? `${stderr.trim()}\n[killed: timeout after ${timeout}ms]`.trim() : stderr.trim(),
         exitCode: code ?? 1,
+        timedOut: killed,
       });
     });
 
     proc.on("error", (err) => {
+      clearTimeout(timer);
       resolve({
         stdout: "",
         stderr: err.message,
@@ -61,6 +81,8 @@ You can:
 - Read/write files: cat, echo, etc. (but prefer using file operations directly)
 - Run scripts: node script.js
 - Any other CLI tool available
+
+Commands time out after 30s by default. Interactive prompts (sudo, ssh, etc.) will fail immediately — you have no tty.
 
 Examples:
 - Check git status: git status
