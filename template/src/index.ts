@@ -1,9 +1,9 @@
-import { execSync } from "node:child_process";
-import fs from "node:fs/promises";
-import http from "node:http";
+import { execSync } from 'node:child_process';
+import fs from 'node:fs/promises';
+import http from 'node:http';
 
-import { Memory } from "./memory.js";
-import { Mind } from "./mind.js";
+import { Memory } from './memory.js';
+import { Mind } from './mind.js';
 
 const PORT = parseInt(process.env.PORT || "7778");
 const HOST_URL = process.env.HOST_URL || "http://127.0.0.1:7777";
@@ -125,9 +125,17 @@ class Creature {
         console.log("[creature] thinking...");
         const thought = await this.mind.think();
 
+        if (thought.critiqued && thought.proposal) {
+          await this.emit({
+            type: "creature.proposal",
+            text: thought.proposal,
+          });
+        }
+
         await this.emit({
           type: "creature.intent",
-          text: thought.intent,
+          text: thought.monologue,
+          critiqued: thought.critiqued,
         });
 
         console.log(`[creature] monologue: ${thought.monologue.slice(0, 100)}...`);
@@ -136,10 +144,28 @@ class Creature {
 
         if (thought.tool_calls.length > 0) {
           await this.mind.executeTools(thought.tool_calls, async (tool, args, result, ms) => {
-            const input = tool === "bash" ? (args.command as string) : JSON.stringify(args);
-            const output = result.ok
-              ? String((result.data as any)?.stdout || "").slice(0, 1000)
-              : String(result.error || "").slice(0, 1000);
+            let input: string;
+            let output: string;
+
+            if (tool === "bash") {
+              input = args.command as string;
+              output = result.ok
+                ? String((result.data as any)?.stdout || "").slice(0, 1000)
+                : String(result.error || "").slice(0, 1000);
+            } else if (tool === "browser") {
+              const a = args.action as string;
+              const sel = args.selector as string;
+              const url = args.url as string;
+              input = `${a}${url ? ` ${url}` : ""}${sel ? ` "${sel}"` : ""}`;
+              output = result.ok
+                ? String((result.data as any)?.snapshot || (result.data as any)?.data || "").slice(0, 1000)
+                : String(result.error || "").slice(0, 1000);
+            } else {
+              input = JSON.stringify(args);
+              output = result.ok
+                ? String((result.data as any)?.stdout || "").slice(0, 1000)
+                : String(result.error || "").slice(0, 1000);
+            }
             await this.emit({
               type: "creature.tool_call",
               tool,

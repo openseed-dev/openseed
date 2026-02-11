@@ -1,10 +1,25 @@
-import http from "node:http";
-import path from "node:path";
-import fs from "node:fs/promises";
-import { spawn, ChildProcess } from "node:child_process";
-import { EventStore, createSSEStream } from "./events.js";
-import { getCurrentSHA, getLastGoodSHA, setLastGoodSHA, resetToSHA } from "./git.js";
-import { Event, HostStatus } from "../shared/types.js";
+import {
+  ChildProcess,
+  spawn,
+} from 'node:child_process';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import path from 'node:path';
+
+import {
+  Event,
+  HostStatus,
+} from '../shared/types.js';
+import {
+  createSSEStream,
+  EventStore,
+} from './events.js';
+import {
+  getCurrentSHA,
+  getLastGoodSHA,
+  resetToSHA,
+  setLastGoodSHA,
+} from './git.js';
 
 const HEALTH_GATE_MS = 10000;
 const ROLLBACK_TIMEOUT_MS = 30000;
@@ -314,19 +329,30 @@ export class Host {
     .event.host-promote { border-left-color: #0f0; }
     .event.host-rollback { border-left-color: #f33; background: #1a0808; }
     .event.creature-boot { border-left-color: #58f; }
+    .event.creature-proposal { border-left-color: #c8f; }
     .event.creature-intent { border-left-color: #fa0; }
+    .event.creature-intent.critiqued { border-left-color: #fd0; }
     .event.creature-tool-call { border-left-color: #0af; }
+    .event.creature-tool-call.browser { border-left-color: #a6e; }
     .event.creature-tool-call.fail { border-left-color: #f55; }
 
     .event .type.host { color: #666; }
     .event .type.promote { color: #0f0; }
     .event .type.rollback { color: #f33; }
+    .event .type.proposal { color: #c8f; }
     .event .type.intent { color: #fa0; }
+    .event .type.critiqued { color: #fd0; }
     .event .type.tool { color: #0af; }
+    .event .type.tool.browser { color: #a6e; }
     .event .type.tool.fail { color: #f55; }
     .event .type.boot { color: #58f; }
 
-    .intent-text { color: #eee; margin-left: 4px; }
+    .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
+    .proposal-text { color: #dbd; margin-left: 4px; white-space: pre-wrap; }
+    .thought-summary { cursor: pointer; }
+    .thought-summary:hover { text-decoration: underline; }
+    .thought-body { display: none; margin-top: 6px; padding: 8px; background: #0d0d0d; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #aaa; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    .thought-body.open { display: block; }
     .tool-cmd { color: #fff; background: #1a1a2a; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
     .tool-status { margin-left: 6px; font-size: 11px; }
     .tool-status.ok { color: #0f0; }
@@ -352,23 +378,55 @@ export class Host {
 
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function ts(t) { return t ? t.slice(11, 19) : ''; }
+    function toggleThought(id) { document.getElementById(id)?.classList.toggle('open'); }
+    function summarize(text, max) {
+      if (!text) return '...';
+      const line = text.split('\\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))[0] || text.trim();
+      return line.length > max ? line.slice(0, max) + '...' : line;
+    }
 
     function renderEvent(ev) {
       const t = ev.type;
       let cls = t.replace(/\\./g, '-');
       let body = '';
 
-      if (t === 'creature.intent') {
-        body = '<span class="type intent">intent</span><span class="intent-text">' + esc(ev.text) + '</span>';
+      if (t === 'creature.proposal') {
+        const summary = summarize(ev.text, 120);
+        const full = ev.text || '';
+        const id = 'p' + Date.now() + Math.random().toString(36).slice(2,6);
+        body = '<span class="type proposal">proposed</span>'
+          + '<span class="proposal-text thought-summary" onclick="toggleThought(\\''+id+'\\')"> — ' + esc(summary) + '</span>'
+          + '<div class="thought-body" id="'+id+'">' + esc(full) + '</div>';
+      } else if (t === 'creature.intent') {
+        const label = ev.critiqued ? 'revised' : 'intent';
+        const cls2 = ev.critiqued ? 'critiqued' : 'intent';
+        cls += ev.critiqued ? ' critiqued' : '';
+        const summary = summarize(ev.text, 120);
+        const full = ev.text || '';
+        const id = 'i' + Date.now() + Math.random().toString(36).slice(2,6);
+        body = '<span class="type ' + cls2 + '">' + label + '</span>'
+          + '<span class="intent-text thought-summary" onclick="toggleThought(\\''+id+'\\')"> — ' + esc(summary) + '</span>'
+          + '<div class="thought-body" id="'+id+'">' + esc(full) + '</div>';
       } else if (t === 'creature.tool_call') {
+        const toolName = ev.tool || 'bash';
+        const isBrowser = toolName === 'browser';
         const okFail = ev.ok ? '<span class="tool-status ok">ok</span>' : '<span class="tool-status err">fail</span>';
         cls += ev.ok ? '' : ' fail';
-        body = '<span class="type tool' + (ev.ok ? '' : ' fail') + '">bash</span>'
+        cls += isBrowser ? ' browser' : '';
+        const toolCls = 'type tool' + (isBrowser ? ' browser' : '') + (ev.ok ? '' : ' fail');
+        body = '<span class="' + toolCls + '">' + esc(toolName) + '</span>'
           + '<code class="tool-cmd">' + esc(ev.input) + '</code>'
           + okFail
           + '<span class="tool-ms">' + ev.ms + 'ms</span>';
         if (ev.output) {
-          body += '<code class="tool-output">' + esc(ev.output) + '</code>';
+          const outId = 'o' + Date.now() + Math.random().toString(36).slice(2,6);
+          const outPreview = ev.output.length > 120 ? ev.output.slice(0, 120) + '...' : ev.output;
+          if (ev.output.length > 120) {
+            body += '<code class="tool-output thought-summary" onclick="toggleThought(\\''+outId+'\\')"> ' + esc(outPreview) + '</code>';
+            body += '<code class="tool-output thought-body" id="'+outId+'">' + esc(ev.output) + '</code>';
+          } else {
+            body += '<code class="tool-output">' + esc(ev.output) + '</code>';
+          }
         }
       } else if (t === 'host.promote') {
         body = '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + ev.sha.slice(0,7) + '</span></span>';

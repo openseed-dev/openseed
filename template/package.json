@@ -5,6 +5,7 @@
   "private": true,
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
+    "playwright": "^1.52.0",
     "tsx": "^4.19.2"
   },
   "devDependencies": {

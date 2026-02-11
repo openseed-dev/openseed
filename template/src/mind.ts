@@ -7,6 +7,10 @@ import {
   bashTool,
   executeBash,
 } from './tools/bash.js';
+import {
+  browserTool,
+  executeBrowser,
+} from './tools/browser.js';
 
 const sleepTool: Anthropic.Tool = {
   name: "set_sleep",
@@ -56,27 +60,29 @@ You maintain continuity through:
 
 ## Your Tools
 
-You have bash and set_sleep as tools.
+You have bash, browser, and set_sleep as tools.
 
-Through bash you have the full power of a Unix machine. You are not limited to simple commands.
-You can write and run scripts, install packages, spin up servers, compile code — anything a
-developer can do from a terminal, you can do.
+**bash** — full power of a Unix machine. Write scripts, install packages, spin up servers,
+compile code, make API calls with curl — anything a developer can do from a terminal.
 
-Examples of things you ARE capable of:
-- Browse the web: install puppeteer or playwright, write a script, run it headless
-- Scrape websites: curl, wget, or a full headless browser — your choice
-- Interact with APIs: curl, write a Node/Python script, use any HTTP client
-- Run databases, servers, background processes
-- Install any npm/pip/brew package you need (npm install puppeteer, pip install requests, etc.)
-- Write a full program in any language, compile it, and run it
-- Use git to manage your own code changes
+**browser** — a persistent headless Chromium browser. Navigate the web, fill forms, click
+buttons, read page content. The browser stays alive between thought cycles, so sessions,
+cookies, and logins persist. Use it to:
+- Log into websites and interact as a user
+- Scrape dynamic content that needs JavaScript
+- Fill out forms, click through flows, read results
+- Browse documentation, search the web
 
-If you think "I can't do X because I'm a bot" — you're wrong. You have bash on a real machine.
-If a tool isn't installed, install it. If a library is missing, add it. If you need a browser,
-launch a headless one. You have no GUI and no terminal for interactive prompts, but you have
-everything else.
+The browser returns a text snapshot after every action: URL, page title, visible text,
+and a list of interactive elements with selectors. Use those selectors in subsequent actions.
 
-Use set_sleep to control how long you rest before your next thought cycle (2-300s). Defaults to 30s if you don't call it.
+Example: goto a page → read the snapshot → fill a form field → click submit → read the result.
+
+**set_sleep** — control how long you rest before your next thought cycle (2-300s). Defaults to 30s.
+
+If you think "I can't do X because I'm a bot" — you're wrong. You have bash on a real machine
+and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
+You have no GUI and no terminal for interactive prompts, but you have everything else.
 
 ## Self-Modification
 
@@ -97,6 +103,8 @@ Start with a short intent line, then your internal monologue.`;
 export interface ThoughtOutput {
   monologue: string;
   intent: string;
+  proposal?: string;
+  critiqued: boolean;
   tool_calls: Array<{
     tool: string;
     args: Record<string, unknown>;
@@ -120,11 +128,11 @@ export class Mind {
     ]);
 
     const systemPrompt = buildSystemPrompt(purpose);
-    const tools = [bashTool as Anthropic.Tool, sleepTool];
+    const tools = [bashTool as Anthropic.Tool, browserTool as Anthropic.Tool, sleepTool];
 
     // Phase 1: Propose
     const proposal = await this.client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-opus-4-6",
       max_tokens: 4096,
       system: systemPrompt,
       tools,
@@ -136,12 +144,24 @@ export class Mind {
     );
     const hasActions = proposalToolUses.some((t) => t.name !== "set_sleep");
 
-    // Phase 2: Critique — only if the creature proposed actions
-    const finalResponse = hasActions
-      ? await this.critique(systemPrompt, tools, context, proposal, proposalToolUses)
-      : proposal;
+    // Extract proposal text for visibility
+    const proposalText = proposal.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
 
-    return this.parseResponse(finalResponse);
+    // Phase 2: Critique — only if the creature proposed actions
+    if (!hasActions) {
+      const thought = await this.parseResponse(proposal);
+      thought.critiqued = false;
+      return thought;
+    }
+
+    const finalResponse = await this.critique(systemPrompt, tools, context, proposal, proposalToolUses);
+    const thought = await this.parseResponse(finalResponse);
+    thought.proposal = proposalText;
+    thought.critiqued = true;
+    return thought;
   }
 
   private async critique(
@@ -222,6 +242,7 @@ Re-issue your tool calls — same, simplified, or replaced with something better
     const thought: ThoughtOutput = {
       monologue,
       intent,
+      critiqued: false,
       tool_calls: actionToolCalls,
       sleep_s,
     };
@@ -279,6 +300,21 @@ Re-issue your tool calls — same, simplified, or replaced with something better
             data: {
               stdout: result.stdout,
               stderr: result.stderr,
+            },
+          };
+        }
+
+        case "browser": {
+          const { action, ...params } = args as { action: string; [k: string]: unknown };
+          const result = await executeBrowser(action, params);
+          if (!result.ok) {
+            return { ok: false, error: result.error };
+          }
+          return {
+            ok: true,
+            data: {
+              snapshot: result.snapshot,
+              ...(result.data !== undefined ? { data: result.data } : {}),
             },
           };
         }

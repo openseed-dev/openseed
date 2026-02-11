@@ -4,7 +4,8 @@ export type Event =
   | { t: string; type: "host.promote"; sha: string }
   | { t: string; type: "host.rollback"; from: string; to: string; reason: string }
   | { t: string; type: "creature.boot"; sha: string }
-  | { t: string; type: "creature.intent"; text: string }
+  | { t: string; type: "creature.proposal"; text: string }
+  | { t: string; type: "creature.intent"; text: string; critiqued: boolean }
   | { t: string; type: "creature.tool_call"; tool: string; input: string; ok: boolean; output: string; ms: number }
   | { t: string; type: "creature.patch"; summary: string; files: string[] }
   | { t: string; type: "creature.checks"; cmd: string; ok: boolean; ms: number; out_tail?: string }
