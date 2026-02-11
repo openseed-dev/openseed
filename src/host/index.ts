@@ -18,6 +18,7 @@ class Host {
   private healthyAt: number | null = null;
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private rollbackTimeout: NodeJS.Timeout | null = null;
+  private expectingExit = false;
 
   async start() {
     await this.store.init();
@@ -122,9 +123,10 @@ class Host {
 
     this.creature.on("exit", (code) => {
       console.log(`[host] creature exited with code ${code}`);
-      if (code !== 0 && code !== null) {
+      if (!this.expectingExit && code !== 0 && code !== null) {
         this.handleCreatureFailure("crash");
       }
+      this.expectingExit = false;
     });
 
     this.startHealthCheck();
@@ -209,6 +211,7 @@ class Host {
   private async restartCreature(sha: string) {
     console.log(`[host] restart requested for ${sha.slice(0, 7)}`);
 
+    this.expectingExit = true;
     if (this.creature) this.creature.kill();
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
