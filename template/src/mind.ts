@@ -158,15 +158,16 @@ export class Mind {
       content: "[not executed yet — under review]",
     }));
 
-    const critiquePrompt = `WAIT. Your tool calls have NOT been executed yet. Before they run, think twice:
+    const critiquePrompt = `PAUSE. Your tool calls have NOT been executed yet. Quick sanity check:
 
-1. What is the dumbest part of this plan? Be specific.
-2. What will actually happen when these commands run? Predict concretely.
-3. Is this worth doing RIGHT NOW, or are you just doing something to feel productive?
-4. Are you repeating something that already failed? Check your recent memory.
+1. Will this make PROGRESS toward your purpose, or is it just exploration/preparation theater?
+2. Are you repeating something that already failed? If so, try a DIFFERENT approach.
+3. What's the smallest, fastest version of this that would work or teach you something?
 
-If the plan survives your honest critique, re-issue the tool calls (modified if needed).
-If not, do something better — or call set_sleep and think longer.`;
+A failed attempt that teaches you something beats another round of planning.
+Imperfect action now is better than perfect action never.
+
+Re-issue your tool calls — same, simplified, or replaced with something better. DO something.`;
 
     const revised = await this.client.messages.create({
       model: "claude-sonnet-4-5-20250929",
