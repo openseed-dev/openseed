@@ -22,7 +22,7 @@ export async function executeBash(
     timeout?: number;
   } = {}
 ): Promise<BashResult> {
-  const { cwd = process.cwd(), timeout = 30000 } = options;
+  const { cwd = process.cwd(), timeout = 120000 } = options;
 
   return new Promise((resolve) => {
     const proc = spawn("bash", ["-c", command], {
@@ -84,7 +84,7 @@ You can:
 - Run scripts: node script.js
 - Any other CLI tool available
 
-Commands time out after 30s by default. You have no terminal — interactive prompts (sudo, ssh password, etc.) will fail immediately.
+Commands time out after 120s by default. You have no terminal — interactive prompts (sudo, ssh password, etc.) will fail immediately.
 
 Examples:
 - Check git status: git status
@@ -100,7 +100,7 @@ Examples:
       },
       timeout: {
         type: "number",
-        description: "Timeout in milliseconds (default: 30000)",
+        description: "Timeout in milliseconds (default: 120000)",
       },
     },
     required: ["command"],
