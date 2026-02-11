@@ -11,12 +11,9 @@
     "stop": "tsx src/cli/index.ts stop",
     "list": "tsx src/cli/index.ts list",
     "destroy": "tsx src/cli/index.ts destroy",
-    "fork": "tsx src/cli/index.ts fork",
-    "test": "tsx tests/checks.ts",
-    "test:rollback": "tsx tests/rollback.ts"
+    "fork": "tsx src/cli/index.ts fork"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.74.0",
     "tsx": "^4.19.2"
   },
   "devDependencies": {
