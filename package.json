@@ -1,0 +1,16 @@
+{
+  "name": "itsalive",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev:host": "tsx src/host/index.ts",
+    "test": "tsx tests/checks.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  }
+}
