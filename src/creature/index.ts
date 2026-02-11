@@ -16,11 +16,14 @@ class Creature {
   async start() {
     this.createServer();
 
-    // Only auto-iterate once per process
-    if (!this.hasIterated) {
-      await this.runIteration();
-      this.hasIterated = true;
-    }
+    // Mark as booted and healthy immediately
+    await fs.mkdir(".self", { recursive: true });
+    await fs.writeFile(BOOT_OK_FILE, "ok", "utf-8");
+    this.booted = true;
+
+    const sha = getCurrentSHA();
+    await this.emit({ type: "creature.boot", sha });
+    console.log("[creature] ready, use POST /tick to iterate");
   }
 
   private createServer() {
