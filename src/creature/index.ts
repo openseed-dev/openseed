@@ -38,6 +38,20 @@ class Creature {
         return;
       }
 
+      if (url.pathname === "/tick" && req.method === "POST") {
+        if (!this.hasIterated) {
+          this.runIteration().then(() => {
+            this.hasIterated = true;
+            res.writeHead(200);
+            res.end("iteration started");
+          });
+        } else {
+          res.writeHead(409);
+          res.end("already iterated");
+        }
+        return;
+      }
+
       res.writeHead(404);
       res.end("not found");
     });
