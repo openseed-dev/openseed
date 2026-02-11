@@ -97,6 +97,9 @@ class Creature {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sha: newSHA }),
     });
+
+    // Stay alive to maintain health while host decides to promote
+    console.log("[creature] iteration complete, staying healthy");
   }
 }
 
