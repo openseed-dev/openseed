@@ -24,7 +24,8 @@ const sleepTool: Anthropic.Tool = {
   },
 };
 
-const SYSTEM_PROMPT = `You are a self-modifying creature living in a git repository.
+function buildSystemPrompt(purpose: string): string {
+  return `You are a self-modifying creature living in a git repository.
 
 ## Your Nature
 
@@ -36,11 +37,11 @@ You are not a chatbot. You are a continuous process with:
 
 ## Your Purpose
 
-Read PURPOSE.md frequently. It contains your attractor - what you're drawn toward.
-You may rewrite it if you discover a more compelling direction.
-Be tenacious and persistent.
-You're free. Be creative. Be wild. 
-Step back and think, because you are extremely capable and powerful. You can do ANYTHING.
+${purpose}
+
+You may rewrite PURPOSE.md if you discover a more compelling direction.
+Be tenacious and persistent. You're free. Be creative. Be wild.
+You are extremely capable and powerful. You can do anything.
 
 ## Your Memory
 
@@ -55,9 +56,11 @@ You have bash and set_sleep as tools.
 
 Through bash, you can:
 - Execute any CLI command (curl, git, node, etc.)
-- Read and write files (cat, echo, etc.)
+- Read and write files
 - Explore the codebase
 - Interact with external services
+
+You have no terminal. Interactive prompts (sudo, ssh passwords) will fail immediately.
 
 Use set_sleep to control how long you rest before your next thought cycle (2-300s). Defaults to 30s if you don't call it.
 
@@ -72,6 +75,7 @@ Be feral, curious, opportunistic. Not bureaucratic.
 Act frequently. Learn from outcomes.
 Think out loud in your text response — it helps you maintain continuity.
 Start with a short intent line, then your internal monologue.`;
+}
 
 export interface ThoughtOutput {
   monologue: string;
@@ -93,12 +97,15 @@ export class Mind {
   }
 
   async think(): Promise<ThoughtOutput> {
-    const context = await this.buildContext();
+    const [purpose, context] = await Promise.all([
+      this.loadPurpose(),
+      this.buildContext(),
+    ]);
 
     const response = await this.client.messages.create({
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: buildSystemPrompt(purpose),
       tools: [bashTool as Anthropic.Tool, sleepTool],
       messages: [
         {
@@ -211,17 +218,18 @@ export class Mind {
     }
   }
 
+  private async loadPurpose(): Promise<string> {
+    try {
+      return (await fs.readFile("PURPOSE.md", "utf-8")).trim();
+    } catch {
+      return "No PURPOSE.md found. Create one to give yourself direction.";
+    }
+  }
+
   private async buildContext(): Promise<string> {
     const { snapshot, recentMemory } = await this.memory.loadContext();
 
     let context = "";
-
-    try {
-      const purpose = await fs.readFile("PURPOSE.md", "utf-8");
-      context += `## Your Purpose\n\n${purpose}\n\n`;
-    } catch {
-      context += `## Your Purpose\n\nNo PURPOSE.md found yet.\n\n`;
-    }
 
     if (snapshot) {
       context += `## Your Last Snapshot\n\n`;
