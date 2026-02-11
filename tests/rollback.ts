@@ -9,6 +9,12 @@ async function testRollback() {
     execSync("rm -rf .self self", { stdio: "pipe" });
   } catch {}
 
+  // Kill any existing processes on the ports
+  try {
+    execSync("pkill -f 'tsx src/host/index.ts'", { stdio: "pipe" });
+    await sleep(1000);
+  } catch {}
+
   // Start host in background
   const host = execSync("pnpm dev:host:manual > /tmp/itsalive-test.log 2>&1 & echo $!", {
     encoding: "utf-8",
@@ -66,8 +72,11 @@ async function testRollback() {
     console.error(`✗ Rollback test failed: ${err.message}`);
     process.exit(1);
   } finally {
-    // Cleanup
-    execSync(`kill ${host}`, { stdio: "ignore" });
+    // Cleanup - kill entire process tree
+    try {
+      execSync(`pkill -P ${host}`, { stdio: "ignore" });
+      execSync(`kill ${host}`, { stdio: "ignore" });
+    } catch {}
   }
 }
 
