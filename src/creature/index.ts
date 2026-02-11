@@ -78,13 +78,6 @@ class Creature {
   }
 
   private async runIteration() {
-    const sha = getCurrentSHA();
-    await this.emit({ type: "creature.boot", sha });
-
-    // Mark as booted so health checks pass
-    await fs.writeFile(BOOT_OK_FILE, "ok", "utf-8");
-    this.booted = true;
-
     await this.emit({ type: "creature.intent", text: "Deciding on a small patch" });
 
     const patch = await decidePatch();
