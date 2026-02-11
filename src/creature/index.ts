@@ -8,6 +8,7 @@ import { Event } from "../shared/types.js";
 const PORT = parseInt(process.env.PORT || "7778");
 const HOST_URL = "http://127.0.0.1:7777";
 const BOOT_OK_FILE = ".self/boot-ok";
+const AUTO_ITERATE = process.env.AUTO_ITERATE !== "false";
 
 class Creature {
   private booted = false;
@@ -23,7 +24,14 @@ class Creature {
 
     const sha = getCurrentSHA();
     await this.emit({ type: "creature.boot", sha });
-    console.log("[creature] ready, use POST /tick to iterate");
+
+    if (AUTO_ITERATE && !this.hasIterated) {
+      console.log("[creature] auto-iterating on boot");
+      await this.runIteration();
+      this.hasIterated = true;
+    } else {
+      console.log("[creature] ready, use POST /tick to iterate");
+    }
   }
 
   private createServer() {

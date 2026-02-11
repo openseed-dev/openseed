@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev:host": "tsx src/host/index.ts",
-    "test": "tsx tests/checks.ts"
+    "dev:host:manual": "AUTO_ITERATE=false tsx src/host/index.ts",
+    "test": "tsx tests/checks.ts",
+    "test:rollback": "tsx tests/rollback.ts"
   },
   "dependencies": {
     "tsx": "^4.19.2"
