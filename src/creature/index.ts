@@ -11,10 +11,16 @@ const BOOT_OK_FILE = ".self/boot-ok";
 
 class Creature {
   private booted = false;
+  private hasIterated = false;
 
   async start() {
     this.createServer();
-    await this.runIteration();
+
+    // Only auto-iterate once per process
+    if (!this.hasIterated) {
+      await this.runIteration();
+      this.hasIterated = true;
+    }
   }
 
   private createServer() {
