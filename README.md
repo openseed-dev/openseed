@@ -30,12 +30,24 @@ This MVP demonstrates a "creature" (autonomous agent) that can:
 
 ## Running the system
 
+**Auto-iteration mode (SPEC-compliant):**
 ```bash
-# Start the host (which spawns the creature)
+# Start with auto-iteration on boot
 pnpm dev:host
 
 # Open the UI in your browser
 open http://localhost:7777
+```
+
+The creature will automatically iterate on each boot, continuously evolving.
+
+**Manual mode (for testing/observation):**
+```bash
+# Start with manual iteration control
+pnpm dev:host:manual
+
+# Trigger iterations manually
+curl -X POST http://localhost:7778/tick
 ```
 
 The UI shows:
@@ -44,14 +56,7 @@ The UI shows:
 - Process PID and health status
 - Real-time event stream of all actions
 
-## Triggering iterations
-
-The creature waits for manual triggers (for MVP testing):
-
-```bash
-# Trigger one iteration
-curl -X POST http://localhost:7778/tick
-```
+## Iteration behavior
 
 Each iteration:
 1. Decides on a small patch (usually appends to `self/diary.md`)
@@ -62,9 +67,13 @@ Each iteration:
 
 ## Testing rollback
 
-The system intentionally breaks on every 3rd iteration to demonstrate rollback:
+The system intentionally breaks on every 3rd iteration to demonstrate rollback.
 
+**Manual test:**
 ```bash
+# Start in manual mode
+pnpm dev:host:manual
+
 # First iteration: appends to diary (succeeds)
 curl -X POST http://localhost:7778/tick
 sleep 15
@@ -75,6 +84,11 @@ sleep 15
 
 # Third iteration: breaks version.ts (fails, triggers rollback)
 curl -X POST http://localhost:7778/tick
+```
+
+**Automated test:**
+```bash
+pnpm test:rollback
 ```
 
 Watch the UI to see:
