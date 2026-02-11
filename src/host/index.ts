@@ -173,7 +173,7 @@ export class Host {
     // Run the creature's own entry point from its own directory using its own tsx
     this.creature = spawn("npx", ["tsx", "src/index.ts"], {
       cwd: creatureDir,
-      stdio: "inherit",
+      stdio: ["ignore", "inherit", "inherit"],
       env: {
         ...process.env,
         PORT: String(creaturePort),

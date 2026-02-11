@@ -27,11 +27,12 @@ export async function executeBash(
   return new Promise((resolve) => {
     const proc = spawn("bash", ["-c", command], {
       cwd,
+      // No stdin, pipe stdout/stderr. New session (detached) so /dev/tty
+      // is unavailable — prevents sudo/ssh from prompting on the terminal.
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
       env: { ...process.env, ...NON_INTERACTIVE_ENV },
     });
-
-    // Close stdin immediately — no interactive input ever
-    proc.stdin.end();
 
     let stdout = "";
     let stderr = "";
@@ -47,7 +48,8 @@ export async function executeBash(
 
     const timer = setTimeout(() => {
       killed = true;
-      proc.kill("SIGKILL");
+      // Kill the entire process group (negative pid)
+      try { process.kill(-proc.pid!, "SIGKILL"); } catch {}
     }, timeout);
 
     proc.on("close", (code) => {
@@ -82,7 +84,7 @@ You can:
 - Run scripts: node script.js
 - Any other CLI tool available
 
-Commands time out after 30s by default. Interactive prompts (sudo, ssh, etc.) will fail immediately — you have no tty.
+Commands time out after 30s by default. You have no terminal — interactive prompts (sudo, ssh password, etc.) will fail immediately.
 
 Examples:
 - Check git status: git status
