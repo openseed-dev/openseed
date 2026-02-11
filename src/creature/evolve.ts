@@ -1,9 +1,25 @@
 import fs from "node:fs/promises";
 
-let iterationCount = 0;
+const COUNTER_FILE = ".self/iteration_count.txt";
+
+async function getIterationCount(): Promise<number> {
+  try {
+    const content = await fs.readFile(COUNTER_FILE, "utf-8");
+    return parseInt(content.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function incrementIterationCount(): Promise<number> {
+  const count = await getIterationCount();
+  const newCount = count + 1;
+  await fs.writeFile(COUNTER_FILE, String(newCount), "utf-8");
+  return newCount;
+}
 
 export async function decidePatch(): Promise<{ summary: string; files: string[]; apply: () => Promise<void> }> {
-  iterationCount++;
+  const iterationCount = await incrementIterationCount();
 
   // Every 3rd iteration, intentionally break the version check to test rollback
   const shouldBreak = iterationCount % 3 === 0;
