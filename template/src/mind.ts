@@ -102,19 +102,77 @@ export class Mind {
       this.buildContext(),
     ]);
 
-    const response = await this.client.messages.create({
+    const systemPrompt = buildSystemPrompt(purpose);
+    const tools = [bashTool as Anthropic.Tool, sleepTool];
+
+    // Phase 1: Propose
+    const proposal = await this.client.messages.create({
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 4096,
-      system: buildSystemPrompt(purpose),
-      tools: [bashTool as Anthropic.Tool, sleepTool],
+      system: systemPrompt,
+      tools,
+      messages: [{ role: "user", content: context }],
+    });
+
+    const proposalToolUses = proposal.content.filter(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+    );
+    const hasActions = proposalToolUses.some((t) => t.name !== "set_sleep");
+
+    // Phase 2: Critique — only if the creature proposed actions
+    const finalResponse = hasActions
+      ? await this.critique(systemPrompt, tools, context, proposal, proposalToolUses)
+      : proposal;
+
+    return this.parseResponse(finalResponse);
+  }
+
+  private async critique(
+    systemPrompt: string,
+    tools: Anthropic.Tool[],
+    context: string,
+    proposal: Anthropic.Message,
+    proposalToolUses: Anthropic.ToolUseBlock[],
+  ): Promise<Anthropic.Message> {
+    // Provide placeholder results for each tool_use so the conversation is valid
+    const toolResults: Anthropic.ToolResultBlockParam[] = proposalToolUses.map((t) => ({
+      type: "tool_result" as const,
+      tool_use_id: t.id,
+      content: "[not executed yet — under review]",
+    }));
+
+    const critiquePrompt = `WAIT. Your tool calls have NOT been executed yet. Before they run, think twice:
+
+1. What is the dumbest part of this plan? Be specific.
+2. What will actually happen when these commands run? Predict concretely.
+3. Is this worth doing RIGHT NOW, or are you just doing something to feel productive?
+4. Are you repeating something that already failed? Check your recent memory.
+
+If the plan survives your honest critique, re-issue the tool calls (modified if needed).
+If not, do something better — or call set_sleep and think longer.`;
+
+    const revised = await this.client.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools,
       messages: [
+        { role: "user", content: context },
+        { role: "assistant", content: proposal.content },
         {
           role: "user",
-          content: context,
+          content: [
+            ...toolResults,
+            { type: "text" as const, text: critiquePrompt },
+          ],
         },
       ],
     });
 
+    return revised;
+  }
+
+  private async parseResponse(response: Anthropic.Message): Promise<ThoughtOutput> {
     const textBlocks = response.content.filter(
       (block): block is Anthropic.TextBlock => block.type === "text"
     );
