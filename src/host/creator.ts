@@ -150,7 +150,9 @@ You can modify any file in the creature's directory:
 - **Check your previous interventions.** Read .self/creator-log.jsonl to see what you changed before and whether it helped. Don't repeat failed experiments.
 - **Preserve what works.** If the creature has learned good rules or developed effective patterns, don't disrupt them.
 - **Git safety net exists.** If your changes break the creature, it will be rolled back automatically. Be bold but thoughtful.
-- **Think in terms of cognitive architecture, not tasks.** Don't tell the creature WHAT to do — change HOW it thinks.`;
+- **Think in terms of cognitive architecture, not tasks.** Don't tell the creature WHAT to do — change HOW it thinks.
+- **Be efficient.** You have a limited number of turns. Read what you need, make your changes, and call done(). Don't exhaustively read every file — skim, diagnose, act.
+- **Always call done().** When you're finished (whether you made changes or not), you MUST call done() with your reasoning. This is how your evaluation gets logged.`;
 }
 
 export class Creator {
@@ -218,14 +220,6 @@ export class Creator {
       if (toolUses.length === 0) {
         messages.push({ role: 'assistant', content: response.content });
         messages.push({ role: 'user', content: 'Use your tools to read the creature\'s state and evaluate it. Call done() when finished.' });
-        continue;
-      }
-
-      // Nudge to wrap up when running low on turns
-      const turnsLeft = MAX_TURNS - turns;
-      if (turnsLeft <= 3 && !toolUses.some((tu) => tu.name === 'done')) {
-        messages.push({ role: 'assistant', content: response.content });
-        messages.push({ role: 'user', content: `You have ${turnsLeft} turns remaining. Please call done() now with your reasoning summary.` });
         continue;
       }
 
@@ -360,7 +354,18 @@ export class Creator {
       }
 
       messages.push({ role: 'assistant', content: response.content });
-      messages.push({ role: 'user', content: toolResults });
+
+      // Nudge to wrap up when running low on turns
+      const turnsLeft = MAX_TURNS - turns;
+      if (turnsLeft <= 5 && !finished) {
+        const nudge: Anthropic.TextBlockParam = {
+          type: 'text' as const,
+          text: `[SYSTEM] You have ${turnsLeft} turns remaining. Call done() NOW with a summary of your evaluation and changes.`,
+        };
+        messages.push({ role: 'user', content: [...toolResults, nudge] });
+      } else {
+        messages.push({ role: 'user', content: toolResults });
+      }
     }
 
     if (!finished) {

@@ -495,12 +495,23 @@ export class Orchestrator {
       flex: 1; min-width: 0; padding: 16px;
     }
     .main-header {
-      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #222;
-      display: flex; align-items: center; gap: 16px;
+      position: sticky; top: 0; z-index: 10; background: #0a0a0a;
+      padding: 12px 16px; margin: -16px -16px 12px -16px; border-bottom: 1px solid #222;
+      display: flex; align-items: center; gap: 12px;
     }
-    .main-header h2 { color: #eee; font-size: 14px; }
+    .main-header h2 { color: #eee; font-size: 14px; margin: 0; }
     .main-header .info { color: #555; font-size: 12px; }
     .main-header .sha { color: #58f; }
+    .sidebar-view-tabs {
+      display: flex; gap: 4px; padding: 4px 12px 8px 28px;
+    }
+    .sidebar-view-tab {
+      padding: 3px 10px; cursor: pointer; border-radius: 3px;
+      background: #111; border: 1px solid #222; color: #666;
+      font-family: inherit; font-size: 11px;
+    }
+    .sidebar-view-tab:hover { color: #aaa; border-color: #333; }
+    .sidebar-view-tab.active { color: #58f; border-color: #58f; background: #1a1a2a; }
     .events { display: flex; flex-direction: column; gap: 2px; }
 
     .event { padding: 6px 12px; border-radius: 4px; border-left: 3px solid #333; background: #111; }
@@ -574,17 +585,7 @@ export class Orchestrator {
     }
     .message-bar button:hover { background: #2a2a4a; }
 
-    .view-switcher {
-      display: none; padding: 8px; border-top: 1px solid #222;
-    }
-    .view-switcher.visible { display: flex; gap: 4px; }
-    .view-btn {
-      flex: 1; padding: 6px 0; text-align: center; cursor: pointer;
-      background: #111; border: 1px solid #222; border-radius: 4px;
-      color: #666; font-family: inherit; font-size: 12px;
-    }
-    .view-btn:hover { color: #aaa; border-color: #333; }
-    .view-btn.active { color: #58f; border-color: #58f; background: #1a1a2a; }
+    /* view-switcher removed — tabs are now in the sticky header */
 
     .view { display: none; }
     .view.active { display: block; }
@@ -613,10 +614,6 @@ export class Orchestrator {
   <div class="sidebar">
     <div class="sidebar-header">itsalive</div>
     <div class="creature-list" id="creatures"></div>
-    <div class="view-switcher" id="vswitcher">
-      <button class="view-btn active" id="vbtn-log" onclick="switchView('log')">log</button>
-      <button class="view-btn" id="vbtn-mind" onclick="switchView('mind')">mind</button>
-    </div>
   </div>
   <div class="main">
     <div class="main-header" id="header">
@@ -748,7 +745,6 @@ export class Orchestrator {
     let currentView = 'log';
     let mindData = null;
     let mindTab = 'purpose';
-    const vswitcher = document.getElementById('vswitcher');
     const logView = document.getElementById('log-view');
     const mindView = document.getElementById('mind-view');
     const mtabs = document.getElementById('mtabs');
@@ -756,10 +752,9 @@ export class Orchestrator {
 
     function switchView(v) {
       currentView = v;
-      document.getElementById('vbtn-log').classList.toggle('active', v === 'log');
-      document.getElementById('vbtn-mind').classList.toggle('active', v === 'mind');
       logView.classList.toggle('active', v === 'log');
       mindView.classList.toggle('active', v === 'mind');
+      renderSidebar();
       if (v === 'mind' && selected) {
         if (!mindData) loadMind().then(renderMind);
         else renderMind();
@@ -777,7 +772,6 @@ export class Orchestrator {
           + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>'
           + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\\''+name+'\\')">evolve</button>';
         msgBar.classList.add('visible');
-        vswitcher.classList.add('visible');
         switchView('log');
         try {
           const res = await fetch('/api/creatures/' + name + '/events');
@@ -790,7 +784,6 @@ export class Orchestrator {
       } else {
         headerEl.innerHTML = '<h2>all creatures</h2>';
         msgBar.classList.remove('visible');
-        vswitcher.classList.remove('visible');
         switchView('log');
       }
       renderSidebar();
@@ -874,6 +867,12 @@ export class Orchestrator {
         }
         html += '<div class="creature-item' + sel + '" onclick="select(\\''+n+'\\')">'
           + dot + '<span class="cname">' + esc(n) + '</span>' + act + '</div>';
+        if (selected === n) {
+          html += '<div class="sidebar-view-tabs">'
+            + '<button class="sidebar-view-tab' + (currentView === 'log' ? ' active' : '') + '" onclick="event.stopPropagation();switchView(\\'log\\')">log</button>'
+            + '<button class="sidebar-view-tab' + (currentView === 'mind' ? ' active' : '') + '" onclick="event.stopPropagation();switchView(\\'mind\\')">mind</button>'
+            + '</div>';
+        }
       }
       document.getElementById('creatures').innerHTML = html;
     }
