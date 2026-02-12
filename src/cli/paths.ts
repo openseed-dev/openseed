@@ -1,5 +1,5 @@
-import path from "node:path";
-import os from "node:os";
+import os from 'node:os';
+import path from 'node:path';
 
 export const ITSALIVE_HOME = path.join(os.homedir(), ".itsalive");
 export const CREATURES_DIR = path.join(ITSALIVE_HOME, "creatures");

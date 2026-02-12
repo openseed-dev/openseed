@@ -1,12 +1,13 @@
-import { execSync } from "node:child_process";
-import fs from "node:fs/promises";
-import http from "node:http";
+import { execSync } from 'node:child_process';
+import fs from 'node:fs/promises';
+import http from 'node:http';
 
-import { Memory } from "./memory.js";
-import { Mind } from "./mind.js";
+import { Memory } from './memory.js';
+import { Mind } from './mind.js';
 
 const PORT = parseInt(process.env.PORT || "7778");
-const HOST_URL = process.env.HOST_URL || "http://127.0.0.1:7777";
+const HOST_URL = process.env.HOST_URL || "http://127.0.0.1:7770";
+const CREATURE_NAME = process.env.CREATURE_NAME || "";
 const BOOT_OK_FILE = ".self/boot-ok";
 const AUTO_ITERATE = process.env.AUTO_ITERATE !== "false";
 
@@ -81,6 +82,23 @@ class Creature {
         return;
       }
 
+      if (url.pathname === "/message" && req.method === "POST") {
+        let body = "";
+        req.on("data", (chunk: string) => (body += chunk));
+        req.on("end", () => {
+          try {
+            const { text } = JSON.parse(body);
+            this.mind.inject(text);
+            res.writeHead(200);
+            res.end("ok");
+          } catch {
+            res.writeHead(400);
+            res.end("bad request");
+          }
+        });
+        return;
+      }
+
       res.writeHead(404);
       res.end("not found");
     });
@@ -92,8 +110,11 @@ class Creature {
 
   private async emit(event: CreatureEvent) {
     const fullEvent = { t: new Date().toISOString(), ...event };
+    const eventUrl = CREATURE_NAME
+      ? `${HOST_URL}/api/creatures/${CREATURE_NAME}/event`
+      : `${HOST_URL}/event`;
     try {
-      await fetch(`${HOST_URL}/event`, {
+      await fetch(eventUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fullEvent),
@@ -167,6 +188,11 @@ class Creature {
             actions,
           });
           console.log(`[creature] sleeping ${seconds}s — ${summary.slice(0, 80)}`);
+        },
+
+        // onThought — emit creature thinking/monologue to host
+        async (text) => {
+          await this.emit({ type: "creature.thought", text });
         }
       );
     } catch (err) {

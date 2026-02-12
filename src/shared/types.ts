@@ -4,6 +4,7 @@ export type Event =
   | { t: string; type: "host.promote"; sha: string }
   | { t: string; type: "host.rollback"; from: string; to: string; reason: string }
   | { t: string; type: "creature.boot"; sha: string }
+  | { t: string; type: "creature.thought"; text: string }
   | { t: string; type: "creature.sleep"; text: string; seconds: number; actions: number }
   | { t: string; type: "creature.tool_call"; tool: string; input: string; ok: boolean; output: string; ms: number }
   | { t: string; type: "creature.patch"; summary: string; files: string[] }

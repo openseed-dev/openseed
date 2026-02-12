@@ -1,47 +1,30 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { creatureDir } from "./paths.js";
-import { readRunFile } from "./ports.js";
+import { readOrchestratorInfo } from './ports.js';
 
 interface StopOptions {
   name: string;
 }
 
 export async function stop(opts: StopOptions): Promise<void> {
-  const dir = creatureDir(opts.name);
-
-  const runInfo = await readRunFile(dir);
-  if (!runInfo) {
-    console.log(`creature "${opts.name}" is not running`);
-    return;
+  const info = await readOrchestratorInfo();
+  if (!info) {
+    console.error('orchestrator is not running');
+    process.exit(1);
   }
 
   try {
-    process.kill(runInfo.host_pid, 0);
-  } catch {
-    // Already dead — clean up stale run file
-    await fs.unlink(path.join(dir, ".self", "run.json")).catch(() => {});
-    console.log(`creature "${opts.name}" is not running (cleaned stale lock)`);
-    return;
-  }
+    const res = await fetch(`http://127.0.0.1:${info.port}/api/creatures/${opts.name}/stop`, {
+      method: 'POST',
+    });
 
-  console.log(`stopping creature "${opts.name}" (pid ${runInfo.host_pid})...`);
-  process.kill(runInfo.host_pid, "SIGTERM");
-
-  // Wait for process to die (up to 5s)
-  for (let i = 0; i < 50; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-    try {
-      process.kill(runInfo.host_pid, 0);
-    } catch {
-      console.log(`creature "${opts.name}" stopped`);
-      return;
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`failed to stop "${opts.name}": ${text}`);
+      process.exit(1);
     }
-  }
 
-  // Force kill
-  console.log("force killing...");
-  process.kill(runInfo.host_pid, "SIGKILL");
-  await fs.unlink(path.join(dir, ".self", "run.json")).catch(() => {});
-  console.log(`creature "${opts.name}" killed`);
+    console.log(`creature "${opts.name}" stopped`);
+  } catch (err) {
+    console.error('failed to reach orchestrator:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
 }

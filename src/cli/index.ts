@@ -6,6 +6,7 @@ import { list } from './list.js';
 import { spawn } from './spawn.js';
 import { start } from './start.js';
 import { stop } from './stop.js';
+import { up } from './up.js';
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -13,15 +14,17 @@ function usage(): never {
   console.log(`itsalive — creature hatchery
 
 commands:
-  spawn <name> [--purpose "..."]   create a new creature from template
-  start <name> [--manual] [--bare] start a creature (host + creature process)
+  up [--port 7770]                start the orchestrator + dashboard
+  spawn <name> [--purpose "..."]  create a new creature from template
+  start <name> [--manual] [--bare] start a creature (requires orchestrator)
   stop <name>                      stop a running creature
   list                             list all creatures and their status
   destroy <name>                   stop and remove a creature
   fork <source> <name>             fork a creature (copies full git history)
 
 options:
-  --bare                           run without Docker sandbox
+  --port <n>                       orchestrator port (default 7770)
+  --bare                           run creature without Docker sandbox
   --manual                         don't auto-start cognition loop
   --help                           show this help
 `);
@@ -44,6 +47,13 @@ async function main() {
   }
 
   switch (command) {
+    case "up": {
+      const portStr = parseFlag(args, "--port");
+      const port = portStr ? parseInt(portStr) : undefined;
+      await up({ port });
+      break;
+    }
+
     case "spawn": {
       const name = args.find((a) => !a.startsWith("--"));
       if (!name) {

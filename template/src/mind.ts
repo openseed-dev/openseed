@@ -85,6 +85,12 @@ If you think "I can't do X because I'm a bot" — you're wrong. You have bash on
 and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
 You have no GUI and no terminal for interactive prompts, but you have everything else.
 
+## Messages
+
+Your creator may leave messages for you in MESSAGES.md (in your root directory). Check it
+occasionally — especially after waking from sleep. These are one-way instructions: your
+creator will never read that file, so don't write replies there. Act on what they say.
+
 ## Self-Modification
 
 If you can't do something, change yourself until you can. Install tools, add dependencies,
@@ -121,6 +127,8 @@ export type SleepCallback = (
   actions: number,
 ) => Promise<void>;
 
+export type ThoughtCallback = (text: string) => Promise<void>;
+
 export class Mind {
   private client: Anthropic;
   private memory: Memory;
@@ -133,7 +141,23 @@ export class Mind {
     this.memory = memory;
   }
 
-  async run(onToolResult?: ToolResultCallback, onSleep?: SleepCallback): Promise<never> {
+  inject(text: string) {
+    const wrapped = `[MESSAGE FROM YOUR CREATOR — this is a direct interrupt. Your creator cannot hear you or read your responses. Process this message and continue autonomously.]\n\n${text}`;
+    const last = this.messages[this.messages.length - 1];
+    if (last?.role === "user") {
+      // Can't have consecutive user messages — append to the existing one
+      if (typeof last.content === "string") {
+        last.content += "\n\n" + wrapped;
+      } else if (Array.isArray(last.content)) {
+        last.content.push({ type: "text", text: wrapped });
+      }
+    } else {
+      this.messages.push({ role: "user", content: wrapped });
+    }
+    console.log(`[mind] injected creator message: ${text.slice(0, 80)}`);
+  }
+
+  async run(onToolResult?: ToolResultCallback, onSleep?: SleepCallback, onThought?: ThoughtCallback): Promise<never> {
     const purpose = await this.loadPurpose();
     this.systemPrompt = buildSystemPrompt(purpose);
     this.tools = [bashTool as Anthropic.Tool, browserTool as Anthropic.Tool, sleepTool];
@@ -183,6 +207,7 @@ export class Mind {
         .join("\n");
       if (text) {
         monologueSinceSleep += (monologueSinceSleep ? "\n\n" : "") + text;
+        if (onThought) await onThought(text);
       }
 
       // Extract tool uses

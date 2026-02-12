@@ -1,9 +1,30 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import net from "node:net";
-import { CREATURES_DIR } from "./paths.js";
+import fs from 'node:fs/promises';
+import net from 'node:net';
+import path from 'node:path';
+
+import {
+  CREATURES_DIR,
+  ITSALIVE_HOME,
+} from './paths.js';
 
 const BASE_PORT = 7770;
+
+interface OrchestratorInfo {
+  port: number;
+  pid: number;
+  started_at: string;
+}
+
+export async function readOrchestratorInfo(): Promise<OrchestratorInfo | null> {
+  try {
+    const content = await fs.readFile(path.join(ITSALIVE_HOME, "orchestrator.json"), "utf-8");
+    const info: OrchestratorInfo = JSON.parse(content);
+    process.kill(info.pid, 0); // throws if not alive
+    return info;
+  } catch {
+    return null;
+  }
+}
 
 interface RunInfo {
   host_port: number;

@@ -1,6 +1,7 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { Event } from "../shared/types.js";
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+import { Event } from '../shared/types.js';
 
 export class EventStore {
   private eventsFile: string;
@@ -33,6 +34,11 @@ export class EventStore {
       .split("\n")
       .filter((line) => line.trim())
       .map((line) => JSON.parse(line));
+  }
+
+  async readRecent(n: number): Promise<Event[]> {
+    const all = await this.readAll();
+    return all.slice(-n);
   }
 
   subscribe(fn: (event: Event) => void) {

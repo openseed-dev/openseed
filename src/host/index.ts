@@ -1,398 +1,430 @@
-import {
-  ChildProcess,
-  execSync,
-  spawn,
-} from 'node:child_process';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import http from 'node:http';
+import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 
+import { Event } from '../shared/types.js';
+import { EventStore } from './events.js';
 import {
-  Event,
-  HostStatus,
-} from '../shared/types.js';
-import {
-  createSSEStream,
-  EventStore,
-} from './events.js';
-import {
-  getCurrentSHA,
-  getLastGoodSHA,
-  resetToSHA,
-  setLastGoodSHA,
-} from './git.js';
+  CreatureSupervisor,
+  SupervisorConfig,
+} from './supervisor.js';
 
-const HEALTH_GATE_MS = 10000;
-const ROLLBACK_TIMEOUT_MS = 30000;
+const ITSALIVE_HOME = path.join(os.homedir(), '.itsalive');
+const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
 
-export interface HostConfig {
-  creatureDir: string;
-  creatureName: string;
-  hostPort: number;
-  creaturePort: number;
-  autoIterate: boolean;
-  sandboxed: boolean;
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (chunk: string) => (body += chunk));
+    req.on('end', () => resolve(body));
+  });
 }
 
-export class Host {
-  private config: HostConfig;
-  private store: EventStore;
-  private creature: ChildProcess | null = null;
-  private currentSHA = "";
-  private lastGoodSHA = "";
-  private healthyAt: number | null = null;
-  private healthCheckInterval: NodeJS.Timeout | null = null;
-  private rollbackTimeout: NodeJS.Timeout | null = null;
-  private expectingExit = false;
+export class Orchestrator {
+  private port: number;
+  private supervisors: Map<string, CreatureSupervisor> = new Map();
+  private stores: Map<string, EventStore> = new Map();
+  private globalListeners: Set<(name: string, event: Event) => void> = new Set();
 
-  constructor(config: HostConfig) {
-    this.config = config;
-    this.store = new EventStore(config.creatureDir);
+  constructor(port: number) {
+    this.port = port;
   }
 
   async start() {
-    await this.store.init();
-    this.currentSHA = getCurrentSHA(this.config.creatureDir);
-    this.lastGoodSHA = await getLastGoodSHA(this.config.creatureDir);
-
+    console.log('[orchestrator] starting...');
     await this.writeRunFile();
     this.setupCleanup();
-
-    await this.emit({ t: new Date().toISOString(), type: "host.boot" });
-
-    console.log(`[host] creature: ${this.config.creatureName} (${this.config.creatureDir})`);
     this.createServer();
-    await this.spawnCreature();
+    await this.autoReconnect();
+    console.log(`[orchestrator] ready at http://localhost:${this.port}`);
   }
+
+  // --- Lifecycle ---
 
   private async writeRunFile() {
-    const runFile = path.join(this.config.creatureDir, ".self", "run.json");
-    await fs.mkdir(path.dirname(runFile), { recursive: true });
+    await fs.mkdir(ITSALIVE_HOME, { recursive: true });
     await fs.writeFile(
-      runFile,
-      JSON.stringify(
-        {
-          host_port: this.config.hostPort,
-          creature_port: this.config.creaturePort,
-          host_pid: process.pid,
-          creature_name: this.config.creatureName,
-          started_at: new Date().toISOString(),
-        },
-        null,
-        2
-      ) + "\n",
-      "utf-8"
+      path.join(ITSALIVE_HOME, 'orchestrator.json'),
+      JSON.stringify({ port: this.port, pid: process.pid, started_at: new Date().toISOString() }, null, 2) + '\n',
+      'utf-8',
     );
-  }
-
-  private async cleanupRunFile() {
-    const runFile = path.join(this.config.creatureDir, ".self", "run.json");
-    try {
-      await fs.unlink(runFile);
-    } catch {
-      // Already gone
-    }
-  }
-
-  private killCreature() {
-    if (this.config.sandboxed) {
-      try { execSync(`docker kill ${this.containerName()}`, { stdio: "ignore" }); } catch {}
-    } else if (this.creature) {
-      this.creature.kill();
-    }
-  }
-
-  private isContainerRunning(): boolean {
-    try {
-      const out = execSync(
-        `docker inspect -f '{{.State.Running}}' ${this.containerName()}`,
-        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-      ).trim();
-      return out === "true";
-    } catch {
-      return false;
-    }
   }
 
   private setupCleanup() {
     const cleanup = async () => {
-      // In sandboxed mode, let the container keep running independently
-      if (!this.config.sandboxed) {
-        this.killCreature();
-      }
-      await this.cleanupRunFile();
+      try { await fs.unlink(path.join(ITSALIVE_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
-
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
   }
 
-  private async emit(event: Event) {
-    await this.store.emit(event);
-    console.log(`[host] ${event.type}`, event);
+  // --- Discovery ---
+
+  private async discoverCreatures(): Promise<Array<{ name: string; dir: string }>> {
+    const creatures: Array<{ name: string; dir: string }> = [];
+    try {
+      const entries = await fs.readdir(CREATURES_DIR);
+      for (const name of entries) {
+        const dir = path.join(CREATURES_DIR, name);
+        try {
+          await fs.access(path.join(dir, 'BIRTH.json'));
+          creatures.push({ name, dir });
+        } catch { continue; }
+      }
+    } catch { /* no creatures dir yet */ }
+    return creatures;
   }
+
+  private async autoReconnect() {
+    const creatures = await this.discoverCreatures();
+    for (const { name, dir } of creatures) {
+      const port = this.getContainerPort(name);
+      if (port) {
+        console.log(`[orchestrator] found running container for ${name} on port ${port}`);
+        await this.startCreatureInternal(name, dir, port, { sandboxed: true, autoIterate: true });
+      }
+    }
+  }
+
+  private getContainerPort(name: string): number | null {
+    try {
+      const out = execSync(`docker port creature-${name} 7778`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      const port = parseInt(out.split(':').pop()!);
+      return isNaN(port) ? null : port;
+    } catch {
+      return null;
+    }
+  }
+
+  // --- Port allocation ---
+
+  private async allocatePort(): Promise<number> {
+    const used = new Set<number>([this.port]);
+    for (const sup of this.supervisors.values()) used.add(sup.port);
+
+    let port = 7771;
+    while (port < 65534) {
+      if (!used.has(port) && await this.isPortAvailable(port)) return port;
+      port++;
+    }
+    throw new Error('no available ports');
+  }
+
+  private isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(false));
+      server.once('listening', () => { server.close(() => resolve(true)); });
+      server.listen(port, '127.0.0.1');
+    });
+  }
+
+  private isDockerAvailable(): boolean {
+    try { execSync('docker info', { stdio: 'ignore' }); return true; } catch { return false; }
+  }
+
+  private hasDockerImage(name: string): boolean {
+    try {
+      return execSync(`docker images -q creature-${name}`, { encoding: 'utf-8' }).trim().length > 0;
+    } catch { return false; }
+  }
+
+  // --- Creature management ---
+
+  async startCreature(name: string, opts?: { bare?: boolean; manual?: boolean }): Promise<void> {
+    if (this.supervisors.has(name)) throw new Error(`creature "${name}" is already running`);
+
+    const dir = path.join(CREATURES_DIR, name);
+    try { await fs.access(path.join(dir, 'BIRTH.json')); }
+    catch { throw new Error(`creature "${name}" not found`); }
+
+    const sandboxed = !(opts?.bare) && this.isDockerAvailable() && this.hasDockerImage(name);
+    const autoIterate = !(opts?.manual);
+    const port = await this.allocatePort();
+
+    console.log(`[orchestrator] starting ${name} (${sandboxed ? 'sandboxed' : 'bare'}) on port ${port}`);
+    await this.startCreatureInternal(name, dir, port, { sandboxed, autoIterate });
+  }
+
+  private async startCreatureInternal(
+    name: string, dir: string, port: number,
+    opts: { sandboxed: boolean; autoIterate: boolean },
+  ) {
+    const store = new EventStore(dir);
+    await store.init();
+    this.stores.set(name, store);
+
+    const config: SupervisorConfig = {
+      name, dir, port,
+      orchestratorPort: this.port,
+      autoIterate: opts.autoIterate,
+      sandboxed: opts.sandboxed,
+    };
+
+    const supervisor = new CreatureSupervisor(config, async (n, event) => {
+      await this.emitEvent(n, event);
+    });
+
+    this.supervisors.set(name, supervisor);
+    await supervisor.start();
+  }
+
+  async stopCreature(name: string): Promise<void> {
+    const supervisor = this.supervisors.get(name);
+    if (!supervisor) throw new Error(`creature "${name}" is not running`);
+    await supervisor.stop();
+    this.supervisors.delete(name);
+    this.stores.delete(name);
+  }
+
+  async restartCreature(name: string): Promise<void> {
+    const supervisor = this.supervisors.get(name);
+    if (!supervisor) throw new Error(`creature "${name}" is not running`);
+    await supervisor.restart();
+  }
+
+  // --- Events ---
+
+  private async emitEvent(name: string, event: Event) {
+    const store = this.stores.get(name);
+    if (store) await store.append(event);
+
+    const supervisor = this.supervisors.get(name);
+    if (supervisor) supervisor.updateFromEvent(event);
+
+    this.globalListeners.forEach(fn => fn(name, event));
+
+    console.log(`[${name}] ${event.type}`);
+  }
+
+  async handleCreatureEvent(name: string, event: Event): Promise<void> {
+    // Ensure we have a store even if supervisor isn't tracked (reconnecting containers)
+    if (!this.stores.has(name)) {
+      const dir = path.join(CREATURES_DIR, name);
+      try {
+        await fs.access(path.join(dir, 'BIRTH.json'));
+        const store = new EventStore(dir);
+        await store.init();
+        this.stores.set(name, store);
+      } catch { /* unknown creature, still emit */ }
+    }
+    await this.emitEvent(name, event);
+  }
+
+  async sendMessage(name: string, text: string): Promise<void> {
+    const supervisor = this.supervisors.get(name);
+    if (!supervisor) throw new Error(`creature "${name}" is not running`);
+
+    const res = await fetch(`http://127.0.0.1:${supervisor.port}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!res.ok) throw new Error(`creature rejected message: ${await res.text()}`);
+    console.log(`[${name}] creator message injected: ${text.slice(0, 80)}`);
+  }
+
+  async listCreatures(): Promise<Array<{ name: string; status: string; sha: string | null; port: number | null }>> {
+    const all = await this.discoverCreatures();
+    return all.map(({ name }) => {
+      const sup = this.supervisors.get(name);
+      if (sup) {
+        const info = sup.getInfo();
+        return { name, status: info.status, sha: info.sha, port: info.port };
+      }
+      return { name, status: 'stopped', sha: null, port: null };
+    });
+  }
+
+  // --- HTTP Server ---
 
   private createServer() {
-    const { hostPort } = this.config;
-
     const server = http.createServer(async (req, res) => {
-      const url = new URL(req.url!, `http://localhost:${hostPort}`);
+      const url = new URL(req.url!, `http://localhost:${this.port}`);
+      const p = url.pathname;
 
-      if (url.pathname === "/" && req.method === "GET") {
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(await this.renderUI());
+      if (p === '/' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(this.renderDashboard());
         return;
       }
 
-      if (url.pathname === "/events" && req.method === "GET") {
-        createSSEStream(this.store)(req, res);
+      if (p === '/api/creatures' && req.method === 'GET') {
+        const creatures = await this.listCreatures();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(creatures));
         return;
       }
 
-      if (url.pathname === "/event" && req.method === "POST") {
-        let body = "";
-        req.on("data", (chunk: string) => (body += chunk));
-        req.on("end", async () => {
+      if (p === '/api/events' && req.method === 'GET') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        });
+        const listener = (name: string, event: Event) => {
+          res.write(`data: ${JSON.stringify({ creature: name, ...event })}\n\n`);
+        };
+        this.globalListeners.add(listener);
+        req.on('close', () => this.globalListeners.delete(listener));
+        return;
+      }
+
+      // Creature-specific routes: /api/creatures/:name/:action
+      const match = p.match(/^\/api\/creatures\/([^/]+)\/(.+)$/);
+      if (match) {
+        const [, name, action] = match;
+
+        if (action === 'event' && req.method === 'POST') {
+          const body = await readBody(req);
           try {
             const event = JSON.parse(body) as Event;
-            await this.emit(event);
-            res.writeHead(200);
-            res.end("ok");
-          } catch {
-            res.writeHead(400);
-            res.end("invalid event");
-          }
-        });
-        return;
-      }
+            await this.handleCreatureEvent(name, event);
+            res.writeHead(200); res.end('ok');
+          } catch { res.writeHead(400); res.end('invalid event'); }
+          return;
+        }
 
-      if (url.pathname === "/restart" && req.method === "POST") {
-        let body = "";
-        req.on("data", (chunk: string) => (body += chunk));
-        req.on("end", async () => {
+        if (action === 'events' && req.method === 'GET') {
           try {
-            const { sha } = JSON.parse(body);
-            await this.restartCreature(sha);
-            res.writeHead(200);
-            res.end("ok");
+            const store = this.stores.get(name) || new EventStore(path.join(CREATURES_DIR, name));
+            if (!this.stores.has(name)) await store.init();
+            const events = await store.readRecent(200);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(events));
           } catch {
-            res.writeHead(500);
-            res.end("restart failed");
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('[]');
           }
-        });
+          return;
+        }
+
+        if (action === 'start' && req.method === 'POST') {
+          try {
+            const body = await readBody(req);
+            const opts = body ? JSON.parse(body) : {};
+            await this.startCreature(name, opts);
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'stop' && req.method === 'POST') {
+          try {
+            await this.stopCreature(name);
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'restart' && req.method === 'POST') {
+          try {
+            await this.restartCreature(name);
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'message' && req.method === 'POST') {
+          try {
+            const body = await readBody(req);
+            const { text } = JSON.parse(body);
+            await this.sendMessage(name, text);
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+      }
+
+      // Legacy: creatures without CREATURE_NAME env var POST here
+      if (p === '/event' && req.method === 'POST') {
+        const body = await readBody(req);
+        try {
+          const event = JSON.parse(body) as Event;
+          const name = req.headers['x-creature-name'] as string;
+          if (name) {
+            await this.handleCreatureEvent(name, event);
+          } else {
+            console.warn('[orchestrator] /event without creature name, dropping');
+          }
+          res.writeHead(200); res.end('ok');
+        } catch { res.writeHead(400); res.end('invalid event'); }
         return;
       }
 
-      if (url.pathname === "/status" && req.method === "GET") {
-        const status: HostStatus = {
-          current_sha: this.currentSHA,
-          last_good_sha: this.lastGoodSHA,
-          pid: this.creature?.pid ?? null,
-          healthy: this.healthyAt !== null,
-        };
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(status));
-        return;
-      }
-
-      res.writeHead(404);
-      res.end("not found");
+      res.writeHead(404); res.end('not found');
     });
 
-    server.listen(hostPort, () => {
-      console.log(`[host] listening on http://localhost:${hostPort}`);
+    server.listen(this.port, () => {
+      console.log(`[orchestrator] listening on http://localhost:${this.port}`);
     });
   }
 
-  private containerName(): string {
-    return `creature-${this.config.creatureName}`;
-  }
+  // --- Dashboard ---
 
-  private async spawnCreature() {
-    const { creatureDir, creaturePort, hostPort, autoIterate, sandboxed } = this.config;
-
-    this.currentSHA = getCurrentSHA(creatureDir);
-
-    let reconnected = false;
-
-    if (sandboxed) {
-      const name = this.containerName();
-
-      if (this.isContainerRunning()) {
-        // Container is already running — reconnect by tailing its logs
-        console.log(`[host] reconnecting to running container ${name}`);
-        this.creature = spawn("docker", ["logs", "-f", "--tail", "50", name], {
-          stdio: ["ignore", "inherit", "inherit"],
-        });
-        reconnected = true;
-      } else {
-        // Clean up any stopped container with the same name
-        try { execSync(`docker rm -f ${name}`, { stdio: "ignore" }); } catch {}
-
-        this.creature = spawn("docker", [
-          "run", "--rm", "--init",
-          "--name", name,
-          "--memory", "2g",
-          "--cpus", "1.5",
-          "-p", `${creaturePort}:7778`,
-          "-v", `${creatureDir}:/creature`,
-          // Named volume for node_modules so host's macOS binaries don't overwrite Linux ones
-          "-v", `${name}-node-modules:/creature/node_modules`,
-          "-e", `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY || ""}`,
-          "-e", `HOST_URL=http://host.docker.internal:${hostPort}`,
-          "-e", "PORT=7778",
-          "-e", `AUTO_ITERATE=${autoIterate ? "true" : "false"}`,
-          `creature-${this.config.creatureName}`,
-        ], {
-          stdio: ["ignore", "inherit", "inherit"],
-        });
-
-        console.log(`[host] spawned container ${name}`);
-      }
-    } else {
-      this.creature = spawn("npx", ["tsx", "src/index.ts"], {
-        cwd: creatureDir,
-        stdio: ["ignore", "inherit", "inherit"],
-        env: {
-          ...process.env,
-          PORT: String(creaturePort),
-          HOST_URL: `http://127.0.0.1:${hostPort}`,
-          AUTO_ITERATE: autoIterate ? "true" : "false",
-        },
-      });
-    }
-
-    await this.emit({
-      t: new Date().toISOString(),
-      type: "host.spawn",
-      pid: this.creature.pid!,
-      sha: this.currentSHA,
-    });
-
-    this.creature.on("exit", (code) => {
-      console.log(`[host] creature exited with code ${code}`);
-      if (!this.expectingExit) {
-        // For reconnected containers, docker logs exits with 0 when container stops —
-        // check if container is actually gone before treating as crash
-        if (reconnected && code === 0 && this.isContainerRunning()) return;
-        this.handleCreatureFailure("crash");
-      }
-      this.expectingExit = false;
-    });
-
-    this.startHealthCheck();
-    if (!reconnected) {
-      this.startRollbackTimer();
-    }
-  }
-
-  private startHealthCheck() {
-    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
-
-    this.healthCheckInterval = setInterval(async () => {
-      const healthy = await this.checkHealth();
-
-      if (healthy && !this.healthyAt) {
-        this.healthyAt = Date.now();
-      } else if (!healthy) {
-        this.healthyAt = null;
-      }
-
-      if (this.healthyAt && Date.now() - this.healthyAt >= HEALTH_GATE_MS) {
-        await this.promote();
-      }
-    }, 1000);
-  }
-
-  private startRollbackTimer() {
-    if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
-
-    this.rollbackTimeout = setTimeout(() => {
-      if (!this.healthyAt) {
-        this.handleCreatureFailure("health timeout");
-      }
-    }, ROLLBACK_TIMEOUT_MS);
-  }
-
-  private async checkHealth(): Promise<boolean> {
-    try {
-      const res = await fetch(`http://127.0.0.1:${this.config.creaturePort}/healthz`);
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  private async promote() {
-    if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
-    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
-
-    this.lastGoodSHA = this.currentSHA;
-    await setLastGoodSHA(this.config.creatureDir, this.lastGoodSHA);
-
-    await this.emit({
-      t: new Date().toISOString(),
-      type: "host.promote",
-      sha: this.lastGoodSHA,
-    });
-
-    console.log(`[host] promoted ${this.lastGoodSHA.slice(0, 7)}`);
-  }
-
-  private async handleCreatureFailure(reason: string) {
-    console.log(`[host] rollback triggered: ${reason}`);
-
-    const from = this.currentSHA;
-    const to = this.lastGoodSHA;
-
-    this.killCreature();
-    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
-    if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
-
-    await this.emit({
-      t: new Date().toISOString(),
-      type: "host.rollback",
-      from,
-      to,
-      reason,
-    });
-
-    resetToSHA(this.config.creatureDir, to);
-    await this.spawnCreature();
-  }
-
-  private async restartCreature(_sha: string) {
-    console.log(`[host] restart requested`);
-
-    this.expectingExit = true;
-    this.killCreature();
-    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
-    if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
-
-    this.healthyAt = null;
-    await this.spawnCreature();
-  }
-
-  private async renderUI(): Promise<string> {
-    const name = this.config.creatureName;
+  private renderDashboard(): string {
     return `<!DOCTYPE html>
 <html>
 <head>
-  <title>itsalive — ${name}</title>
+  <title>itsalive</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: #0a0a0a; color: #ccc; padding: 24px; font-size: 13px; }
-    h1 { color: #0f0; font-size: 18px; margin-bottom: 16px; }
-    h1 span { color: #555; font-weight: normal; }
-    .status { display: flex; gap: 24px; margin-bottom: 16px; padding: 12px 16px; background: #141414; border: 1px solid #222; border-radius: 6px; }
-    .status div { color: #777; }
-    .status span { color: #eee; }
-    .status .healthy-yes { color: #0f0; }
-    .status .healthy-no { color: #f55; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      background: #0a0a0a; color: #ccc; font-size: 13px;
+      display: flex;
+    }
+
+    .sidebar {
+      position: sticky; top: 0; height: 100vh;
+      width: 220px; border-right: 1px solid #222;
+      display: flex; flex-direction: column; flex-shrink: 0;
+      overflow-y: auto;
+    }
+    .sidebar-header {
+      padding: 16px; color: #0f0; font-size: 16px; font-weight: bold;
+      border-bottom: 1px solid #222;
+    }
+    .creature-list { padding: 8px; flex: 1; }
+    .creature-item {
+      padding: 8px 12px; border-radius: 4px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
+    }
+    .creature-item:hover { background: #1a1a1a; }
+    .creature-item.selected { background: #1a1a2a; border-left: 2px solid #58f; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot.stopped { background: #555; }
+    .dot.starting { background: #fa0; }
+    .dot.running { background: #0f0; }
+    .dot.sleeping { background: #f80; }
+    .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn {
+      background: #222; border: 1px solid #333; color: #aaa;
+      padding: 2px 6px; border-radius: 3px; cursor: pointer;
+      font-family: inherit; font-size: 11px;
+    }
+    .btn:hover { background: #333; color: #fff; }
+
+    .main {
+      flex: 1; min-width: 0; padding: 16px;
+    }
+    .main-header {
+      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #222;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .main-header h2 { color: #eee; font-size: 14px; }
+    .main-header .info { color: #555; font-size: 12px; }
+    .main-header .sha { color: #58f; }
     .events { display: flex; flex-direction: column; gap: 2px; }
+
     .event { padding: 6px 12px; border-radius: 4px; border-left: 3px solid #333; background: #111; }
     .event .time { color: #555; font-size: 11px; }
+    .event .clabel { color: #58f; font-size: 11px; margin-left: 4px; font-weight: bold; }
     .event .type { font-weight: bold; margin-left: 8px; }
 
     .event.host-boot { border-left-color: #666; }
@@ -400,6 +432,7 @@ export class Host {
     .event.host-promote { border-left-color: #0f0; }
     .event.host-rollback { border-left-color: #f33; background: #1a0808; }
     .event.creature-boot { border-left-color: #58f; }
+    .event.creature-thought { border-left-color: #888; }
     .event.creature-sleep { border-left-color: #fa0; }
     .event.creature-tool-call { border-left-color: #0af; }
     .event.creature-tool-call.browser { border-left-color: #a6e; }
@@ -412,6 +445,7 @@ export class Host {
     .event .type.tool { color: #0af; }
     .event .type.tool.browser { color: #a6e; }
     .event .type.tool.fail { color: #f55; }
+    .event .type.thought { color: #aaa; }
     .event .type.boot { color: #58f; }
 
     .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
@@ -425,121 +459,206 @@ export class Host {
     .tool-status.err { color: #f55; }
     .tool-output { display: block; color: #888; margin-top: 4px; padding: 6px 8px; background: #0d0d0d; border-radius: 3px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
     .tool-ms { color: #555; font-size: 11px; margin-left: 6px; }
+    .tool-detail { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #888; padding: 8px; background: #0d0d0d; border-radius: 4px; margin-top: 6px; }
+    .tool-detail-cmd { margin-bottom: 6px; }
+    .tool-detail-out { border-top: 1px solid #222; padding-top: 6px; }
     .sha { color: #58f; }
     .detail { color: #888; margin-left: 4px; }
+
+    .message-bar {
+      position: sticky; bottom: 0; background: #0a0a0a;
+      padding: 12px 0; margin-top: 12px; border-top: 1px solid #222;
+      display: none; gap: 8px;
+    }
+    .message-bar.visible { display: flex; }
+    .message-bar textarea {
+      flex: 1; background: #111; border: 1px solid #333;
+      color: #eee; padding: 8px 12px; border-radius: 4px;
+      font-family: inherit; font-size: 13px;
+      resize: vertical; min-height: 38px; max-height: 200px;
+    }
+    .message-bar textarea:focus { outline: none; border-color: #58f; }
+    .message-bar button {
+      background: #1a1a2a; border: 1px solid #58f; color: #58f;
+      padding: 8px 16px; border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 13px;
+    }
+    .message-bar button:hover { background: #2a2a4a; }
   </style>
 </head>
 <body>
-  <h1>itsalive <span>— ${name}</span></h1>
-  <div class="status">
-    <div>sha <span id="current">-</span></div>
-    <div>last good <span id="last_good">-</span></div>
-    <div>pid <span id="pid">-</span></div>
-    <div>healthy <span id="healthy">-</span></div>
+  <div class="sidebar">
+    <div class="sidebar-header">itsalive</div>
+    <div class="creature-list" id="creatures"></div>
   </div>
-  <div class="events" id="events"></div>
+  <div class="main">
+    <div class="main-header" id="header">
+      <h2>all creatures</h2>
+    </div>
+    <div class="events" id="events"></div>
+    <div class="message-bar" id="msgbar">
+      <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}"></textarea>
+      <button onclick="sendMsg()">Send</button>
+    </div>
+  </div>
+
   <script>
+    let selected = null;
+    let creatures = {};
     const eventsEl = document.getElementById('events');
-    const sse = new EventSource('/events');
+    const headerEl = document.getElementById('header');
+    const msgBar = document.getElementById('msgbar');
 
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function ts(t) { return t ? t.slice(11, 19) : ''; }
-    function toggleThought(id) { document.getElementById(id)?.classList.toggle('open'); }
+    function toggle(id) { document.getElementById(id)?.classList.toggle('open'); }
     function summarize(text, max) {
       if (!text) return '...';
       const line = text.split('\\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))[0] || text.trim();
       return line.length > max ? line.slice(0, max) + '...' : line;
     }
 
-    function renderEvent(ev) {
+    function uid() { return 'u' + Date.now() + Math.random().toString(36).slice(2,6); }
+
+    function renderEvent(ev, showCreature) {
       const t = ev.type;
       let cls = t.replace(/\\./g, '-');
       let body = '';
+      const cl = showCreature && ev.creature ? '<span class="clabel">' + esc(ev.creature) + '</span>' : '';
 
       if (t === 'creature.sleep') {
         const secs = ev.seconds || 30;
         const acts = ev.actions || 0;
-        const badge = '<span class="tool-ms">' + secs + 's sleep / ' + acts + ' actions</span>';
-        const summary = summarize(ev.text, 120);
-        const full = ev.text || '';
-        const id = 'i' + Date.now() + Math.random().toString(36).slice(2,6);
-        body = '<span class="type sleep">sleep</span>'
-          + badge
-          + '<span class="intent-text thought-summary" onclick="toggleThought(\\''+id+'\\')"> — ' + esc(summary) + '</span>'
-          + '<div class="thought-body" id="'+id+'">' + esc(full) + '</div>';
+        const id = uid();
+        body = cl + '<span class="type sleep">sleep</span>'
+          + '<span class="tool-ms">' + secs + 's / ' + acts + ' actions</span>'
+          + '<span class="intent-text thought-summary" onclick="toggle(\\''+id+'\\')"> \\u2014 ' + esc(summarize(ev.text, 120)) + '</span>'
+          + '<div class="thought-body" id="'+id+'">' + esc(ev.text || '') + '</div>';
       } else if (t === 'creature.tool_call') {
-        const toolName = ev.tool || 'bash';
-        const isBrowser = toolName === 'browser';
-        const okFail = ev.ok ? '<span class="tool-status ok">ok</span>' : '<span class="tool-status err">fail</span>';
+        const tn = ev.tool || 'bash';
+        const br = tn === 'browser';
         cls += ev.ok ? '' : ' fail';
-        cls += isBrowser ? ' browser' : '';
-        const toolCls = 'type tool' + (isBrowser ? ' browser' : '') + (ev.ok ? '' : ' fail');
-        body = '<span class="' + toolCls + '">' + esc(toolName) + '</span>'
-          + '<code class="tool-cmd">' + esc(ev.input) + '</code>'
-          + okFail
-          + '<span class="tool-ms">' + ev.ms + 'ms</span>';
-        if (ev.output) {
-          const outId = 'o' + Date.now() + Math.random().toString(36).slice(2,6);
-          const outPreview = ev.output.length > 120 ? ev.output.slice(0, 120) + '...' : ev.output;
-          if (ev.output.length > 120) {
-            body += '<code class="tool-output thought-summary" onclick="toggleThought(\\''+outId+'\\')"> ' + esc(outPreview) + '</code>';
-            body += '<code class="tool-output thought-body" id="'+outId+'">' + esc(ev.output) + '</code>';
-          } else {
-            body += '<code class="tool-output">' + esc(ev.output) + '</code>';
-          }
-        }
+        cls += br ? ' browser' : '';
+        const tc = 'type tool' + (br ? ' browser' : '') + (ev.ok ? '' : ' fail');
+        const oid = uid();
+        const cmdPreview = (ev.input || '').length > 80 ? (ev.input || '').slice(0,80) + '...' : (ev.input || '');
+        body = cl + '<span class="' + tc + ' thought-summary" onclick="toggle(\\''+oid+'\\')">\\u25b6 ' + esc(tn) + '</span>'
+          + '<code class="tool-cmd thought-summary" onclick="toggle(\\''+oid+'\\')"> ' + esc(cmdPreview) + '</code>'
+          + (ev.ok ? '<span class="tool-status ok">ok</span>' : '<span class="tool-status err">fail</span>')
+          + '<span class="tool-ms">' + (ev.ms||0) + 'ms</span>'
+          + '<div class="tool-detail thought-body" id="'+oid+'">'
+          + '<div class="tool-detail-cmd"><strong>input:</strong> ' + esc(ev.input || '') + '</div>'
+          + (ev.output ? '<div class="tool-detail-out"><strong>output:</strong>\\n' + esc(ev.output) + '</div>' : '')
+          + '</div>';
+      } else if (t === 'creature.thought') {
+        body = cl + '<span class="type thought">thought</span>'
+          + '<span class="intent-text"> ' + esc(ev.text || '') + '</span>';
       } else if (t === 'host.promote') {
-        body = '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + ev.sha.slice(0,7) + '</span></span>';
+        body = cl + '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'host.rollback') {
-        body = '<span class="type rollback">rollback</span><span class="detail">' + esc(ev.reason) + ' <span class="sha">' + ev.from.slice(0,7) + '</span> → <span class="sha">' + ev.to.slice(0,7) + '</span></span>';
+        body = cl + '<span class="type rollback">rollback</span><span class="detail">' + esc(ev.reason||'') + ' <span class="sha">' + (ev.from||'').slice(0,7) + '</span> \\u2192 <span class="sha">' + (ev.to||'').slice(0,7) + '</span></span>';
       } else if (t === 'host.spawn') {
-        body = '<span class="type boot">spawn</span><span class="detail">pid ' + ev.pid + ' <span class="sha">' + ev.sha.slice(0,7) + '</span></span>';
+        body = cl + '<span class="type boot">spawn</span><span class="detail">pid ' + (ev.pid||'?') + ' <span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'creature.boot') {
-        body = '<span class="type boot">creature boot</span><span class="detail"><span class="sha">' + ev.sha.slice(0,7) + '</span></span>';
+        body = cl + '<span class="type boot">creature boot</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'host.boot') {
-        body = '<span class="type host">host boot</span>';
+        body = cl + '<span class="type host">host boot</span>';
       } else {
-        body = '<span class="type host">' + esc(t) + '</span><span class="detail">' + esc(JSON.stringify(ev)) + '</span>';
+        body = cl + '<span class="type host">' + esc(t) + '</span>';
       }
 
       return '<div class="event ' + cls + '"><span class="time">' + ts(ev.t) + '</span>' + body + '</div>';
     }
 
+    // SSE
+    const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {
       const ev = JSON.parse(e.data);
-      eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev));
-      window.scrollTo(0, document.body.scrollHeight);
+      if (selected === null || ev.creature === selected) {
+        eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
+        window.scrollTo(0, document.body.scrollHeight);
+      }
     };
 
-    setInterval(async () => {
+    async function select(name) {
+      selected = name;
+      eventsEl.innerHTML = '';
+      if (name) {
+        headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
+          + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>';
+        msgBar.classList.add('visible');
+        try {
+          const res = await fetch('/api/creatures/' + name + '/events');
+          const events = await res.json();
+          for (const ev of events) {
+            eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, false));
+          }
+          window.scrollTo(0, document.body.scrollHeight);
+        } catch {}
+      } else {
+        headerEl.innerHTML = '<h2>all creatures</h2>';
+        msgBar.classList.remove('visible');
+      }
+      renderSidebar();
+    }
+
+    function renderSidebar() {
+      const names = Object.keys(creatures).sort();
+      let html = '<div class="creature-item' + (selected === null ? ' selected' : '') + '" onclick="select(null)">'
+        + '<span class="cname" style="color:#888">all</span></div>';
+      for (const n of names) {
+        const c = creatures[n];
+        const sel = selected === n ? ' selected' : '';
+        const dot = '<span class="dot ' + c.status + '"></span>';
+        let act = '';
+        if (c.status === 'stopped') {
+          act = '<button class="btn" onclick="event.stopPropagation();startC(\\''+n+'\\')">start</button>';
+        } else {
+          act = '<button class="btn" onclick="event.stopPropagation();stopC(\\''+n+'\\')">stop</button>';
+        }
+        html += '<div class="creature-item' + sel + '" onclick="select(\\''+n+'\\')">'
+          + dot + '<span class="cname">' + esc(n) + '</span>' + act + '</div>';
+      }
+      document.getElementById('creatures').innerHTML = html;
+    }
+
+    async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
+    async function stopC(n) { await fetch('/api/creatures/'+n+'/stop',{method:'POST'}); refresh(); }
+    async function restartC(n) { await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
+    async function sendMsg() {
+      if (!selected) return;
+      const inp = document.getElementById('msg');
+      const text = inp.value.trim();
+      if (!text) return;
+      await fetch('/api/creatures/'+selected+'/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+      inp.value = '';
+    }
+
+    async function refresh() {
       try {
-        const res = await fetch('/status');
-        const s = await res.json();
-        document.getElementById('current').textContent = s.current_sha.slice(0, 7);
-        document.getElementById('last_good').textContent = s.last_good_sha.slice(0, 7);
-        document.getElementById('pid').textContent = s.pid || 'none';
-        const h = document.getElementById('healthy');
-        h.textContent = s.healthy ? 'yes' : 'no';
-        h.className = s.healthy ? 'healthy-yes' : 'healthy-no';
+        const res = await fetch('/api/creatures');
+        creatures = {};
+        for (const c of await res.json()) creatures[c.name] = c;
+        renderSidebar();
+        if (selected && creatures[selected]) {
+          const el = document.getElementById('cinfo');
+          if (el) {
+            const c = creatures[selected];
+            el.innerHTML = '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \\u00b7 ' + c.status;
+          }
+        }
       } catch {}
-    }, 1000);
+    }
+
+    refresh();
+    setInterval(refresh, 2000);
   </script>
 </body>
 </html>`;
   }
 }
 
-// Direct invocation: parse config from env vars (used by CLI start command)
-if (process.env.CREATURE_DIR) {
-  const config: HostConfig = {
-    creatureDir: process.env.CREATURE_DIR,
-    creatureName: process.env.CREATURE_NAME || path.basename(process.env.CREATURE_DIR),
-    hostPort: parseInt(process.env.HOST_PORT || "7777"),
-    creaturePort: parseInt(process.env.CREATURE_PORT || "7778"),
-    autoIterate: process.env.AUTO_ITERATE !== "false",
-    sandboxed: process.env.SANDBOXED === "true",
-  };
-
-  const host = new Host(config);
-  host.start();
-}
+// --- Entry point ---
+const port = parseInt(process.env.ORCHESTRATOR_PORT || '7770');
+const orchestrator = new Orchestrator(port);
+orchestrator.start();
