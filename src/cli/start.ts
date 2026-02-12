@@ -1,13 +1,38 @@
-import { spawn } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
+import {
+  execSync,
+  spawn,
+} from 'node:child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
-import { creatureDir } from "./paths.js";
-import { allocatePorts, readRunFile } from "./ports.js";
+import { creatureDir } from './paths.js';
+import {
+  allocatePorts,
+  readRunFile,
+} from './ports.js';
 
 interface StartOptions {
   name: string;
   manual: boolean;
+  bare: boolean;
+}
+
+function isDockerAvailable(): boolean {
+  try {
+    execSync("docker info", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasDockerImage(name: string): boolean {
+  try {
+    const out = execSync(`docker images -q creature-${name}`, { encoding: "utf-8" }).trim();
+    return out.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export async function start(opts: StartOptions): Promise<void> {
@@ -34,9 +59,19 @@ export async function start(opts: StartOptions): Promise<void> {
     }
   }
 
+  // Determine sandboxed mode: use Docker if available and image exists, unless --bare
+  const sandboxed = !opts.bare && isDockerAvailable() && hasDockerImage(opts.name);
+  if (sandboxed) {
+    console.log(`starting creature "${opts.name}" (sandboxed)...`);
+  } else {
+    if (!opts.bare && isDockerAvailable()) {
+      console.log(`no docker image for "${opts.name}" — running bare (build with: docker build -t creature-${opts.name} <creature-dir>)`);
+    }
+    console.log(`starting creature "${opts.name}" (bare)...`);
+  }
+
   const { hostPort, creaturePort } = await allocatePorts();
 
-  console.log(`starting creature "${opts.name}"...`);
   console.log(`  host:     http://localhost:${hostPort}`);
   console.log(`  creature: http://localhost:${creaturePort}`);
 
@@ -53,6 +88,7 @@ export async function start(opts: StartOptions): Promise<void> {
       HOST_PORT: String(hostPort),
       CREATURE_PORT: String(creaturePort),
       AUTO_ITERATE: opts.manual ? "false" : "true",
+      SANDBOXED: sandboxed ? "true" : "false",
     },
   });
 

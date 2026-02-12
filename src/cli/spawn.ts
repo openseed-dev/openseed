@@ -1,10 +1,14 @@
-import crypto from "node:crypto";
-import { execSync } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { execSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
-import { CREATURES_DIR, creatureDir, templateDir } from "./paths.js";
-import { readVersion } from "./version.js";
+import {
+  creatureDir,
+  CREATURES_DIR,
+  templateDir,
+} from './paths.js';
+import { readVersion } from './version.js';
 
 interface SpawnOptions {
   name: string;
@@ -85,8 +89,30 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
   execSync("git add -A", { cwd: dir, stdio: "pipe" });
   execSync('git commit -m "genesis"', { cwd: dir, stdio: "pipe" });
 
+  // Build Docker image if Docker is available
+  if (isDockerAvailable()) {
+    console.log("building docker image...");
+    try {
+      execSync(`docker build -t creature-${opts.name} .`, { cwd: dir, stdio: "inherit" });
+      console.log(`docker image creature-${opts.name} built`);
+    } catch (err) {
+      console.warn("docker build failed — creature will run in bare mode");
+    }
+  } else {
+    console.log("docker not available — creature will run in bare mode");
+  }
+
   console.log(`creature "${opts.name}" spawned at ${dir}`);
   console.log(`  id: ${birth.id}`);
   console.log(`  born: ${birth.born}`);
   console.log(`\nstart it with: itsalive start ${opts.name}`);
+}
+
+function isDockerAvailable(): boolean {
+  try {
+    execSync("docker info", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }

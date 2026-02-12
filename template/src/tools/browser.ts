@@ -39,14 +39,14 @@ async function ensureContext(): Promise<BrowserContext> {
     timezoneId: "America/New_York",
   };
 
-  // Prefer installed Chrome — passes anti-bot checks far better
+  // Use installed Chrome if available (better anti-bot), fall back to Playwright's Chromium
+  // In Docker containers, Chrome won't be installed — falls back automatically
   try {
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
       channel: "chrome",
       ...launchOpts,
     });
   } catch {
-    // Chrome not installed or profile locked — use Playwright's Chromium
     context = await chromium.launchPersistentContext(PROFILE_DIR, launchOpts);
   }
 

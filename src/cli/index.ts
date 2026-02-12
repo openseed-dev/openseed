@@ -1,11 +1,11 @@
 #!/usr/bin/env tsx
 
-import { spawn } from "./spawn.js";
-import { start } from "./start.js";
-import { list } from "./list.js";
-import { stop } from "./stop.js";
-import { destroy } from "./destroy.js";
-import { fork } from "./fork.js";
+import { destroy } from './destroy.js';
+import { fork } from './fork.js';
+import { list } from './list.js';
+import { spawn } from './spawn.js';
+import { start } from './start.js';
+import { stop } from './stop.js';
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -14,13 +14,15 @@ function usage(): never {
 
 commands:
   spawn <name> [--purpose "..."]   create a new creature from template
-  start <name> [--manual]          start a creature (host + creature process)
+  start <name> [--manual] [--bare] start a creature (host + creature process)
   stop <name>                      stop a running creature
   list                             list all creatures and their status
   destroy <name>                   stop and remove a creature
   fork <source> <name>             fork a creature (copies full git history)
 
 options:
+  --bare                           run without Docker sandbox
+  --manual                         don't auto-start cognition loop
   --help                           show this help
 `);
   process.exit(0);
@@ -56,11 +58,12 @@ async function main() {
     case "start": {
       const name = args.find((a) => !a.startsWith("--"));
       if (!name) {
-        console.error("usage: itsalive start <name> [--manual]");
+        console.error("usage: itsalive start <name> [--manual] [--bare]");
         process.exit(1);
       }
       const manual = hasFlag(args, "--manual");
-      await start({ name, manual });
+      const bare = hasFlag(args, "--bare");
+      await start({ name, manual, bare });
       break;
     }
 

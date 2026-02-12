@@ -1,5 +1,6 @@
 import {
   ChildProcess,
+  execSync,
   spawn,
 } from 'node:child_process';
 import fs from 'node:fs/promises';
@@ -30,6 +31,7 @@ export interface HostConfig {
   hostPort: number;
   creaturePort: number;
   autoIterate: boolean;
+  sandboxed: boolean;
 }
 
 export class Host {
@@ -92,9 +94,17 @@ export class Host {
     }
   }
 
+  private killCreature() {
+    if (this.config.sandboxed) {
+      try { execSync(`docker kill ${this.containerName()}`, { stdio: "ignore" }); } catch {}
+    } else if (this.creature) {
+      this.creature.kill();
+    }
+  }
+
   private setupCleanup() {
     const cleanup = async () => {
-      if (this.creature) this.creature.kill();
+      this.killCreature();
       await this.cleanupRunFile();
       process.exit(0);
     };
@@ -180,22 +190,52 @@ export class Host {
     });
   }
 
+  private containerName(): string {
+    return `creature-${this.config.creatureName}`;
+  }
+
   private async spawnCreature() {
-    const { creatureDir, creaturePort, hostPort, autoIterate } = this.config;
+    const { creatureDir, creaturePort, hostPort, autoIterate, sandboxed } = this.config;
 
     this.currentSHA = getCurrentSHA(creatureDir);
 
-    // Run the creature's own entry point from its own directory using its own tsx
-    this.creature = spawn("npx", ["tsx", "src/index.ts"], {
-      cwd: creatureDir,
-      stdio: ["ignore", "inherit", "inherit"],
-      env: {
-        ...process.env,
-        PORT: String(creaturePort),
-        HOST_URL: `http://127.0.0.1:${hostPort}`,
-        AUTO_ITERATE: autoIterate ? "true" : "false",
-      },
-    });
+    if (sandboxed) {
+      const name = this.containerName();
+
+      // Clean up any leftover container with the same name
+      try { execSync(`docker rm -f ${name}`, { stdio: "ignore" }); } catch {}
+
+      this.creature = spawn("docker", [
+        "run", "--rm", "--init",
+        "--name", name,
+        "--memory", "2g",
+        "--cpus", "1.5",
+        "-p", `${creaturePort}:7778`,
+        "-v", `${creatureDir}:/creature`,
+        // Named volume for node_modules so host's macOS binaries don't overwrite Linux ones
+        "-v", `${name}-node-modules:/creature/node_modules`,
+        "-e", `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY || ""}`,
+        "-e", `HOST_URL=http://host.docker.internal:${hostPort}`,
+        "-e", "PORT=7778",
+        "-e", `AUTO_ITERATE=${autoIterate ? "true" : "false"}`,
+        `creature-${this.config.creatureName}`,
+      ], {
+        stdio: ["ignore", "inherit", "inherit"],
+      });
+
+      console.log(`[host] spawned container ${name}`);
+    } else {
+      this.creature = spawn("npx", ["tsx", "src/index.ts"], {
+        cwd: creatureDir,
+        stdio: ["ignore", "inherit", "inherit"],
+        env: {
+          ...process.env,
+          PORT: String(creaturePort),
+          HOST_URL: `http://127.0.0.1:${hostPort}`,
+          AUTO_ITERATE: autoIterate ? "true" : "false",
+        },
+      });
+    }
 
     await this.emit({
       t: new Date().toISOString(),
@@ -275,7 +315,7 @@ export class Host {
     const from = this.currentSHA;
     const to = this.lastGoodSHA;
 
-    if (this.creature) this.creature.kill();
+    this.killCreature();
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
 
@@ -295,7 +335,7 @@ export class Host {
     console.log(`[host] restart requested`);
 
     this.expectingExit = true;
-    if (this.creature) this.creature.kill();
+    this.killCreature();
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
 
@@ -466,6 +506,7 @@ if (process.env.CREATURE_DIR) {
     hostPort: parseInt(process.env.HOST_PORT || "7777"),
     creaturePort: parseInt(process.env.CREATURE_PORT || "7778"),
     autoIterate: process.env.AUTO_ITERATE !== "false",
+    sandboxed: process.env.SANDBOXED === "true",
   };
 
   const host = new Host(config);
