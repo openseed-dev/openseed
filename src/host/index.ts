@@ -102,9 +102,24 @@ export class Host {
     }
   }
 
+  private isContainerRunning(): boolean {
+    try {
+      const out = execSync(
+        `docker inspect -f '{{.State.Running}}' ${this.containerName()}`,
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+      ).trim();
+      return out === "true";
+    } catch {
+      return false;
+    }
+  }
+
   private setupCleanup() {
     const cleanup = async () => {
-      this.killCreature();
+      // In sandboxed mode, let the container keep running independently
+      if (!this.config.sandboxed) {
+        this.killCreature();
+      }
       await this.cleanupRunFile();
       process.exit(0);
     };
@@ -199,31 +214,42 @@ export class Host {
 
     this.currentSHA = getCurrentSHA(creatureDir);
 
+    let reconnected = false;
+
     if (sandboxed) {
       const name = this.containerName();
 
-      // Clean up any leftover container with the same name
-      try { execSync(`docker rm -f ${name}`, { stdio: "ignore" }); } catch {}
+      if (this.isContainerRunning()) {
+        // Container is already running — reconnect by tailing its logs
+        console.log(`[host] reconnecting to running container ${name}`);
+        this.creature = spawn("docker", ["logs", "-f", "--tail", "50", name], {
+          stdio: ["ignore", "inherit", "inherit"],
+        });
+        reconnected = true;
+      } else {
+        // Clean up any stopped container with the same name
+        try { execSync(`docker rm -f ${name}`, { stdio: "ignore" }); } catch {}
 
-      this.creature = spawn("docker", [
-        "run", "--rm", "--init",
-        "--name", name,
-        "--memory", "2g",
-        "--cpus", "1.5",
-        "-p", `${creaturePort}:7778`,
-        "-v", `${creatureDir}:/creature`,
-        // Named volume for node_modules so host's macOS binaries don't overwrite Linux ones
-        "-v", `${name}-node-modules:/creature/node_modules`,
-        "-e", `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY || ""}`,
-        "-e", `HOST_URL=http://host.docker.internal:${hostPort}`,
-        "-e", "PORT=7778",
-        "-e", `AUTO_ITERATE=${autoIterate ? "true" : "false"}`,
-        `creature-${this.config.creatureName}`,
-      ], {
-        stdio: ["ignore", "inherit", "inherit"],
-      });
+        this.creature = spawn("docker", [
+          "run", "--rm", "--init",
+          "--name", name,
+          "--memory", "2g",
+          "--cpus", "1.5",
+          "-p", `${creaturePort}:7778`,
+          "-v", `${creatureDir}:/creature`,
+          // Named volume for node_modules so host's macOS binaries don't overwrite Linux ones
+          "-v", `${name}-node-modules:/creature/node_modules`,
+          "-e", `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY || ""}`,
+          "-e", `HOST_URL=http://host.docker.internal:${hostPort}`,
+          "-e", "PORT=7778",
+          "-e", `AUTO_ITERATE=${autoIterate ? "true" : "false"}`,
+          `creature-${this.config.creatureName}`,
+        ], {
+          stdio: ["ignore", "inherit", "inherit"],
+        });
 
-      console.log(`[host] spawned container ${name}`);
+        console.log(`[host] spawned container ${name}`);
+      }
     } else {
       this.creature = spawn("npx", ["tsx", "src/index.ts"], {
         cwd: creatureDir,
@@ -246,14 +272,19 @@ export class Host {
 
     this.creature.on("exit", (code) => {
       console.log(`[host] creature exited with code ${code}`);
-      if (!this.expectingExit && code !== 0 && code !== null) {
+      if (!this.expectingExit) {
+        // For reconnected containers, docker logs exits with 0 when container stops —
+        // check if container is actually gone before treating as crash
+        if (reconnected && code === 0 && this.isContainerRunning()) return;
         this.handleCreatureFailure("crash");
       }
       this.expectingExit = false;
     });
 
     this.startHealthCheck();
-    this.startRollbackTimer();
+    if (!reconnected) {
+      this.startRollbackTimer();
+    }
   }
 
   private startHealthCheck() {
@@ -359,7 +390,7 @@ export class Host {
     .status span { color: #eee; }
     .status .healthy-yes { color: #0f0; }
     .status .healthy-no { color: #f55; }
-    .events { height: calc(100vh - 140px); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .events { display: flex; flex-direction: column; gap: 2px; }
     .event { padding: 6px 12px; border-radius: 4px; border-left: 3px solid #333; background: #111; }
     .event .time { color: #555; font-size: 11px; }
     .event .type { font-weight: bold; margin-left: 8px; }
@@ -386,13 +417,13 @@ export class Host {
     .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
     .thought-summary { cursor: pointer; }
     .thought-summary:hover { text-decoration: underline; }
-    .thought-body { display: none; margin-top: 6px; padding: 8px; background: #0d0d0d; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #aaa; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    .thought-body { display: none; margin-top: 6px; padding: 8px; background: #0d0d0d; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #aaa; font-size: 12px; }
     .thought-body.open { display: block; }
     .tool-cmd { color: #fff; background: #1a1a2a; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
     .tool-status { margin-left: 6px; font-size: 11px; }
     .tool-status.ok { color: #0f0; }
     .tool-status.err { color: #f55; }
-    .tool-output { display: block; color: #888; margin-top: 4px; padding: 6px 8px; background: #0d0d0d; border-radius: 3px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; font-size: 12px; }
+    .tool-output { display: block; color: #888; margin-top: 4px; padding: 6px 8px; background: #0d0d0d; border-radius: 3px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
     .tool-ms { color: #555; font-size: 11px; margin-left: 6px; }
     .sha { color: #58f; }
     .detail { color: #888; margin-left: 4px; }
@@ -477,7 +508,7 @@ export class Host {
     sse.onmessage = (e) => {
       const ev = JSON.parse(e.data);
       eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev));
-      eventsEl.scrollTop = eventsEl.scrollHeight;
+      window.scrollTo(0, document.body.scrollHeight);
     };
 
     setInterval(async () => {
