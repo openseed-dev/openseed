@@ -19,7 +19,7 @@ RUN npx playwright install --with-deps chromium
 # Copy creature code
 COPY . .
 
-RUN mkdir -p .self
+RUN mkdir -p .self workspace
 
 EXPOSE 7778
 

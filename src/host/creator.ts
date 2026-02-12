@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import Anthropic from '@anthropic-ai/sdk';
 
+import { CostTracker } from './costs.js';
 import { Event } from '../shared/types.js';
 import { EventStore } from './events.js';
 import { CreatureSupervisor } from './supervisor.js';
@@ -157,9 +158,11 @@ You can modify any file in the creature's directory:
 
 export class Creator {
   private client: Anthropic;
+  private costs: CostTracker | null = null;
 
-  constructor() {
+  constructor(costs?: CostTracker) {
     this.client = new Anthropic();
+    this.costs = costs || null;
   }
 
   async evaluate(
@@ -202,6 +205,11 @@ export class Creator {
       } catch (err) {
         console.error(`[creator] LLM call failed:`, err);
         break;
+      }
+
+      // Track token costs
+      if (this.costs && response.usage) {
+        this.costs.record(`creator:${name}`, response.usage.input_tokens, response.usage.output_tokens);
       }
 
       const text = response.content

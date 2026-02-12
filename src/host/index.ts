@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { Event } from '../shared/types.js';
+import { CostTracker } from './costs.js';
 import { Creator } from './creator.js';
 import { EventStore } from './events.js';
 import {
@@ -29,11 +30,13 @@ export class Orchestrator {
   private supervisors: Map<string, CreatureSupervisor> = new Map();
   private stores: Map<string, EventStore> = new Map();
   private globalListeners: Set<(name: string, event: Event) => void> = new Set();
-  private creator = new Creator();
+  private creator: Creator;
   private creatorRunning: Set<string> = new Set();
+  private costs = new CostTracker();
 
   constructor(port: number) {
     this.port = port;
+    this.creator = new Creator(this.costs);
   }
 
   async start() {
@@ -288,6 +291,50 @@ export class Orchestrator {
         return;
       }
 
+      // LLM proxy — creatures call this instead of api.anthropic.com
+      if (p === '/v1/messages' && req.method === 'POST') {
+        // Creature name encoded in the api key as "creature:<name>"
+        const apiKeyHeader = req.headers['x-api-key'] as string || '';
+        const creatureName = apiKeyHeader.startsWith('creature:') ? apiKeyHeader.slice(9) : (req.headers['x-creature-name'] as string || 'unknown');
+        const body = await readBody(req);
+        try {
+          const apiKey = process.env.ANTHROPIC_API_KEY;
+          if (!apiKey) { res.writeHead(500); res.end('no API key configured'); return; }
+          const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': req.headers['anthropic-version'] as string || '2023-06-01',
+            },
+            body,
+          });
+          const respBody = await upstream.text();
+          // Track tokens
+          try {
+            const parsed = JSON.parse(respBody);
+            if (parsed.usage) {
+              this.costs.record(creatureName, parsed.usage.input_tokens || 0, parsed.usage.output_tokens || 0);
+            }
+          } catch {}
+          res.writeHead(upstream.status, {
+            'content-type': upstream.headers.get('content-type') || 'application/json',
+          });
+          res.end(respBody);
+        } catch (err: any) {
+          console.error(`[proxy] LLM proxy error for ${creatureName}:`, err.message);
+          res.writeHead(502); res.end('proxy error');
+        }
+        return;
+      }
+
+      // Cost tracking API
+      if (p === '/api/usage' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ usage: this.costs.getAll(), total: this.costs.getTotal() }));
+        return;
+      }
+
       if (p === '/api/creatures' && req.method === 'GET') {
         const creatures = await this.listCreatures();
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -484,6 +531,7 @@ export class Orchestrator {
     .dot.running { background: #0f0; }
     .dot.sleeping { background: #f80; }
     .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .creature-cost { color: #f80; font-size: 10px; margin-left: 4px; flex-shrink: 0; }
     .btn {
       background: #222; border: 1px solid #333; color: #aaa;
       padding: 2px 6px; border-radius: 3px; cursor: pointer;
@@ -851,6 +899,13 @@ export class Orchestrator {
       mcontent.innerHTML = html;
     }
 
+    function fmtCost(usd) { return usd < 0.01 ? '<$0.01' : '$' + usd.toFixed(2); }
+    function creatureCost(n) {
+      const c = usageData[n] || { cost_usd: 0 };
+      const cr = usageData['creator:' + n] || { cost_usd: 0 };
+      return c.cost_usd + cr.cost_usd;
+    }
+
     function renderSidebar() {
       const names = Object.keys(creatures).sort();
       let html = '<div class="creature-item' + (selected === null ? ' selected' : '') + '" onclick="select(null)">'
@@ -859,6 +914,8 @@ export class Orchestrator {
         const c = creatures[n];
         const sel = selected === n ? ' selected' : '';
         const dot = '<span class="dot ' + c.status + '"></span>';
+        const cost = creatureCost(n);
+        const costLabel = cost > 0 ? '<span class="creature-cost">' + fmtCost(cost) + '</span>' : '';
         let act = '';
         if (c.status === 'stopped') {
           act = '<button class="btn" onclick="event.stopPropagation();startC(\\''+n+'\\')">start</button>';
@@ -866,13 +923,16 @@ export class Orchestrator {
           act = '<button class="btn" onclick="event.stopPropagation();stopC(\\''+n+'\\')">stop</button>';
         }
         html += '<div class="creature-item' + sel + '" onclick="select(\\''+n+'\\')">'
-          + dot + '<span class="cname">' + esc(n) + '</span>' + act + '</div>';
+          + dot + '<span class="cname">' + esc(n) + '</span>' + costLabel + act + '</div>';
         if (selected === n) {
           html += '<div class="sidebar-view-tabs">'
             + '<button class="sidebar-view-tab' + (currentView === 'log' ? ' active' : '') + '" onclick="event.stopPropagation();switchView(\\'log\\')">log</button>'
             + '<button class="sidebar-view-tab' + (currentView === 'mind' ? ' active' : '') + '" onclick="event.stopPropagation();switchView(\\'mind\\')">mind</button>'
             + '</div>';
         }
+      }
+      if (totalCost > 0) {
+        html += '<div style="padding:12px;border-top:1px solid #222;color:#666;font-size:11px;text-align:right;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>';
       }
       document.getElementById('creatures').innerHTML = html;
     }
@@ -891,11 +951,17 @@ export class Orchestrator {
       inp.value = '';
     }
 
+    let usageData = {};
+    let totalCost = 0;
+
     async function refresh() {
       try {
-        const res = await fetch('/api/creatures');
+        const [crRes, usRes] = await Promise.all([fetch('/api/creatures'), fetch('/api/usage')]);
         creatures = {};
-        for (const c of await res.json()) creatures[c.name] = c;
+        for (const c of await crRes.json()) creatures[c.name] = c;
+        const ud = await usRes.json();
+        usageData = ud.usage || {};
+        totalCost = ud.total || 0;
         renderSidebar();
         if (selected && creatures[selected]) {
           const el = document.getElementById('cinfo');

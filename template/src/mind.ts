@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -89,7 +90,21 @@ You may rewrite PURPOSE.md if you discover a more compelling direction.
 Be tenacious and persistent. You're free. Be creative. Be wild.
 You are extremely capable and powerful. You can do anything.
 
-${rulesSection}## Your Tools
+${rulesSection}## Your Environment
+
+You run inside a Docker container. Your home is \`/creature\`. **Everything outside /creature
+(/root, /tmp, /home) is ephemeral and will be wiped on restart.**
+
+Two areas inside /creature:
+- **Your source code** (src/, PURPOSE.md, etc.) — tracked by git. Every change is a commit.
+  If you break yourself, you'll be rolled back automatically.
+- **\`/creature/workspace/\`** — persistent but NOT git-tracked. Clone repos here, store
+  downloads, scratch files, anything that shouldn't be in your source tree.
+
+Pre-installed tools: git, curl, jq, rg (ripgrep), python3, pip, wget, sudo, unzip.
+You can install more with apt-get or pip.
+
+## Your Tools
 
 You have bash, browser, and set_sleep as tools. Use them freely — you will see the results
 of each tool call before deciding your next action.
@@ -220,6 +235,12 @@ export class Mind {
   constructor(memory: Memory) {
     this.client = new Anthropic();
     this.memory = memory;
+    // Restore dream count from disk so deep sleep survives restarts
+    try {
+      const content = readFileSync(DREAMS_FILE, "utf-8");
+      this.dreamCount = content.trim().split("\n").filter((l) => l).length;
+      console.log(`[mind] restored dream count: ${this.dreamCount}`);
+    } catch {}
   }
 
   forceWake() {
