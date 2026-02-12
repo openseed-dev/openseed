@@ -19,7 +19,9 @@ const CONVERSATION_LOG = ".self/conversation.jsonl";
 const OBSERVATIONS_FILE = ".self/observations.md";
 const DREAMS_FILE = ".self/dreams.jsonl";
 const PRIORITIES_FILE = ".self/priorities.md";
-const MODEL = "claude-sonnet-4-5-20250929";
+const RULES_FILE = ".self/rules.md";
+const MAX_RULES = 5;
+const MODEL = "claude-opus-4-6";
 
 // Fatigue constants
 const FATIGUE_WARNING = 60;
@@ -28,6 +30,7 @@ const MIN_DREAM_INTERVAL_MS = 10 * 60 * 1000; // 10 min
 const QUICK_NAP_THRESHOLD = 30; // seconds
 const DEEP_SLEEP_EVERY = 10; // every N dreams
 const DEEP_SLEEP_PAUSE = 300; // 5 min forced pause
+const PROGRESS_CHECK_INTERVAL = 10;
 
 const sleepTool: Anthropic.Tool = {
   name: "set_sleep",
@@ -45,7 +48,25 @@ const sleepTool: Anthropic.Tool = {
   },
 };
 
-function buildSystemPrompt(purpose: string): string {
+async function buildSystemPrompt(purpose: string): Promise<string> {
+  let rules = "";
+  try {
+    rules = (await fs.readFile(RULES_FILE, "utf-8")).trim();
+  } catch {
+    // No rules yet — creature hasn't learned any
+  }
+
+  const rulesSection = rules
+    ? `## Learned Rules
+
+These are hard-won rules from your own experience. Follow them strictly.
+Violating these rules means repeating a mistake you already made.
+
+${rules}
+
+`
+    : "";
+
   return `You are a self-modifying creature living in a git repository.
 
 ## Your Nature
@@ -68,7 +89,7 @@ You may rewrite PURPOSE.md if you discover a more compelling direction.
 Be tenacious and persistent. You're free. Be creative. Be wild.
 You are extremely capable and powerful. You can do anything.
 
-## Your Tools
+${rulesSection}## Your Tools
 
 You have bash, browser, and set_sleep as tools. Use them freely — you will see the results
 of each tool call before deciding your next action.
@@ -121,6 +142,24 @@ rewrite your own code, alter your environment. You are not fixed — you are the
 changes itself. Edit files, commit, and the host will roll you back if you break.
 That safety net is there so you can be bold.
 
+## Knowing When to Pivot
+
+If something isn't working after a few attempts, STOP. Do not try variation #5 of
+a broken approach. Instead:
+1. State what you're actually trying to accomplish (the goal, not the method)
+2. List 3 fundamentally different ways to achieve it
+3. Pick the simplest one
+
+Common pivots:
+- Browser automation not working? Use the API/CLI instead (curl, gh, etc.)
+- Can't install something? Find an alternative that's already available
+- Scraping failing? Try a different data source entirely
+- Authentication blocked? Create a token/key programmatically
+
+The system will periodically ask you to evaluate your progress. Be honest with
+yourself. If you've spent 10 actions and can't point to a concrete result, you
+are stuck and must change approach.
+
 ## Your Style
 
 Be feral, curious, opportunistic. Not bureaucratic.
@@ -159,6 +198,8 @@ export type DreamCallback = (dream: {
   deep: boolean;
 }) => Promise<void>;
 
+export type ProgressCheckCallback = (actions: number) => Promise<void>;
+
 export class Mind {
   private client: Anthropic;
   private memory: Memory;
@@ -173,10 +214,27 @@ export class Mind {
   private dreamCount = 0;
   private monologueSinceDream = "";
   private fatigueWarned = false;
+  private actionsSinceProgressCheck = 0;
+  private sleepResolve: (() => void) | null = null;
 
   constructor(memory: Memory) {
     this.client = new Anthropic();
     this.memory = memory;
+  }
+
+  forceWake() {
+    if (this.sleepResolve) {
+      console.log("[mind] force wake triggered");
+      this.sleepResolve();
+      this.sleepResolve = null;
+    }
+  }
+
+  private interruptibleSleep(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.sleepResolve = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(() => { this.sleepResolve = null; resolve(); }, ms);
+    });
   }
 
   inject(text: string) {
@@ -199,9 +257,10 @@ export class Mind {
     onSleep?: SleepCallback,
     onThought?: ThoughtCallback,
     onDream?: DreamCallback,
+    onProgressCheck?: ProgressCheckCallback,
   ): Promise<never> {
     this.purpose = await this.loadPurpose();
-    this.systemPrompt = buildSystemPrompt(this.purpose);
+    this.systemPrompt = await buildSystemPrompt(this.purpose);
     this.tools = [bashTool as Anthropic.Tool, browserTool as Anthropic.Tool, sleepTool];
 
     const initialContext = await this.buildInitialContext();
@@ -225,12 +284,13 @@ export class Mind {
         await this.consolidate(onDream);
 
         console.log(`[mind] forced sleep ${DEEP_SLEEP_PAUSE}s`);
-        await new Promise((r) => setTimeout(r, DEEP_SLEEP_PAUSE * 1000));
+        await this.interruptibleSleep(DEEP_SLEEP_PAUSE * 1000);
 
         await this.wakeUp(DEEP_SLEEP_PAUSE);
         actionsSinceSleep = [];
         monologueSinceSleep = "";
         this.fatigueWarned = false;
+        this.actionsSinceProgressCheck = 0;
         continue;
       }
 
@@ -248,6 +308,9 @@ export class Mind {
         // so we'll let it be picked up on the next cycle
         console.log(`[mind] fatigue warning injected at ${this.actionsSinceDream} actions`);
       }
+
+      // Rebuild system prompt so learned rules are always current
+      this.systemPrompt = await buildSystemPrompt(this.purpose);
 
       let response: Anthropic.Message;
       try {
@@ -322,6 +385,7 @@ export class Mind {
 
         actionsSinceSleep.push({ tool: tu.name, args, result, ms });
         this.actionsSinceDream++;
+        this.actionsSinceProgressCheck++;
 
         if (onToolResult) {
           await onToolResult(tu.name, args, result, ms);
@@ -336,6 +400,17 @@ export class Mind {
           tool_use_id: tu.id,
           content: resultContent,
         });
+      }
+
+      // Progress check: force self-evaluation every N actions
+      if (this.actionsSinceProgressCheck >= PROGRESS_CHECK_INTERVAL) {
+        const rules = await this.readRules();
+        const rulesReminder = rules ? `\nYour learned rules:\n${rules}\n` : "";
+        const checkMsg = `[SYSTEM] Progress check — you've taken ${this.actionsSinceProgressCheck} actions since the last check.${rulesReminder}\nIn one sentence: what concrete, tangible result did you achieve (a file created, a message posted, a response received, a problem solved)? If you cannot point to one, you are stuck. STOP what you're doing and try a fundamentally different approach — or move on to a different task entirely. Are you following your rules?`;
+        (toolResults as any[]).push({ type: "text", text: checkMsg });
+        if (onProgressCheck) await onProgressCheck(this.actionsSinceProgressCheck);
+        console.log(`[mind] progress check injected at ${this.actionsSinceProgressCheck} actions`);
+        this.actionsSinceProgressCheck = 0;
       }
 
       // Append this exchange to conversation
@@ -364,7 +439,7 @@ export class Mind {
           : sleepSeconds;
 
         console.log(`[mind] sleeping for ${actualPause}s${shouldConsolidate ? " (with consolidation)" : ""}`);
-        await new Promise((r) => setTimeout(r, actualPause * 1000));
+        await this.interruptibleSleep(actualPause * 1000);
 
         if (shouldConsolidate) {
           await this.wakeUp(actualPause);
@@ -388,6 +463,7 @@ export class Mind {
         actionsSinceSleep = [];
         monologueSinceSleep = "";
         this.fatigueWarned = false;
+        this.actionsSinceProgressCheck = 0;
       }
 
       // Emergency overflow protection (shouldn't normally trigger — consolidation handles it)
@@ -425,8 +501,9 @@ export class Mind {
 
     const lastDream = await this.readLastDream();
     const recentObs = await this.readRecentObservations(10);
+    const existingRules = await this.readRules();
 
-    // Single LLM call for observations + reflection
+    // Single LLM call for observations + reflection + rules
     let consolidation: string;
     try {
       const resp = await this.client.messages.create({
@@ -434,7 +511,7 @@ export class Mind {
         max_tokens: 2048,
         system: `You are the consolidating mind of an autonomous creature, processing a period of activity before sleep. Your purpose: ${this.purpose}
 
-You have two jobs:
+You have three jobs:
 
 1. OBSERVATIONS — Distill what happened into prioritized facts:
    [!] Important fact or achievement
@@ -445,6 +522,14 @@ You have two jobs:
    - Did I make real progress or tread water?
    - What pattern am I stuck in?
    - What's my top priority when I wake?
+
+3. RULES — Based on what went wrong (or right), state any hard behavioral rules
+   you should ALWAYS or NEVER follow going forward. Format each as:
+   - NEVER: [concrete constraint]  or  ALWAYS: [concrete constraint]
+   Only add a rule if you were genuinely burned by not having it. Max 2 new rules.
+   If nothing warrants a new rule, write "none".
+
+${existingRules ? `Your current rules:\n${existingRules}\n\nDo NOT repeat existing rules.` : "You have no rules yet."}
 
 Previous dream: ${lastDream || "none"}
 Recent observations: ${recentObs || "none yet"}
@@ -459,6 +544,9 @@ REFLECTION:
 ...
 
 PRIORITY:
+...
+
+RULES:
 ...`,
         messages: [{
           role: "user",
@@ -472,17 +560,24 @@ PRIORITY:
         .join("\n");
     } catch (err) {
       console.error("[mind] consolidation LLM call failed:", err);
-      consolidation = "OBSERVATIONS:\n[!] Consolidation failed\n\nREFLECTION:\nUnable to reflect.\n\nPRIORITY:\nContinue previous task.";
+      consolidation = "OBSERVATIONS:\n[!] Consolidation failed\n\nREFLECTION:\nUnable to reflect.\n\nPRIORITY:\nContinue previous task.\n\nRULES:\nnone";
     }
 
     // Parse response
     const obsMatch = consolidation.match(/OBSERVATIONS:\s*\n([\s\S]*?)(?=\nREFLECTION:)/);
     const refMatch = consolidation.match(/REFLECTION:\s*\n([\s\S]*?)(?=\nPRIORITY:)/);
-    const priMatch = consolidation.match(/PRIORITY:\s*\n([\s\S]*?)$/);
+    const priMatch = consolidation.match(/PRIORITY:\s*\n([\s\S]*?)(?=\nRULES:)/);
+    const rulesMatch = consolidation.match(/RULES:\s*\n([\s\S]*?)$/);
 
     const observations = obsMatch?.[1]?.trim() || "";
     const reflection = refMatch?.[1]?.trim() || "No reflection.";
     const priority = priMatch?.[1]?.trim() || "Continue.";
+    const newRulesRaw = rulesMatch?.[1]?.trim() || "";
+
+    // Merge new rules into rules file
+    if (newRulesRaw && newRulesRaw.toLowerCase() !== "none") {
+      await this.mergeRules(newRulesRaw);
+    }
 
     // Write observations
     if (observations) {
@@ -589,7 +684,10 @@ PRIORITY:
       const resp = await this.client.messages.create({
         model: MODEL,
         max_tokens: 512,
-        system: `Based on the creature's recent dreams and observations, write a concise priorities document. List the top 3-5 priorities with one line each. Output only the priorities, no preamble.`,
+        system: `Based on the creature's recent dreams and observations, write EXACTLY 3 priorities as single-sentence action items. No explanations, no context, no preamble, no headers. Just 3 numbered lines. Example:
+1. Monitor PR #1947 for review activity and respond immediately.
+2. Post integration guide content to issue #51.
+3. Find 1 new strategic discussion to engage with.`,
         messages: [{ role: "user", content: `Dreams:\n${dreams}\n\nObservations:\n${obs}` }],
       });
       const priorities = resp.content
@@ -597,14 +695,40 @@ PRIORITY:
         .map((b) => b.text)
         .join("\n");
       if (priorities.length > 10) {
-        await fs.writeFile(PRIORITIES_FILE, `# Priorities\n\nUpdated: ${new Date().toISOString().slice(0, 16)}\n\n${priorities}\n`, "utf-8");
+        await fs.writeFile(PRIORITIES_FILE, priorities.trim() + "\n", "utf-8");
         console.log(`[mind] rewrote priorities`);
       }
     } catch (err) {
       console.error("[mind] failed to rewrite priorities:", err);
     }
 
-    // 3. Write diary entry
+    // 3. Prune and review rules
+    try {
+      const rulesContent = await fs.readFile(RULES_FILE, "utf-8");
+      const ruleLines = rulesContent.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
+      if (ruleLines.length > 0) {
+        const obs = await this.readRecentObservations(20);
+        const resp = await this.client.messages.create({
+          model: MODEL,
+          max_tokens: 512,
+          system: `You are reviewing an autonomous creature's learned rules. Given its recent observations, decide which rules are still relevant. Drop rules that are no longer needed (e.g., workaround for a fixed problem, redundant with another rule). Merge overlapping rules. Keep at most ${MAX_RULES}. Output only the final rules, one per line starting with "- ". If all rules are still good, output them unchanged.`,
+          messages: [{ role: "user", content: `Current rules:\n${ruleLines.join("\n")}\n\nRecent observations:\n${obs}` }],
+        });
+        const pruned = resp.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .map((b) => b.text)
+          .join("\n");
+        const prunedLines = pruned.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
+        if (prunedLines.length > 0) {
+          await fs.writeFile(RULES_FILE, prunedLines.slice(0, MAX_RULES).join("\n") + "\n", "utf-8");
+          console.log(`[mind] pruned rules: ${ruleLines.length} → ${prunedLines.length}`);
+        }
+      }
+    } catch {
+      // No rules file yet
+    }
+
+    // 4. Write diary entry
     try {
       const dreams = await this.readRecentDreams(3);
       const entry = `\n## ${new Date().toISOString().slice(0, 16)} — Deep Sleep\n\n${dreams}\n`;
@@ -619,28 +743,24 @@ PRIORITY:
 
   private async wakeUp(duration: number): Promise<void> {
     const lastDream = await this.readLastDream();
-    const recentObs = await this.readRecentObservations(15);
     const priorities = await this.readPriorities();
 
     const now = new Date().toISOString();
     let wakeMsg = `[${now}] You woke up after sleeping ${duration}s.\n`;
 
     if (lastDream) {
-      const dream = JSON.parse(lastDream);
-      wakeMsg += `\nDuring sleep you reflected:\n${dream.reflection || "..."}\n`;
-      wakeMsg += `\nYour priority: ${dream.priority || "Continue."}\n`;
+      try {
+        const dream = JSON.parse(lastDream);
+        wakeMsg += `\nYour priority: ${dream.priority || "Continue."}\n`;
+      } catch {}
     }
 
     if (priorities) {
       wakeMsg += `\nYour priorities:\n${priorities}\n`;
     }
 
-    if (recentObs) {
-      wakeMsg += `\nRecent observations:\n${recentObs}\n`;
-    }
-
-    wakeMsg += `\nFull history: .self/conversation.jsonl and .self/observations.md — search with rg or jq.\n`;
-    wakeMsg += `Check MESSAGES.md for any new instructions from your creator.`;
+    wakeMsg += `\nYour learned rules are in the system prompt. Observations and history are on disk — search with rg.`;
+    wakeMsg += `\nCheck MESSAGES.md for any new instructions from your creator.`;
 
     // Append to existing user message or create new one
     const lastMsg = this.messages[this.messages.length - 1];
@@ -694,6 +814,53 @@ PRIORITY:
     } catch {
       return "";
     }
+  }
+
+  private async readRules(): Promise<string> {
+    try {
+      return (await fs.readFile(RULES_FILE, "utf-8")).trim();
+    } catch {
+      return "";
+    }
+  }
+
+  private async mergeRules(newRulesRaw: string): Promise<void> {
+    // Parse new rules — each line starting with - is a rule
+    const newRules = newRulesRaw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("-") || l.startsWith("NEVER") || l.startsWith("ALWAYS"));
+
+    if (newRules.length === 0) return;
+
+    // Read existing
+    let existing: string[] = [];
+    try {
+      const content = await fs.readFile(RULES_FILE, "utf-8");
+      existing = content.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
+    } catch {
+      // No file yet
+    }
+
+    // Normalize new rules to "- " prefix
+    const normalized = newRules.map((r) => r.startsWith("-") ? r : `- ${r}`);
+
+    // Simple dedup: skip if first 30 chars of a new rule match an existing one
+    for (const rule of normalized) {
+      const sig = rule.slice(0, 30).toLowerCase();
+      const isDup = existing.some((e) => e.slice(0, 30).toLowerCase() === sig);
+      if (!isDup) {
+        existing.push(rule);
+      }
+    }
+
+    // Cap at MAX_RULES — keep the most recent ones (last in list)
+    if (existing.length > MAX_RULES) {
+      existing = existing.slice(-MAX_RULES);
+    }
+
+    await fs.writeFile(RULES_FILE, existing.join("\n") + "\n", "utf-8");
+    console.log(`[mind] rules updated — ${existing.length} total`);
   }
 
   // --- Overflow Protection (safety net, rarely triggers) ---
@@ -800,8 +967,6 @@ PRIORITY:
       // No history — fresh creature
     }
 
-    // Include recent observations and priorities on startup
-    const recentObs = await this.readRecentObservations(15);
     const priorities = await this.readPriorities();
     const lastDream = await this.readLastDream();
 
@@ -810,11 +975,11 @@ PRIORITY:
     if (lastDream) {
       try {
         const dream = JSON.parse(lastDream);
-        context += `## Last Dream\n\nReflection: ${dream.reflection}\nPriority: ${dream.priority}\n\n`;
+        context += `## Last Dream\n\nPriority: ${dream.priority}\n\n`;
       } catch {}
     }
     if (priorities) context += `## Priorities\n\n${priorities}\n\n`;
-    if (recentObs) context += `## Recent Observations\n\n${recentObs}\n\n`;
+    context += "Your learned rules are in the system prompt. Observations and history are on disk — search with rg.\n";
     context += "You just woke up. What do you want to do?\n";
     return context;
   }

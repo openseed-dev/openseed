@@ -82,6 +82,13 @@ class Creature {
         return;
       }
 
+      if (url.pathname === "/wake" && req.method === "POST") {
+        this.mind.forceWake();
+        res.writeHead(200);
+        res.end("ok");
+        return;
+      }
+
       if (url.pathname === "/message" && req.method === "POST") {
         let body = "";
         req.on("data", (chunk: string) => (body += chunk));
@@ -205,6 +212,12 @@ class Creature {
             deep: dream.deep,
           });
           console.log(`[creature] dream #${dream.observations} obs, deep=${dream.deep} — ${dream.priority.slice(0, 80)}`);
+        },
+
+        // onProgressCheck — emit progress check event to host
+        async (actions) => {
+          await this.emit({ type: "creature.progress_check", actions });
+          console.log(`[creature] progress check at ${actions} actions`);
         }
       );
     } catch (err) {

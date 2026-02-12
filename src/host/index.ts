@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { Event } from '../shared/types.js';
+import { Creator } from './creator.js';
 import { EventStore } from './events.js';
 import {
   CreatureSupervisor,
@@ -28,6 +29,8 @@ export class Orchestrator {
   private supervisors: Map<string, CreatureSupervisor> = new Map();
   private stores: Map<string, EventStore> = new Map();
   private globalListeners: Set<(name: string, event: Event) => void> = new Set();
+  private creator = new Creator();
+  private creatorRunning: Set<string> = new Set();
 
   constructor(port: number) {
     this.port = port;
@@ -199,6 +202,37 @@ export class Orchestrator {
     this.globalListeners.forEach(fn => fn(name, event));
 
     console.log(`[${name}] ${event.type}`);
+
+    // Trigger Creator on deep sleep
+    if (event.type === 'creature.dream' && (event as any).deep) {
+      this.triggerCreator(name, 'deep_sleep').catch((err) => {
+        console.error(`[creator] auto-trigger failed for ${name}:`, err);
+      });
+    }
+  }
+
+  async triggerCreator(name: string, trigger: string): Promise<void> {
+    if (this.creatorRunning.has(name)) {
+      console.log(`[creator] already running for ${name}, skipping`);
+      return;
+    }
+
+    const supervisor = this.supervisors.get(name);
+    const store = this.stores.get(name);
+    const dir = path.join(CREATURES_DIR, name);
+
+    if (!supervisor || !store) {
+      throw new Error(`creature "${name}" not found or not running`);
+    }
+
+    this.creatorRunning.add(name);
+    try {
+      await this.creator.evaluate(name, dir, store, supervisor, trigger, async (n, ev) => {
+        await this.emitEvent(n, ev);
+      });
+    } finally {
+      this.creatorRunning.delete(name);
+    }
   }
 
   async handleCreatureEvent(name: string, event: Event): Promise<void> {
@@ -330,6 +364,28 @@ export class Orchestrator {
           return;
         }
 
+        if (action === 'evolve' && req.method === 'POST') {
+          try {
+            this.triggerCreator(name, 'manual').catch((err) => {
+              console.error(`[creator] manual trigger failed for ${name}:`, err);
+            });
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'wake' && req.method === 'POST') {
+          try {
+            const supervisor = this.supervisors.get(name);
+            if (!supervisor) throw new Error(`creature "${name}" is not running`);
+            const res2 = await fetch(`http://127.0.0.1:${supervisor.port}/wake`, { method: 'POST' });
+            if (!res2.ok) throw new Error('creature rejected wake');
+            console.log(`[${name}] force wake triggered`);
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
         if (action === 'message' && req.method === 'POST') {
           try {
             const body = await readBody(req);
@@ -345,18 +401,20 @@ export class Orchestrator {
           const read = async (f: string) => {
             try { return await fs.readFile(path.join(dir, f), 'utf-8'); } catch { return ''; }
           };
+          const readJsonl = async (f: string, n: number) => {
+            try {
+              const content = await fs.readFile(path.join(dir, f), 'utf-8');
+              const lines = content.trim().split('\n').filter(l => l);
+              return lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+            } catch { return []; }
+          };
           const files = {
             purpose: await read('PURPOSE.md'),
             diary: await read('self/diary.md'),
             observations: await read('.self/observations.md'),
             priorities: await read('.self/priorities.md'),
-            dreams: await (async () => {
-              try {
-                const content = await fs.readFile(path.join(dir, '.self/dreams.jsonl'), 'utf-8');
-                const lines = content.trim().split('\n').filter(l => l);
-                return lines.slice(-10).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-              } catch { return []; }
-            })(),
+            dreams: await readJsonl('.self/dreams.jsonl', 10),
+            creatorLog: await readJsonl('.self/creator-log.jsonl', 10),
           };
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(files));
@@ -462,6 +520,8 @@ export class Orchestrator {
     .event.creature-tool-call.fail { border-left-color: #f55; }
     .event.creature-dream { border-left-color: #a6e; background: #0f0a15; }
     .event.creature-dream.deep { border-left-color: #c8f; background: #120a1a; }
+    .event.creature-progress-check { border-left-color: #f80; background: #1a1208; }
+    .event.creator-evaluation { border-left-color: #0d4; background: #081a0a; }
 
     .event .type.host { color: #666; }
     .event .type.promote { color: #0f0; }
@@ -473,6 +533,8 @@ export class Orchestrator {
     .event .type.thought { color: #aaa; }
     .event .type.dream { color: #a6e; font-style: italic; }
     .event .type.dream.deep { color: #c8f; font-weight: bold; }
+    .event .type.progress-check { color: #f80; }
+    .event .type.creator { color: #0d4; font-weight: bold; }
     .event .type.boot { color: #58f; }
 
     .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
@@ -636,6 +698,21 @@ export class Orchestrator {
           + '<strong>Priority:</strong> ' + esc(ev.priority || '') + '\\n\\n'
           + '<strong>Reflection:</strong>\\n' + esc(ev.reflection || '')
           + '</div>';
+      } else if (t === 'creature.progress_check') {
+        body = cl + '<span class="type progress-check">progress check</span>'
+          + '<span class="tool-ms">' + (ev.actions || 0) + ' actions</span>';
+      } else if (t === 'creator.evaluation') {
+        const oid = uid();
+        const changes = (ev.changes || []);
+        const label = changes.length > 0 ? 'creator evolved' : 'creator evaluated';
+        body = cl + '<span class="type creator">' + label + '</span>'
+          + (changes.length > 0 ? '<span class="tool-ms">' + changes.length + ' files changed</span>' : '')
+          + '<span class="intent-text thought-summary" onclick="toggle(\\''+oid+'\\')"> \\u2014 ' + esc(summarize(ev.reasoning || '', 120)) + '</span>'
+          + '<div class="thought-body" id="'+oid+'">'
+          + '<strong>Trigger:</strong> ' + esc(ev.trigger || '') + '\\n\\n'
+          + '<strong>Reasoning:</strong>\\n' + esc(ev.reasoning || '')
+          + (changes.length > 0 ? '\\n\\n<strong>Changed files:</strong>\\n' + changes.map(f => '  - ' + esc(f)).join('\\n') : '')
+          + '</div>';
       } else if (t === 'host.promote') {
         body = cl + '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'host.rollback') {
@@ -696,7 +773,9 @@ export class Orchestrator {
       currentView = 'log';
       if (name) {
         headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
-          + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>';
+          + '<button class="btn" onclick="wakeC(\\''+name+'\\')">wake</button>'
+          + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>'
+          + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\\''+name+'\\')">evolve</button>';
         msgBar.classList.add('visible');
         vswitcher.classList.add('visible');
         switchView('log');
@@ -732,7 +811,7 @@ export class Orchestrator {
 
     function renderMind() {
       if (!mindData) { mcontent.innerHTML = 'Loading...'; return; }
-      const tabs = ['purpose','observations','dreams','priorities','diary'];
+      const tabs = ['purpose','observations','dreams','priorities','diary','creator'];
       mtabs.innerHTML = tabs.map(t =>
         '<div class="mind-tab' + (mindTab === t ? ' active' : '') + '" onclick="selectMindTab(\\''+t+'\\')">' + t + '</div>'
       ).join('') + '<div class="mind-tab" onclick="loadMind().then(renderMind)" style="margin-left:auto;color:#444">\\u21bb</div>';
@@ -763,6 +842,18 @@ export class Orchestrator {
             + '</div>'
           ).reverse().join('');
         }
+      } else if (mindTab === 'creator') {
+        const logs = mindData.creatorLog || [];
+        if (logs.length === 0) { html = 'No creator evaluations yet.'; }
+        else {
+          html = logs.map(e =>
+            '<div class="dream-entry">'
+            + '<span class="dream-time">' + (e.t || '').slice(0,16) + ' \\u2014 trigger: ' + esc(e.trigger || '') + (e.changed ? ' \\u2014 <span style="color:#0d4">changed</span>' : ' \\u2014 no changes') + '</span>\\n'
+            + '<span class="dream-reflection">' + esc(e.reasoning || '') + '</span>'
+            + (e.changes && e.changes.length > 0 ? '\\n<span style="color:#0d4">Files: ' + e.changes.map(c => esc(c.file || c)).join(', ') + '</span>' : '')
+            + '</div>'
+          ).reverse().join('');
+        }
       }
       mcontent.innerHTML = html;
     }
@@ -790,6 +881,8 @@ export class Orchestrator {
     async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
     async function stopC(n) { await fetch('/api/creatures/'+n+'/stop',{method:'POST'}); refresh(); }
     async function restartC(n) { await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
+    async function wakeC(n) { await fetch('/api/creatures/'+n+'/wake',{method:'POST'}); }
+    async function evolveC(n) { await fetch('/api/creatures/'+n+'/evolve',{method:'POST'}); }
     async function sendMsg() {
       if (!selected) return;
       const inp = document.getElementById('msg');
