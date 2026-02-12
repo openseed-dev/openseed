@@ -512,53 +512,64 @@ export class Orchestrator {
     }
     .message-bar button:hover { background: #2a2a4a; }
 
-    .files-panel { display: none; margin-bottom: 16px; border: 1px solid #222; border-radius: 6px; overflow: hidden; }
-    .files-panel.visible { display: block; }
-    .files-tabs { display: flex; border-bottom: 1px solid #222; background: #0d0d0d; }
-    .files-tab {
+    .view-switcher {
+      display: none; padding: 8px; border-top: 1px solid #222;
+    }
+    .view-switcher.visible { display: flex; gap: 4px; }
+    .view-btn {
+      flex: 1; padding: 6px 0; text-align: center; cursor: pointer;
+      background: #111; border: 1px solid #222; border-radius: 4px;
+      color: #666; font-family: inherit; font-size: 12px;
+    }
+    .view-btn:hover { color: #aaa; border-color: #333; }
+    .view-btn.active { color: #58f; border-color: #58f; background: #1a1a2a; }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .mind-tabs { display: flex; border-bottom: 1px solid #222; margin-bottom: 12px; }
+    .mind-tab {
       padding: 8px 16px; cursor: pointer; color: #666;
       font-size: 12px; border-bottom: 2px solid transparent;
     }
-    .files-tab:hover { color: #aaa; }
-    .files-tab.active { color: #58f; border-bottom-color: #58f; }
-    .files-content {
-      padding: 12px 16px; white-space: pre-wrap; word-break: break-word;
-      font-size: 12px; color: #bbb; max-height: 400px; overflow-y: auto;
-      line-height: 1.5;
+    .mind-tab:hover { color: #aaa; }
+    .mind-tab.active { color: #58f; border-bottom-color: #58f; }
+    .mind-content {
+      white-space: pre-wrap; word-break: break-word;
+      font-size: 12px; color: #bbb; line-height: 1.5;
     }
-    .files-content .dream-entry { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1a1a1a; }
-    .files-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .files-content .dream-time { color: #555; font-size: 11px; }
-    .files-content .dream-priority { color: #a6e; }
-    .files-content .dream-reflection { color: #888; }
-    .files-content .obs-important { color: #e8e8e8; }
-    .files-content .obs-minor { color: #666; }
-    .files-toggle {
-      background: none; border: 1px solid #333; color: #666;
-      padding: 4px 10px; border-radius: 3px; cursor: pointer;
-      font-family: inherit; font-size: 11px; margin-left: auto;
-    }
-    .files-toggle:hover { color: #aaa; border-color: #555; }
-    .files-toggle.active { color: #58f; border-color: #58f; }
+    .mind-content .dream-entry { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1a1a1a; }
+    .mind-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .mind-content .dream-time { color: #555; font-size: 11px; }
+    .mind-content .dream-priority { color: #a6e; }
+    .mind-content .dream-reflection { color: #888; }
+    .mind-content .obs-important { color: #e8e8e8; }
+    .mind-content .obs-minor { color: #666; }
   </style>
 </head>
 <body>
   <div class="sidebar">
     <div class="sidebar-header">itsalive</div>
     <div class="creature-list" id="creatures"></div>
+    <div class="view-switcher" id="vswitcher">
+      <button class="view-btn active" id="vbtn-log" onclick="switchView('log')">log</button>
+      <button class="view-btn" id="vbtn-mind" onclick="switchView('mind')">mind</button>
+    </div>
   </div>
   <div class="main">
     <div class="main-header" id="header">
       <h2>all creatures</h2>
     </div>
-    <div class="files-panel" id="fpanel">
-      <div class="files-tabs" id="ftabs"></div>
-      <div class="files-content" id="fcontent"></div>
+    <div class="view active" id="log-view">
+      <div class="events" id="events"></div>
+      <div class="message-bar" id="msgbar">
+        <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}"></textarea>
+        <button onclick="sendMsg()">Send</button>
+      </div>
     </div>
-    <div class="events" id="events"></div>
-    <div class="message-bar" id="msgbar">
-      <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}"></textarea>
-      <button onclick="sendMsg()">Send</button>
+    <div class="view" id="mind-view">
+      <div class="mind-tabs" id="mtabs"></div>
+      <div class="mind-content" id="mcontent"></div>
     </div>
   </div>
 
@@ -657,24 +668,38 @@ export class Orchestrator {
       }
     };
 
-    let filesData = null;
-    let filesTab = 'purpose';
-    let filesVisible = false;
-    const fpanel = document.getElementById('fpanel');
-    const ftabs = document.getElementById('ftabs');
-    const fcontent = document.getElementById('fcontent');
+    let currentView = 'log';
+    let mindData = null;
+    let mindTab = 'purpose';
+    const vswitcher = document.getElementById('vswitcher');
+    const logView = document.getElementById('log-view');
+    const mindView = document.getElementById('mind-view');
+    const mtabs = document.getElementById('mtabs');
+    const mcontent = document.getElementById('mcontent');
+
+    function switchView(v) {
+      currentView = v;
+      document.getElementById('vbtn-log').classList.toggle('active', v === 'log');
+      document.getElementById('vbtn-mind').classList.toggle('active', v === 'mind');
+      logView.classList.toggle('active', v === 'log');
+      mindView.classList.toggle('active', v === 'mind');
+      if (v === 'mind' && selected) {
+        if (!mindData) loadMind().then(renderMind);
+        else renderMind();
+      }
+    }
 
     async function select(name) {
       selected = name;
       eventsEl.innerHTML = '';
-      filesVisible = false;
-      fpanel.classList.remove('visible');
-      filesData = null;
+      mindData = null;
+      currentView = 'log';
       if (name) {
         headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
-          + '<button class="files-toggle" id="ftoggle" onclick="toggleFiles()">mind</button>'
           + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>';
         msgBar.classList.add('visible');
+        vswitcher.classList.add('visible');
+        switchView('log');
         try {
           const res = await fetch('/api/creatures/' + name + '/events');
           const events = await res.json();
@@ -686,60 +711,48 @@ export class Orchestrator {
       } else {
         headerEl.innerHTML = '<h2>all creatures</h2>';
         msgBar.classList.remove('visible');
+        vswitcher.classList.remove('visible');
+        switchView('log');
       }
       renderSidebar();
     }
 
-    async function toggleFiles() {
-      filesVisible = !filesVisible;
-      const btn = document.getElementById('ftoggle');
-      if (filesVisible) {
-        btn?.classList.add('active');
-        fpanel.classList.add('visible');
-        if (!filesData) await loadFiles();
-        renderFiles();
-      } else {
-        btn?.classList.remove('active');
-        fpanel.classList.remove('visible');
-      }
-    }
-
-    async function loadFiles() {
+    async function loadMind() {
       if (!selected) return;
       try {
         const res = await fetch('/api/creatures/' + selected + '/files');
-        filesData = await res.json();
-      } catch { filesData = {}; }
+        mindData = await res.json();
+      } catch { mindData = {}; }
     }
 
-    function selectTab(tab) {
-      filesTab = tab;
-      renderFiles();
+    function selectMindTab(tab) {
+      mindTab = tab;
+      renderMind();
     }
 
-    function renderFiles() {
-      if (!filesData) { fcontent.innerHTML = 'Loading...'; return; }
+    function renderMind() {
+      if (!mindData) { mcontent.innerHTML = 'Loading...'; return; }
       const tabs = ['purpose','observations','dreams','priorities','diary'];
-      ftabs.innerHTML = tabs.map(t =>
-        '<div class="files-tab' + (filesTab === t ? ' active' : '') + '" onclick="selectTab(\\''+t+'\\')">' + t + '</div>'
-      ).join('') + '<div class="files-tab" onclick="loadFiles().then(renderFiles)" style="margin-left:auto;color:#444">\\u21bb</div>';
+      mtabs.innerHTML = tabs.map(t =>
+        '<div class="mind-tab' + (mindTab === t ? ' active' : '') + '" onclick="selectMindTab(\\''+t+'\\')">' + t + '</div>'
+      ).join('') + '<div class="mind-tab" onclick="loadMind().then(renderMind)" style="margin-left:auto;color:#444">\\u21bb</div>';
 
       let html = '';
-      if (filesTab === 'purpose') {
-        html = esc(filesData.purpose || 'No PURPOSE.md');
-      } else if (filesTab === 'diary') {
-        html = esc(filesData.diary || 'No diary entries yet.');
-      } else if (filesTab === 'priorities') {
-        html = esc(filesData.priorities || 'No priorities yet.');
-      } else if (filesTab === 'observations') {
-        const obs = filesData.observations || '';
+      if (mindTab === 'purpose') {
+        html = esc(mindData.purpose || 'No PURPOSE.md');
+      } else if (mindTab === 'diary') {
+        html = esc(mindData.diary || 'No diary entries yet.');
+      } else if (mindTab === 'priorities') {
+        html = esc(mindData.priorities || 'No priorities yet.');
+      } else if (mindTab === 'observations') {
+        const obs = mindData.observations || '';
         html = obs ? obs.split('\\n').map(l => {
           if (l.startsWith('[!]')) return '<span class="obs-important">' + esc(l) + '</span>';
           if (l.startsWith('[.]')) return '<span class="obs-minor">' + esc(l) + '</span>';
           return esc(l);
         }).join('\\n') : 'No observations yet.';
-      } else if (filesTab === 'dreams') {
-        const dreams = filesData.dreams || [];
+      } else if (mindTab === 'dreams') {
+        const dreams = mindData.dreams || [];
         if (dreams.length === 0) { html = 'No dreams yet.'; }
         else {
           html = dreams.map(d =>
@@ -751,7 +764,7 @@ export class Orchestrator {
           ).reverse().join('');
         }
       }
-      fcontent.innerHTML = html;
+      mcontent.innerHTML = html;
     }
 
     function renderSidebar() {
