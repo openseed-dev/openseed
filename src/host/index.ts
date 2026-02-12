@@ -339,6 +339,29 @@ export class Orchestrator {
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
+
+        if (action === 'files' && req.method === 'GET') {
+          const dir = path.join(CREATURES_DIR, name);
+          const read = async (f: string) => {
+            try { return await fs.readFile(path.join(dir, f), 'utf-8'); } catch { return ''; }
+          };
+          const files = {
+            purpose: await read('PURPOSE.md'),
+            diary: await read('self/diary.md'),
+            observations: await read('.self/observations.md'),
+            priorities: await read('.self/priorities.md'),
+            dreams: await (async () => {
+              try {
+                const content = await fs.readFile(path.join(dir, '.self/dreams.jsonl'), 'utf-8');
+                const lines = content.trim().split('\n').filter(l => l);
+                return lines.slice(-10).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+              } catch { return []; }
+            })(),
+          };
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(files));
+          return;
+        }
       }
 
       // Legacy: creatures without CREATURE_NAME env var POST here
@@ -488,6 +511,35 @@ export class Orchestrator {
       font-family: inherit; font-size: 13px;
     }
     .message-bar button:hover { background: #2a2a4a; }
+
+    .files-panel { display: none; margin-bottom: 16px; border: 1px solid #222; border-radius: 6px; overflow: hidden; }
+    .files-panel.visible { display: block; }
+    .files-tabs { display: flex; border-bottom: 1px solid #222; background: #0d0d0d; }
+    .files-tab {
+      padding: 8px 16px; cursor: pointer; color: #666;
+      font-size: 12px; border-bottom: 2px solid transparent;
+    }
+    .files-tab:hover { color: #aaa; }
+    .files-tab.active { color: #58f; border-bottom-color: #58f; }
+    .files-content {
+      padding: 12px 16px; white-space: pre-wrap; word-break: break-word;
+      font-size: 12px; color: #bbb; max-height: 400px; overflow-y: auto;
+      line-height: 1.5;
+    }
+    .files-content .dream-entry { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1a1a1a; }
+    .files-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .files-content .dream-time { color: #555; font-size: 11px; }
+    .files-content .dream-priority { color: #a6e; }
+    .files-content .dream-reflection { color: #888; }
+    .files-content .obs-important { color: #e8e8e8; }
+    .files-content .obs-minor { color: #666; }
+    .files-toggle {
+      background: none; border: 1px solid #333; color: #666;
+      padding: 4px 10px; border-radius: 3px; cursor: pointer;
+      font-family: inherit; font-size: 11px; margin-left: auto;
+    }
+    .files-toggle:hover { color: #aaa; border-color: #555; }
+    .files-toggle.active { color: #58f; border-color: #58f; }
   </style>
 </head>
 <body>
@@ -498,6 +550,10 @@ export class Orchestrator {
   <div class="main">
     <div class="main-header" id="header">
       <h2>all creatures</h2>
+    </div>
+    <div class="files-panel" id="fpanel">
+      <div class="files-tabs" id="ftabs"></div>
+      <div class="files-content" id="fcontent"></div>
     </div>
     <div class="events" id="events"></div>
     <div class="message-bar" id="msgbar">
@@ -596,11 +652,22 @@ export class Orchestrator {
       }
     };
 
+    let filesData = null;
+    let filesTab = 'purpose';
+    let filesVisible = false;
+    const fpanel = document.getElementById('fpanel');
+    const ftabs = document.getElementById('ftabs');
+    const fcontent = document.getElementById('fcontent');
+
     async function select(name) {
       selected = name;
       eventsEl.innerHTML = '';
+      filesVisible = false;
+      fpanel.classList.remove('visible');
+      filesData = null;
       if (name) {
         headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
+          + '<button class="files-toggle" id="ftoggle" onclick="toggleFiles()">mind</button>'
           + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>';
         msgBar.classList.add('visible');
         try {
@@ -616,6 +683,70 @@ export class Orchestrator {
         msgBar.classList.remove('visible');
       }
       renderSidebar();
+    }
+
+    async function toggleFiles() {
+      filesVisible = !filesVisible;
+      const btn = document.getElementById('ftoggle');
+      if (filesVisible) {
+        btn?.classList.add('active');
+        fpanel.classList.add('visible');
+        if (!filesData) await loadFiles();
+        renderFiles();
+      } else {
+        btn?.classList.remove('active');
+        fpanel.classList.remove('visible');
+      }
+    }
+
+    async function loadFiles() {
+      if (!selected) return;
+      try {
+        const res = await fetch('/api/creatures/' + selected + '/files');
+        filesData = await res.json();
+      } catch { filesData = {}; }
+    }
+
+    function selectTab(tab) {
+      filesTab = tab;
+      renderFiles();
+    }
+
+    function renderFiles() {
+      if (!filesData) { fcontent.innerHTML = 'Loading...'; return; }
+      const tabs = ['purpose','observations','dreams','priorities','diary'];
+      ftabs.innerHTML = tabs.map(t =>
+        '<div class="files-tab' + (filesTab === t ? ' active' : '') + '" onclick="selectTab(\\''+t+'\\')">' + t + '</div>'
+      ).join('') + '<div class="files-tab" onclick="loadFiles().then(renderFiles)" style="margin-left:auto;color:#444">\\u21bb</div>';
+
+      let html = '';
+      if (filesTab === 'purpose') {
+        html = esc(filesData.purpose || 'No PURPOSE.md');
+      } else if (filesTab === 'diary') {
+        html = esc(filesData.diary || 'No diary entries yet.');
+      } else if (filesTab === 'priorities') {
+        html = esc(filesData.priorities || 'No priorities yet.');
+      } else if (filesTab === 'observations') {
+        const obs = filesData.observations || '';
+        html = obs ? obs.split('\\n').map(l => {
+          if (l.startsWith('[!]')) return '<span class="obs-important">' + esc(l) + '</span>';
+          if (l.startsWith('[.]')) return '<span class="obs-minor">' + esc(l) + '</span>';
+          return esc(l);
+        }).join('\\n') : 'No observations yet.';
+      } else if (filesTab === 'dreams') {
+        const dreams = filesData.dreams || [];
+        if (dreams.length === 0) { html = 'No dreams yet.'; }
+        else {
+          html = dreams.map(d =>
+            '<div class="dream-entry">'
+            + '<span class="dream-time">' + (d.t || '').slice(0,16) + (d.deep ? ' (deep sleep)' : '') + ' \\u2014 ' + (d.actions||0) + ' actions</span>\\n'
+            + '<span class="dream-priority">Priority: ' + esc(d.priority || '') + '</span>\\n'
+            + '<span class="dream-reflection">' + esc(d.reflection || '') + '</span>'
+            + '</div>'
+          ).reverse().join('');
+        }
+      }
+      fcontent.innerHTML = html;
     }
 
     function renderSidebar() {
