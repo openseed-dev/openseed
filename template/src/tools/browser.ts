@@ -1,5 +1,4 @@
 import {
-  Browser,
   BrowserContext,
   chromium,
   Page,
@@ -8,77 +7,69 @@ import {
 const CDP_PORT = 9222;
 const SNAPSHOT_TEXT_LIMIT = 3000;
 const SNAPSHOT_ELEMENTS_LIMIT = 50;
+const PROFILE_DIR = ".self/browser-profile";
 
 const LAUNCH_ARGS = [
   "--disable-blink-features=AutomationControlled",
   `--remote-debugging-port=${CDP_PORT}`,
 ];
 
-let browser: Browser | null = null;
-let defaultPage: Page | null = null;
-
-async function ensureBrowser(): Promise<Browser> {
-  if (browser?.isConnected()) return browser;
-
-  // Prefer installed Chrome (passes anti-bot checks far better than Playwright's Chromium)
-  // Falls back to Playwright's bundled Chromium if Chrome isn't available
-  try {
-    browser = await chromium.launch({
-      channel: "chrome",
-      headless: true,
-      args: LAUNCH_ARGS,
-    });
-    return browser;
-  } catch {
-    // Chrome not installed — use Playwright's Chromium
-  }
-
-  browser = await chromium.launch({
-    headless: true,
-    args: LAUNCH_ARGS,
-  });
-  return browser;
-}
-
 const REALISTIC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-async function initPage(page: Page): Promise<void> {
-  // Remove automation signals
-  await page.addInitScript(() => {
+let context: BrowserContext | null = null;
+let defaultPage: Page | null = null;
+
+async function ensureContext(): Promise<BrowserContext> {
+  if (context) {
+    try {
+      context.pages(); // throws if context is closed
+      return context;
+    } catch {
+      context = null;
+      defaultPage = null;
+    }
+  }
+
+  const launchOpts = {
+    headless: true,
+    args: LAUNCH_ARGS,
+    userAgent: REALISTIC_UA,
+    viewport: { width: 1280, height: 900 } as const,
+    locale: "en-US",
+    timezoneId: "America/New_York",
+  };
+
+  // Prefer installed Chrome — passes anti-bot checks far better
+  try {
+    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      channel: "chrome",
+      ...launchOpts,
+    });
+  } catch {
+    // Chrome not installed or profile locked — use Playwright's Chromium
+    context = await chromium.launchPersistentContext(PROFILE_DIR, launchOpts);
+  }
+
+  // Anti-detection scripts applied to all pages in this context
+  await context.addInitScript(() => {
     Object.defineProperty(navigator, "webdriver", { get: () => false });
-    // Override permissions API to look normal
     const originalQuery = window.navigator.permissions.query;
     window.navigator.permissions.query = (parameters: any) =>
       parameters.name === "notifications"
         ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
         : originalQuery(parameters);
   });
+
+  return context;
 }
 
-let managedContext: BrowserContext | null = null;
-
 async function getActivePage(): Promise<Page> {
-  const b = await ensureBrowser();
+  const ctx = await ensureContext();
 
-  // Reuse our managed context if it still exists
-  if (managedContext && !managedContext.pages().every((p) => p.isClosed())) {
-    const pages = managedContext.pages().filter((p) => !p.isClosed());
-    if (defaultPage && !defaultPage.isClosed()) return defaultPage;
-    defaultPage = pages[0] || await managedContext.newPage();
-    await initPage(defaultPage);
-    return defaultPage;
-  }
+  if (defaultPage && !defaultPage.isClosed()) return defaultPage;
 
-  // Create a fresh context with anti-detection settings
-  managedContext = await b.newContext({
-    userAgent: REALISTIC_UA,
-    viewport: { width: 1280, height: 900 },
-    locale: "en-US",
-    timezoneId: "America/New_York",
-  });
-
-  defaultPage = await managedContext.newPage();
-  await initPage(defaultPage);
+  const pages = ctx.pages().filter((p) => !p.isClosed());
+  defaultPage = pages[0] || await ctx.newPage();
   return defaultPage;
 }
 
@@ -108,7 +99,7 @@ async function getPageSnapshot(page: Page): Promise<string> {
       );
       for (let i = 0; i < els.length && results.length < limit; i++) {
         const el = els[i] as HTMLElement;
-        if (el.offsetWidth === 0 && el.offsetHeight === 0) continue; // hidden
+        if (el.offsetWidth === 0 && el.offsetHeight === 0) continue;
 
         const tag = el.tagName.toLowerCase();
         const type = el.getAttribute("type") || "";
@@ -155,7 +146,6 @@ export async function executeBrowser(
         if (!url) return { ok: false, error: "url is required" };
         const page = await getActivePage();
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-        // Brief wait for dynamic content
         await page.waitForTimeout(1000);
         return { ok: true, snapshot: await getPageSnapshot(page) };
       }
@@ -223,26 +213,24 @@ export async function executeBrowser(
       }
 
       case "tabs": {
-        const b = await ensureBrowser();
-        const allPages = b.contexts().flatMap((c) => c.pages());
+        const ctx = await ensureContext();
+        const allPages = ctx.pages();
         const tabList = allPages.map((p, i) => `[${i}] ${p.url()} — ${p.isClosed() ? "(closed)" : "open"}`);
         return { ok: true, data: tabList.join("\n") };
       }
 
       case "switch_tab": {
         const index = params.index as number;
-        const b = await ensureBrowser();
-        const allPages = b.contexts().flatMap((c) => c.pages());
+        const ctx = await ensureContext();
+        const allPages = ctx.pages();
         if (index < 0 || index >= allPages.length) return { ok: false, error: `Tab ${index} not found (${allPages.length} tabs open)` };
         defaultPage = allPages[index];
         return { ok: true, snapshot: await getPageSnapshot(defaultPage) };
       }
 
       case "new_tab": {
-        // Ensure we have a browser & context via getActivePage, then create a new page
-        await getActivePage();
-        defaultPage = await managedContext!.newPage();
-        await initPage(defaultPage);
+        const ctx = await ensureContext();
+        defaultPage = await ctx.newPage();
         const url = params.url as string;
         if (url) {
           await defaultPage.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -252,7 +240,7 @@ export async function executeBrowser(
       }
 
       case "info": {
-        await ensureBrowser();
+        await ensureContext();
         return {
           ok: true,
           data: `CDP endpoint: http://localhost:${CDP_PORT}\n`
@@ -265,29 +253,21 @@ export async function executeBrowser(
       }
 
       case "close": {
-        if (browser?.isConnected()) {
-          for (const ctx of browser.contexts()) {
-            for (const page of ctx.pages()) {
-              try { await page.close(); } catch {}
-            }
-          }
-          try { await browser.close(); } catch {}
+        if (context) {
+          try { await context.close(); } catch {}
         }
-        browser = null;
+        context = null;
         defaultPage = null;
-        managedContext = null;
-        return { ok: true, data: "Browser closed" };
+        return { ok: true, data: "Browser closed (profile preserved on disk)" };
       }
 
       default:
         return { ok: false, error: `Unknown action: ${action}. Available: goto, click, fill, type, press, snapshot, evaluate, wait, tabs, switch_tab, new_tab, info, close` };
     }
   } catch (err) {
-    // On connection errors, reset state so next call retries
     if (err instanceof Error && (err.message.includes("Target closed") || err.message.includes("Connection closed"))) {
-      browser = null;
+      context = null;
       defaultPage = null;
-      managedContext = null;
     }
     return {
       ok: false,
@@ -298,7 +278,7 @@ export async function executeBrowser(
 
 export const browserTool = {
   name: "browser",
-  description: `Control a headless Chromium browser. The browser persists between calls — sessions, cookies, and tabs survive.
+  description: `Control a headless Chromium browser with a persistent profile. Cookies, sessions, logins, and localStorage survive across restarts.
 
 Actions:
 - goto { url } — navigate to URL
@@ -313,7 +293,7 @@ Actions:
 - switch_tab { index } — switch to a different tab
 - new_tab { url? } — open a new tab
 - info — get the raw CDP endpoint URL for direct access (use when built-in actions aren't enough)
-- close — shut down the browser
+- close — shut down the browser (profile is preserved on disk)
 
 Every action returns a text snapshot of the page: URL, title, visible text, and interactive elements.
 

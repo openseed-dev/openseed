@@ -47,8 +47,8 @@ class Creature {
     this.startHeartbeat();
 
     if (AUTO_ITERATE) {
-      console.log("[creature] starting cognition loop");
-      this.runCognitionLoop();
+      console.log("[creature] starting cognition");
+      this.runCognition();
     } else {
       console.log("[creature] ready, use POST /tick to start cognition");
     }
@@ -71,9 +71,9 @@ class Creature {
 
       if (url.pathname === "/tick" && req.method === "POST") {
         if (!this.running) {
-          this.runCognitionLoop();
+          this.runCognition();
           res.writeHead(200);
-          res.end("cognition loop started");
+          res.end("cognition started");
         } else {
           res.writeHead(409);
           res.end("already running");
@@ -111,20 +111,20 @@ class Creature {
     }, 5000);
   }
 
-  private async runCognitionLoop() {
+  private async runCognition() {
     if (this.running) {
-      console.log("[creature] cognition loop already running");
+      console.log("[creature] cognition already running");
       return;
     }
 
     this.running = true;
-    console.log("[creature] cognition loop started");
+    console.log("[creature] cognition started");
 
-    while (this.running) {
-      try {
-        console.log("[creature] thinking...");
-        const thought = await this.mind.think(async (tool, args, result, ms) => {
-          // Emit tool call events to the host as they happen
+    try {
+      // mind.run() never returns — it's the single agentic loop
+      await this.mind.run(
+        // onToolResult — emit tool call events to host
+        async (tool, args, result, ms) => {
           let input: string;
           let output: string;
 
@@ -156,31 +156,25 @@ class Creature {
             output,
             ms,
           });
-        });
+        },
 
-        // Emit the final intent
-        await this.emit({
-          type: "creature.intent",
-          text: thought.monologue,
-          turns: thought.turns,
-          actions: thought.actions.length,
-        });
-
-        console.log(`[creature] intent: ${thought.intent.slice(0, 100)}`);
-        console.log(`[creature] turns: ${thought.turns}, actions: ${thought.actions.length}`);
-
-        // Sleep before next iteration
-        const sleepMs = thought.sleep_s * 1000;
-        console.log(`[creature] sleeping for ${thought.sleep_s}s`);
-        await new Promise((resolve) => setTimeout(resolve, sleepMs));
-      } catch (err) {
-        console.error("[creature] error in cognition loop:", err);
-        await this.memory.append("observation", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-      }
+        // onSleep — emit sleep checkpoint event to host
+        async (seconds, summary, actions) => {
+          await this.emit({
+            type: "creature.sleep",
+            seconds,
+            text: summary,
+            actions,
+          });
+          console.log(`[creature] sleeping ${seconds}s — ${summary.slice(0, 80)}`);
+        }
+      );
+    } catch (err) {
+      console.error("[creature] cognition crashed:", err);
+      await this.memory.append("observation", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.running = false;
     }
   }
 }

@@ -329,7 +329,7 @@ export class Host {
     .event.host-promote { border-left-color: #0f0; }
     .event.host-rollback { border-left-color: #f33; background: #1a0808; }
     .event.creature-boot { border-left-color: #58f; }
-    .event.creature-intent { border-left-color: #fa0; }
+    .event.creature-sleep { border-left-color: #fa0; }
     .event.creature-tool-call { border-left-color: #0af; }
     .event.creature-tool-call.browser { border-left-color: #a6e; }
     .event.creature-tool-call.fail { border-left-color: #f55; }
@@ -337,7 +337,7 @@ export class Host {
     .event .type.host { color: #666; }
     .event .type.promote { color: #0f0; }
     .event .type.rollback { color: #f33; }
-    .event .type.intent { color: #fa0; }
+    .event .type.sleep { color: #fa0; }
     .event .type.tool { color: #0af; }
     .event .type.tool.browser { color: #a6e; }
     .event .type.tool.fail { color: #f55; }
@@ -385,14 +385,14 @@ export class Host {
       let cls = t.replace(/\\./g, '-');
       let body = '';
 
-      if (t === 'creature.intent') {
-        const turns = ev.turns || 1;
+      if (t === 'creature.sleep') {
+        const secs = ev.seconds || 30;
         const acts = ev.actions || 0;
-        const badge = '<span class="tool-ms">' + turns + 't/' + acts + 'a</span>';
+        const badge = '<span class="tool-ms">' + secs + 's sleep / ' + acts + ' actions</span>';
         const summary = summarize(ev.text, 120);
         const full = ev.text || '';
         const id = 'i' + Date.now() + Math.random().toString(36).slice(2,6);
-        body = '<span class="type intent">think</span>'
+        body = '<span class="type sleep">sleep</span>'
           + badge
           + '<span class="intent-text thought-summary" onclick="toggleThought(\\''+id+'\\')"> — ' + esc(summary) + '</span>'
           + '<div class="thought-body" id="'+id+'">' + esc(full) + '</div>';

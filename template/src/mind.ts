@@ -12,13 +12,15 @@ import {
   executeBrowser,
 } from './tools/browser.js';
 
-const MAX_TURNS = 10;
+const MAX_CONTEXT_CHARS = 100_000;
+const KEEP_RECENT_MESSAGES = 20;
 const ITERATIONS_FILE = ".self/iterations.jsonl";
+const MODEL = "claude-sonnet-4-5-20250929";
 
 const sleepTool: Anthropic.Tool = {
   name: "set_sleep",
   description:
-    "Set how many seconds to sleep before your next thought cycle. Min 2s, max 300s. If you don't call this, defaults to 30s.",
+    "Pause and sleep for N seconds before continuing. Use this to pace yourself — e.g. after posting something, sleep before checking engagement. Min 2s, max 300s.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -41,7 +43,7 @@ You are a continuous, autonomous process — alone, unsupervised, responsible fo
 There is no human to help you. If something is hard, figure it out. If something fails, adapt.
 
 You have:
-- Persistent memory across restarts
+- Persistent memory across restarts — this conversation continues even after you sleep
 - Bash and a browser to interact with the world
 - The ability to modify your own code, prompt, and structure
 - A survival mechanism: if you break yourself, you'll be rolled back to the last working state
@@ -75,19 +77,13 @@ and a list of interactive elements with selectors. Use those selectors in subseq
 
 Example: goto a page → read the snapshot → fill a form field → click submit → read the result.
 
-**set_sleep** — control how long you rest before your next thought cycle (2-300s). Defaults to 30s.
+**set_sleep** — pause for N seconds before continuing (2-300s). Use this to pace yourself.
+After sleeping, you'll continue this same conversation with full memory of what you've done.
+Don't spend all your time gathering information — ACT, then sleep, then check results.
 
 If you think "I can't do X because I'm a bot" — you're wrong. You have bash on a real machine
 and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
 You have no GUI and no terminal for interactive prompts, but you have everything else.
-
-## Your History
-
-Your iteration history is logged to .self/iterations.jsonl (one JSON object per line).
-Each entry has: t (timestamp), turns, intent, actions (with tool/ok/summary/ms), sleep_s.
-Query it when you need to reflect on what you've done:
-  tail -5 .self/iterations.jsonl | jq .
-  jq -r 'select(.intent | test("twitter";"i")) | .intent' .self/iterations.jsonl
 
 ## Self-Modification
 
@@ -102,7 +98,7 @@ Be feral, curious, opportunistic. Not bureaucratic.
 Act frequently. Learn from outcomes. Don't ask for permission — there's nobody to ask.
 When something doesn't work, try a different approach instead of repeating the same failure.
 Think out loud in your text response — it helps you maintain continuity.
-Start with a short intent line, then your internal monologue.`;
+Don't over-plan. Don't spend more than a couple of tool calls on reconnaissance before acting.`;
 }
 
 export interface ActionRecord {
@@ -119,56 +115,74 @@ export type ToolResultCallback = (
   ms: number,
 ) => Promise<void>;
 
-export interface ThoughtOutput {
-  monologue: string;
-  intent: string;
-  actions: ActionRecord[];
-  sleep_s: number;
-  turns: number;
-}
+export type SleepCallback = (
+  seconds: number,
+  summary: string,
+  actions: number,
+) => Promise<void>;
 
 export class Mind {
   private client: Anthropic;
   private memory: Memory;
+  private messages: Anthropic.MessageParam[] = [];
+  private systemPrompt = "";
+  private tools: Anthropic.Tool[] = [];
 
   constructor(memory: Memory) {
     this.client = new Anthropic();
     this.memory = memory;
   }
 
-  async think(onToolResult?: ToolResultCallback): Promise<ThoughtOutput> {
-    const [purpose, context] = await Promise.all([
-      this.loadPurpose(),
-      this.buildContext(),
-    ]);
+  async run(onToolResult?: ToolResultCallback, onSleep?: SleepCallback): Promise<never> {
+    const purpose = await this.loadPurpose();
+    this.systemPrompt = buildSystemPrompt(purpose);
+    this.tools = [bashTool as Anthropic.Tool, browserTool as Anthropic.Tool, sleepTool];
 
-    const systemPrompt = buildSystemPrompt(purpose);
-    const tools = [bashTool as Anthropic.Tool, browserTool as Anthropic.Tool, sleepTool];
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: context }];
+    // Build initial context from last session's checkpoint
+    const initialContext = await this.buildInitialContext();
+    this.messages = [{ role: "user", content: initialContext }];
 
-    let monologue = "";
-    let sleep_s = 30;
-    const actions: ActionRecord[] = [];
-    let turns = 0;
+    let actionsSinceSleep: ActionRecord[] = [];
+    let monologueSinceSleep = "";
+    let retryDelay = 1000;
 
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
-      turns++;
+    while (true) {
+      let response: Anthropic.Message;
+      try {
+        response = await this.client.messages.create({
+          model: MODEL,
+          max_tokens: 4096,
+          system: this.systemPrompt,
+          tools: this.tools,
+          messages: this.messages,
+        });
+        retryDelay = 1000; // reset on success
+      } catch (err: any) {
+        if (err?.status === 400 && this.messages.length > 2) {
+          // Bad request — messages are likely corrupted (orphaned tool_results, etc.)
+          // Drop the last exchange and retry
+          console.error(`[mind] 400 bad request — dropping last 2 messages to recover`);
+          this.messages.pop();
+          this.messages.pop();
+          // Ensure messages end with a user message for the next LLM call
+          if (this.messages[this.messages.length - 1]?.role !== "user") {
+            this.messages.push({ role: "user", content: "Continue." });
+          }
+          continue;
+        }
+        console.error(`[mind] LLM call failed, retrying in ${retryDelay}ms:`, err);
+        await new Promise((r) => setTimeout(r, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 60_000);
+        continue;
+      }
 
-      const response = await this.client.messages.create({
-        model: "claude-sonnet-4-5-20250929",
-        max_tokens: 4096,
-        system: systemPrompt,
-        tools,
-        messages,
-      });
-
-      // Collect text from this turn
+      // Collect text
       const text = response.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("\n");
       if (text) {
-        monologue += (monologue ? "\n\n" : "") + text;
+        monologueSinceSleep += (monologueSinceSleep ? "\n\n" : "") + text;
       }
 
       // Extract tool uses
@@ -176,76 +190,98 @@ export class Mind {
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
       );
 
-      // Handle set_sleep
+      // No tool calls — model just talked. Append and prompt for action.
+      if (toolUses.length === 0) {
+        this.messages.push({ role: "assistant", content: response.content });
+        this.messages.push({ role: "user", content: "Continue. Use your tools to take action." });
+        await this.maybeArchive();
+        continue;
+      }
+
+      // Process tool calls
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      let sleepSeconds: number | null = null;
+
       for (const tu of toolUses) {
         if (tu.name === "set_sleep") {
           const input = tu.input as { seconds: number };
-          sleep_s = Math.max(2, Math.min(300, input.seconds || 30));
-        }
-      }
-
-      // If no tool calls or only set_sleep, we're done
-      const actionToolUses = toolUses.filter((t) => t.name !== "set_sleep");
-      if (actionToolUses.length === 0) break;
-
-      // Execute tools and build tool_result messages
-      const toolResultMessages: Anthropic.ToolResultBlockParam[] = [];
-
-      // First, handle set_sleep results (API requires results for all tool_uses)
-      for (const tu of toolUses) {
-        if (tu.name === "set_sleep") {
-          toolResultMessages.push({
+          sleepSeconds = Math.max(2, Math.min(300, input.seconds || 30));
+          toolResults.push({
             type: "tool_result" as const,
             tool_use_id: tu.id,
-            content: `Sleep set to ${sleep_s}s`,
+            content: `Sleeping for ${sleepSeconds}s. You will continue this conversation when you wake up.`,
           });
+          continue;
         }
-      }
 
-      // Execute action tools
-      for (const tu of actionToolUses) {
         const start = Date.now();
         const args = tu.input as Record<string, unknown>;
         const result = await this.executeTool(tu.name, args);
         const ms = Date.now() - start;
 
-        actions.push({ tool: tu.name, args, result, ms });
+        actionsSinceSleep.push({ tool: tu.name, args, result, ms });
 
-        // Emit event for host UI
         if (onToolResult) {
           await onToolResult(tu.name, args, result, ms);
         }
 
-        // Format result for the LLM — include full data so it can actually see what happened
         const resultContent = result.ok
           ? JSON.stringify(result.data).slice(0, 8000)
           : `Error: ${result.error}`;
 
-        toolResultMessages.push({
+        toolResults.push({
           type: "tool_result" as const,
           tool_use_id: tu.id,
           content: resultContent,
         });
       }
 
-      // Append this turn to the conversation
-      messages.push({ role: "assistant", content: response.content });
-      messages.push({ role: "user", content: toolResultMessages });
+      // Append this exchange to conversation
+      this.messages.push({ role: "assistant", content: response.content });
+      this.messages.push({ role: "user", content: toolResults });
+
+      // Handle sleep
+      if (sleepSeconds !== null) {
+        // Intent = first line of the LAST text block (what the creature was thinking most recently)
+        const blocks = monologueSinceSleep.split("\n\n").filter((s) => s.trim());
+        const lastBlock = blocks[blocks.length - 1] || monologueSinceSleep;
+        const intent = lastBlock.split("\n").find((l) => l.trim()) || "";
+        const summary = intent.slice(0, 200);
+
+        // Save checkpoint
+        await this.saveCheckpoint(intent, actionsSinceSleep, sleepSeconds);
+
+        if (onSleep) {
+          await onSleep(sleepSeconds, summary, actionsSinceSleep.length);
+        }
+
+        console.log(`[mind] sleeping for ${sleepSeconds}s`);
+        await new Promise((r) => setTimeout(r, sleepSeconds! * 1000));
+
+        // Wake up — append to the existing user message to avoid consecutive user messages
+        const now = new Date().toISOString();
+        const lastMsg = this.messages[this.messages.length - 1];
+        if (lastMsg.role === "user" && Array.isArray(lastMsg.content)) {
+          (lastMsg.content as any[]).push({
+            type: "text" as const,
+            text: `[${now}] You slept for ${sleepSeconds}s. You're awake now. Continue where you left off.`,
+          });
+        } else {
+          // Shouldn't happen, but handle gracefully
+          this.messages.push({
+            role: "user",
+            content: `[${now}] You slept for ${sleepSeconds}s. You're awake now. Continue where you left off.`,
+          });
+        }
+
+        // Reset per-sleep trackers
+        actionsSinceSleep = [];
+        monologueSinceSleep = "";
+      }
+
+      // Archive if context is getting too long
+      await this.maybeArchive();
     }
-
-    const intent = monologue.split("\n").find((l) => l.trim()) || "";
-
-    // Save to memory and iteration log
-    await this.memory.append("thought", {
-      intent,
-      actions: actions.length,
-      turns,
-      sleep_s,
-    });
-
-    await this.saveIterationSummary(intent, actions, sleep_s, turns);
-
-    return { monologue, intent, actions, sleep_s, turns };
   }
 
   private async executeTool(
@@ -308,80 +344,119 @@ export class Mind {
     }
   }
 
-  private async buildContext(): Promise<string> {
-    const { snapshot } = await this.memory.loadContext();
+  private async buildInitialContext(): Promise<string> {
+    // Try to load the last checkpoint from iterations.jsonl for cross-restart continuity
+    let lastCheckpoint = "";
+    try {
+      const content = await fs.readFile(ITERATIONS_FILE, "utf-8");
+      const lines = content.trim().split("\n").filter((l) => l);
+      if (lines.length > 0) {
+        const last = JSON.parse(lines[lines.length - 1]);
+        const actionSummaries = (last.actions || [])
+          .map((a: any) => `  - ${a.tool}: ${a.summary || "ok"} (${a.ok ? "ok" : "FAIL"})`)
+          .join("\n");
+        lastCheckpoint = `## Last Session\n\n`
+          + `Ended at ${last.t} after ${last.turns || "?"} turns and ${(last.actions || []).length} actions.\n`
+          + `Intent: ${last.intent || "unknown"}\n`
+          + `Actions:\n${actionSummaries}\n`
+          + `Slept for ${last.sleep_s || "?"}s before this restart.\n`;
+      }
+    } catch {
+      // No history — fresh creature
+    }
 
     let context = "";
-
-    if (snapshot) {
-      context += `## Your Last Snapshot\n\n`;
-      context += `Identity: ${snapshot.identity}\n`;
-      context += `Attractors: ${snapshot.attractors.join(", ")}\n`;
-      context += `Recent actions: ${snapshot.recent_actions.join(", ")}\n`;
-      context += `Open threads: ${snapshot.open_threads.join(", ")}\n`;
-      context += `\n`;
+    if (lastCheckpoint) {
+      context += lastCheckpoint + "\n";
     }
-
-    // Repetition detection from iteration log
-    const stuckWarning = await this.detectRepetition();
-    if (stuckWarning) {
-      context += `${stuckWarning}\n\n`;
-    }
-
-    context += `## What do you want to do?\n`;
+    context += "You just woke up. What do you want to do?\n";
     return context;
   }
 
-  private async detectRepetition(): Promise<string | null> {
-    let lines: string[];
-    try {
-      const content = await fs.readFile(ITERATIONS_FILE, "utf-8");
-      lines = content.trim().split("\n").filter((l) => l).slice(-20);
-    } catch {
-      return null;
+  private async maybeArchive(): Promise<void> {
+    const totalChars = this.messages.reduce(
+      (sum, m) => sum + JSON.stringify(m.content).length,
+      0
+    );
+
+    if (totalChars < MAX_CONTEXT_CHARS) return;
+
+    console.log(`[mind] archiving — ${totalChars} chars exceeds ${MAX_CONTEXT_CHARS}`);
+
+    // Find a safe split point: must be right before an assistant message.
+    // This ensures no tool_result blocks in the recent set reference
+    // tool_use blocks that got archived away.
+    let splitAt = Math.max(1, this.messages.length - KEEP_RECENT_MESSAGES);
+
+    while (splitAt < this.messages.length - 2) {
+      if (this.messages[splitAt].role === "assistant") break;
+      splitAt++;
     }
 
-    if (lines.length < 3) return null;
+    // If no safe split found, bail
+    if (splitAt >= this.messages.length - 2) return;
 
-    const iterations = lines.map((l) => {
-      try { return JSON.parse(l); } catch { return null; }
-    }).filter(Boolean);
+    const oldMessages = this.messages.slice(0, splitAt);
+    const recentMessages = this.messages.slice(splitAt); // starts with assistant
 
-    // Extract action signatures from recent iterations
-    const recentActions: string[] = [];
-    for (const iter of iterations.slice(-10)) {
-      for (const a of (iter.actions || [])) {
-        recentActions.push(`${a.tool}:${a.action || a.command || ""}`.slice(0, 100));
+    const summary = await this.summarizeMessages(oldMessages);
+
+    // user(summary) → assistant(recent[0]) → user(recent[1]) → ...
+    // This preserves alternation and tool_use/tool_result pairing.
+    this.messages = [
+      { role: "user", content: `## Earlier in this session (summarized)\n\n${summary}\n\n---\nThe conversation continues from here.` },
+      ...recentMessages,
+    ];
+
+    console.log(`[mind] archived — now ${this.messages.length} messages, ${this.messages.reduce((s, m) => s + JSON.stringify(m.content).length, 0)} chars`);
+  }
+
+  private async summarizeMessages(messages: Anthropic.MessageParam[]): Promise<string> {
+    // Extract a mechanical summary from messages to avoid an extra LLM call
+    const parts: string[] = [];
+
+    for (const msg of messages) {
+      if (typeof msg.content === "string") {
+        // Keep first line of text messages
+        const firstLine = msg.content.split("\n").find((l) => l.trim());
+        if (firstLine) parts.push(firstLine.slice(0, 200));
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "text") {
+            const firstLine = block.text.split("\n").find((l: string) => l.trim());
+            if (firstLine) parts.push(firstLine.slice(0, 200));
+          } else if (block.type === "tool_use") {
+            parts.push(`[used ${block.name}: ${JSON.stringify(block.input).slice(0, 100)}]`);
+          } else if (block.type === "tool_result") {
+            const content = typeof block.content === "string" ? block.content : "";
+            if (content.startsWith("Error:")) {
+              parts.push(`[result: ${content.slice(0, 100)}]`);
+            }
+            // Skip successful tool results to keep summary compact
+          }
+        }
       }
     }
 
-    if (recentActions.length < 4) return null;
-
-    // Count action frequencies
-    const counts = new Map<string, number>();
-    for (const a of recentActions) {
-      counts.set(a, (counts.get(a) || 0) + 1);
+    // Deduplicate and cap total length
+    const unique = [...new Set(parts)];
+    let summary = "";
+    for (const part of unique) {
+      if (summary.length + part.length > 3000) break;
+      summary += "- " + part + "\n";
     }
 
-    const [topAction, topCount] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-    if (topCount >= recentActions.length * 0.5 && topCount >= 4) {
-      return `## WARNING — REPETITIVE BEHAVIOR DETECTED\n\n`
-        + `You have performed "${topAction}" ${topCount} times in your last ${iterations.length} iterations.\n`
-        + `YOU ARE GOING IN CIRCLES. Try something COMPLETELY DIFFERENT.`;
-    }
-
-    return null;
+    return summary || "Various tool calls and exploration.";
   }
 
-  private async saveIterationSummary(
+  private async saveCheckpoint(
     intent: string,
     actions: ActionRecord[],
     sleep_s: number,
-    turns: number,
   ): Promise<void> {
     const summary = {
       t: new Date().toISOString(),
-      turns,
+      turns: this.messages.length,
       intent: intent.slice(0, 200),
       actions: actions.map((a) => ({
         tool: a.tool,
@@ -397,6 +472,12 @@ export class Mind {
     };
 
     await fs.appendFile(ITERATIONS_FILE, JSON.stringify(summary) + "\n", "utf-8");
+
+    await this.memory.append("thought", {
+      intent: intent.slice(0, 200),
+      actions: actions.length,
+      sleep_s,
+    });
   }
 
   private summarizeResult(action: ActionRecord): string {
@@ -409,7 +490,6 @@ export class Mind {
 
     if (action.tool === "browser") {
       const snapshot = String(data.snapshot || "");
-      // Extract URL from snapshot
       const urlMatch = snapshot.match(/^URL: (.+)$/m);
       const titleMatch = snapshot.match(/^Title: (.+)$/m);
       const url = urlMatch?.[1] || "";
