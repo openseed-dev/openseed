@@ -642,13 +642,18 @@ export class Orchestrator {
       return '<div class="event ' + cls + '"><span class="time">' + ts(ev.t) + '</span>' + body + '</div>';
     }
 
+    function isNearBottom() {
+      return (window.innerHeight + window.scrollY) >= document.body.scrollHeight - 150;
+    }
+
     // SSE
     const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {
       const ev = JSON.parse(e.data);
       if (selected === null || ev.creature === selected) {
+        const wasNear = isNearBottom();
         eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
-        window.scrollTo(0, document.body.scrollHeight);
+        if (wasNear) window.scrollTo(0, document.body.scrollHeight);
       }
     };
 
