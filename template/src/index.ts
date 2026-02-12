@@ -193,6 +193,18 @@ class Creature {
         // onThought — emit creature thinking/monologue to host
         async (text) => {
           await this.emit({ type: "creature.thought", text });
+        },
+
+        // onDream — emit consolidation/dream event to host
+        async (dream) => {
+          await this.emit({
+            type: "creature.dream",
+            reflection: dream.reflection,
+            priority: dream.priority,
+            observations: dream.observations,
+            deep: dream.deep,
+          });
+          console.log(`[creature] dream #${dream.observations} obs, deep=${dream.deep} — ${dream.priority.slice(0, 80)}`);
         }
       );
     } catch (err) {

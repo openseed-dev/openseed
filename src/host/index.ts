@@ -437,6 +437,8 @@ export class Orchestrator {
     .event.creature-tool-call { border-left-color: #0af; }
     .event.creature-tool-call.browser { border-left-color: #a6e; }
     .event.creature-tool-call.fail { border-left-color: #f55; }
+    .event.creature-dream { border-left-color: #a6e; background: #0f0a15; }
+    .event.creature-dream.deep { border-left-color: #c8f; background: #120a1a; }
 
     .event .type.host { color: #666; }
     .event .type.promote { color: #0f0; }
@@ -446,6 +448,8 @@ export class Orchestrator {
     .event .type.tool.browser { color: #a6e; }
     .event .type.tool.fail { color: #f55; }
     .event .type.thought { color: #aaa; }
+    .event .type.dream { color: #a6e; font-style: italic; }
+    .event .type.dream.deep { color: #c8f; font-weight: bold; }
     .event .type.boot { color: #58f; }
 
     .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
@@ -553,6 +557,18 @@ export class Orchestrator {
       } else if (t === 'creature.thought') {
         body = cl + '<span class="type thought">thought</span>'
           + '<span class="intent-text"> ' + esc(ev.text || '') + '</span>';
+      } else if (t === 'creature.dream') {
+        const deep = ev.deep ? ' deep' : '';
+        cls += deep;
+        const oid = uid();
+        const label = ev.deep ? 'deep sleep' : 'dream';
+        body = cl + '<span class="type dream' + deep + '">' + label + '</span>'
+          + '<span class="tool-ms">' + (ev.observations || 0) + ' observations</span>'
+          + '<span class="intent-text thought-summary" onclick="toggle(\\''+oid+'\\')"> \\u2014 ' + esc(summarize(ev.priority || '', 120)) + '</span>'
+          + '<div class="thought-body" id="'+oid+'">'
+          + '<strong>Priority:</strong> ' + esc(ev.priority || '') + '\\n\\n'
+          + '<strong>Reflection:</strong>\\n' + esc(ev.reflection || '')
+          + '</div>';
       } else if (t === 'host.promote') {
         body = cl + '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'host.rollback') {

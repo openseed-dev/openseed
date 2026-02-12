@@ -9,7 +9,8 @@ export type Event =
   | { t: string; type: "creature.tool_call"; tool: string; input: string; ok: boolean; output: string; ms: number }
   | { t: string; type: "creature.patch"; summary: string; files: string[] }
   | { t: string; type: "creature.checks"; cmd: string; ok: boolean; ms: number; out_tail?: string }
-  | { t: string; type: "creature.request_restart"; sha: string };
+  | { t: string; type: "creature.request_restart"; sha: string }
+  | { t: string; type: "creature.dream"; reflection: string; priority: string; observations: number; deep: boolean };
 
 export interface HostStatus {
   current_sha: string;
