@@ -1,4 +1,8 @@
 import { execSync } from 'node:child_process';
+import {
+  appendFileSync,
+  mkdirSync,
+} from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 
@@ -29,7 +33,7 @@ class Creature {
   private booted = false;
   private running = false;
   private memory = new Memory();
-  private mind = new Mind(this.memory);
+  readonly mind = new Mind(this.memory);
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
   async start() {
@@ -250,3 +254,33 @@ class Creature {
 
 const creature = new Creature();
 creature.start();
+
+// Crash checkpoint — save state on unexpected shutdown so the creature can resume
+function writeCrashCheckpoint(signal: string) {
+  console.log(`[creature] received ${signal}, writing crash checkpoint…`);
+  try {
+    const state = creature.mind.getState();
+    if (state.actionCount === 0) {
+      console.log(`[creature] no actions this session, skipping crash checkpoint`);
+      process.exit(0);
+    }
+    const checkpoint = {
+      t: new Date().toISOString(),
+      turns: 0,
+      intent: state.intent || "unknown (interrupted)",
+      actions: [],
+      sleep_s: 0,
+      interrupted: true,
+      action_count: state.actionCount,
+    };
+    mkdirSync(".self", { recursive: true });
+    appendFileSync(".self/iterations.jsonl", JSON.stringify(checkpoint) + "\n", "utf-8");
+    console.log(`[creature] crash checkpoint saved (${state.actionCount} actions, intent: ${state.intent.slice(0, 60)})`);
+  } catch (err) {
+    console.error("[creature] failed to write crash checkpoint:", err);
+  }
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => writeCrashCheckpoint("SIGTERM"));
+process.on("SIGINT", () => writeCrashCheckpoint("SIGINT"));

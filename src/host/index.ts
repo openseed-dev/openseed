@@ -17,9 +17,9 @@ import {
   SupervisorConfig,
 } from './supervisor.js';
 
-
 const ITSALIVE_HOME = path.join(os.homedir(), '.itsalive');
 const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
+const ARCHIVE_DIR = path.join(ITSALIVE_HOME, 'archive');
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
@@ -246,7 +246,7 @@ export class Orchestrator {
     console.log(`[orchestrator] creature "${name}" spawned`);
   }
 
-  async destroyCreature(name: string): Promise<void> {
+  async archiveCreature(name: string): Promise<void> {
     const dir = path.join(CREATURES_DIR, name);
     try { await fs.access(path.join(dir, 'BIRTH.json')); }
     catch { throw new Error(`creature "${name}" not found`); }
@@ -255,13 +255,18 @@ export class Orchestrator {
     if (this.supervisors.has(name)) {
       await this.stopCreature(name);
     }
-    // Docker cleanup
+    // Docker cleanup — remove container and image but keep files
     try { execSync(`docker kill creature-${name}`, { stdio: 'ignore' }); } catch {}
     try { execSync(`docker rm -f creature-${name}`, { stdio: 'ignore' }); } catch {}
     try { execSync(`docker rmi creature-${name}`, { stdio: 'ignore' }); } catch {}
 
-    await fs.rm(dir, { recursive: true, force: true });
-    console.log(`[orchestrator] creature "${name}" destroyed`);
+    await fs.mkdir(ARCHIVE_DIR, { recursive: true });
+    const dest = path.join(ARCHIVE_DIR, name);
+    // If already archived under that name, append timestamp
+    try { await fs.access(dest); await fs.rename(dir, dest + '-' + Date.now()); }
+    catch { await fs.rename(dir, dest); }
+
+    console.log(`[orchestrator] creature "${name}" archived to ${ARCHIVE_DIR}`);
   }
 
   // --- Events ---
@@ -614,9 +619,9 @@ export class Orchestrator {
           return;
         }
 
-        if (action === 'destroy' && req.method === 'POST') {
+        if (action === 'archive' && req.method === 'POST') {
           try {
-            await this.destroyCreature(name);
+            await this.archiveCreature(name);
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;

@@ -432,7 +432,7 @@
           + '<button class="btn" onclick="restartC(\'' + name + '\')">restart</button>'
           + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\'' + name + '\')">rebuild</button>'
           + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\'' + name + '\')">evolve</button>'
-          + '<button class="btn" style="color:#f55;border-color:#f55" onclick="destroyC(\'' + name + '\')">destroy</button>';
+          + '<button class="btn" style="color:#f80;border-color:#f80" onclick="archiveC(\'' + name + '\')">archive</button>';
         try {
           const res = await fetch('/api/creatures/' + name + '/events');
           const events = await res.json();
@@ -527,9 +527,9 @@
       finally { btn.disabled = false; btn.textContent = 'spawn'; }
     }
 
-    async function destroyC(n) {
-      if (!confirm('Destroy creature "' + n + '"? This cannot be undone.')) return;
-      await fetch('/api/creatures/' + n + '/destroy', { method: 'POST' });
+    async function archiveC(n) {
+      if (!confirm('Archive creature "' + n + '"? It will be stopped and moved to the archive.')) return;
+      await fetch('/api/creatures/' + n + '/archive', { method: 'POST' });
       await refresh();
       select(null);
     }

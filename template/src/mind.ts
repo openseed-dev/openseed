@@ -1,4 +1,7 @@
-import { readFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  readFileSync,
+} from 'node:fs';
 import fs from 'node:fs/promises';
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -21,6 +24,7 @@ const CONVERSATION_LOG = ".self/conversation.jsonl";
 const OBSERVATIONS_FILE = ".self/observations.md";
 const DREAMS_FILE = ".self/dreams.jsonl";
 const RULES_FILE = ".self/rules.md";
+const RULES_CAP = 15;
 const MODEL = "claude-opus-4-6";
 
 // Fatigue constants
@@ -30,7 +34,7 @@ const MIN_DREAM_INTERVAL_MS = 10 * 60 * 1000; // 10 min
 const QUICK_NAP_THRESHOLD = 30; // seconds
 const DEEP_SLEEP_EVERY = 10; // every N dreams
 const DEEP_SLEEP_PAUSE = 300; // 5 min forced pause
-const PROGRESS_CHECK_INTERVAL = 10;
+const PROGRESS_CHECK_INTERVAL = 15;
 
 const LIGHTWEIGHT_CONSOLIDATION_THRESHOLD = 5;
 
@@ -301,6 +305,7 @@ export class Mind {
   private progressCheckCount = 0;
   private sleepResolve: (() => void) | null = null;
   private onSpecialTool: SpecialToolCallback | null = null;
+  private currentActionCount = 0;
 
   constructor(memory: Memory) {
     this.client = new Anthropic();
@@ -311,6 +316,14 @@ export class Mind {
       this.dreamCount = content.trim().split("\n").filter((l) => l).length;
       console.log(`[mind] restored dream count: ${this.dreamCount}`);
     } catch {}
+  }
+
+  getState(): { intent: string; actionCount: number; sleepStartedAt: number | null } {
+    return {
+      intent: this.extractSummary(this.monologueSinceDream).slice(0, 200),
+      actionCount: this.currentActionCount,
+      sleepStartedAt: this.sleepStartedAt,
+    };
   }
 
   forceWake(reason?: string): boolean {
@@ -325,6 +338,7 @@ export class Mind {
   }
 
   private wakeReason: string | null = null;
+  private sleepStartedAt: number | null = null;
 
   private interruptibleSleep(ms: number): Promise<void> {
     return new Promise<void>((resolve) => {
@@ -346,6 +360,18 @@ export class Mind {
       this.pushMessage({ role: "user", content: wrapped });
     }
     console.log(`[mind] injected creator message: ${text.slice(0, 80)}`);
+
+    // Persist substantive creator messages as RED observations so they survive restarts
+    if (text.length > 20) {
+      const hhmm = new Date().toTimeString().slice(0, 5);
+      const truncated = text.length > 150 ? text.slice(0, 147) + "..." : text;
+      const obs = `RED ${hhmm} Creator directive: ${truncated}`;
+      try {
+        appendFileSync(OBSERVATIONS_FILE, obs + "\n", "utf-8");
+      } catch {
+        // File might not exist yet; will be created on next consolidation
+      }
+    }
   }
 
   async run(
@@ -369,6 +395,7 @@ export class Mind {
     let actionsSinceSleep: ActionRecord[] = [];
     let monologueSinceSleep = "";
     let retryDelay = 1000;
+    this.currentActionCount = 0;
 
     while (true) {
       // Check fatigue before each LLM call
@@ -384,9 +411,12 @@ export class Mind {
 
         await closeBrowser();
         console.log(`[mind] forced sleep ${DEEP_SLEEP_PAUSE}s`);
+        this.sleepStartedAt = Date.now();
         await this.interruptibleSleep(DEEP_SLEEP_PAUSE * 1000);
+        const forcedSleptS = Math.round((Date.now() - this.sleepStartedAt) / 1000);
+        this.sleepStartedAt = null;
 
-        await this.wakeUp(DEEP_SLEEP_PAUSE, onWake);
+        await this.wakeUp(forcedSleptS, DEEP_SLEEP_PAUSE, onWake);
         actionsSinceSleep = [];
         monologueSinceSleep = "";
         this.fatigueWarned = false;
@@ -501,6 +531,7 @@ export class Mind {
         actionsSinceSleep.push({ tool: tu.name, args, result, ms });
         this.actionsSinceDream++;
         this.actionsSinceProgressCheck++;
+        this.currentActionCount = actionsSinceSleep.length;
 
         if (onToolResult) {
           await onToolResult(tu.name, args, result, ms);
@@ -520,15 +551,16 @@ export class Mind {
       // Progress check: escalating self-evaluation every N actions
       if (this.actionsSinceProgressCheck >= PROGRESS_CHECK_INTERVAL) {
         this.progressCheckCount++;
+        const totalActions = this.progressCheckCount * PROGRESS_CHECK_INTERVAL;
         const rules = await this.readRules();
         const rulesReminder = rules ? `\nYour learned rules:\n${rules}\n` : "";
         let checkMsg: string;
         if (this.progressCheckCount === 1) {
-          checkMsg = `[SYSTEM] Check-in — ${this.actionsSinceProgressCheck} actions so far.${rulesReminder}\nBriefly: what are you working toward and is it on track?`;
+          checkMsg = `[SYSTEM] ${totalActions} actions so far. Quick status note for yourself — what's the current approach?`;
         } else if (this.progressCheckCount === 2) {
-          checkMsg = `[SYSTEM] Progress check — ${this.actionsSinceProgressCheck} more actions (${this.progressCheckCount * PROGRESS_CHECK_INTERVAL} total).${rulesReminder}\nWhat concrete result have you achieved so far? A file created, a message posted, a problem solved? If nothing yet, consider whether your current approach is working.`;
+          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nAre you making progress on your current task? If stuck on something for 5+ actions, consider a different angle — but don't abandon the task.`;
         } else {
-          checkMsg = `[SYSTEM] Progress check — ${this.progressCheckCount * PROGRESS_CHECK_INTERVAL} actions this session.${rulesReminder}\nName one concrete, tangible result. If you can't, you may be stuck — try a different approach or move on to a different task. Are you following your rules?`;
+          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nWhat have you accomplished? If genuinely stuck, try a different approach to the SAME goal — switching tasks entirely should be a last resort.`;
         }
         (toolResults as any[]).push({ type: "text", text: checkMsg });
         if (onProgressCheck) await onProgressCheck(this.actionsSinceProgressCheck);
@@ -577,18 +609,21 @@ export class Mind {
         await closeBrowser();
 
         console.log(`[mind] sleeping for ${actualPause}s${consolidated ? " (with consolidation)" : ""}`);
+        this.sleepStartedAt = Date.now();
         await this.interruptibleSleep(actualPause * 1000);
+        const actualSleptS = Math.round((Date.now() - this.sleepStartedAt) / 1000);
+        this.sleepStartedAt = null;
 
         if (consolidated) {
-          await this.wakeUp(actualPause, onWake);
+          await this.wakeUp(actualSleptS, actualPause, onWake);
         } else {
           const reason = this.wakeReason;
           this.wakeReason = null;
           if (!reason && onWake) await onWake("Sleep timer expired", "timer");
           const now = new Date().toISOString();
           const wakeText = reason
-            ? `[${now}] You were woken early (slept ${sleepSeconds}s). Reason: ${reason}. Continue where you left off.`
-            : `[${now}] You slept for ${sleepSeconds}s. You're awake now. Continue where you left off.`;
+            ? `[${now}] You were woken early — slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(sleepSeconds)}. Reason: ${reason}. Continue where you left off.`
+            : `[${now}] You slept for ${this.formatDuration(sleepSeconds)}. You're awake now. Continue where you left off.`;
           const lastMsg = this.messages[this.messages.length - 1];
           if (lastMsg.role === "user" && Array.isArray(lastMsg.content)) {
             (lastMsg.content as any[]).push({
@@ -708,6 +743,7 @@ You have three jobs:
 3. RULES — Hard behavioral rules you should ALWAYS or NEVER follow. Format:
    - ALWAYS: [concrete constraint]  or  - NEVER: [concrete constraint]
    Only add a rule if you were genuinely burned by not having it. Max 2 new rules.
+   Rules should be general principles, not task-specific instructions. Don't encode "always do X first" if X is a one-time task.
    If nothing warrants a new rule, write "none".
 
 ${existingRules ? `Your current rules:\n${existingRules}\n\nDo NOT repeat existing rules.` : "You have no rules yet."}
@@ -880,7 +916,16 @@ Current time: ${new Date().toISOString()}`,
         const resp = await this.client.messages.create({
           model: MODEL,
           max_tokens: 1024,
-          system: `You are reviewing an autonomous creature's learned rules. Given its recent observations, decide which rules are still relevant. Drop rules that are no longer needed (workaround for a fixed problem, redundant, or stale). Merge overlapping rules. Aim for 5-15 rules — keep what matters, drop what's stale. Output only the final rules, one per line starting with "- ".`,
+          system: `You are reviewing an autonomous creature's learned rules. Given its recent observations, decide which rules are still relevant.
+
+Drop rules that:
+- Reference specific one-time tasks (e.g., "check IMAP", "fix PR #42") — these are stale
+- Are workarounds for problems that have been fixed
+- Are too narrow or prescriptive (e.g., "spend max 2 tool calls on recon")
+- Contradict each other
+
+Merge overlapping rules into general principles. Prefer broad behavioral wisdom over narrow prescriptions.
+Aim for 5-15 rules total. Output only the final rules, one per line starting with "- ".`,
           messages: [{ role: "user", content: `Current rules:\n${ruleLines.join("\n")}\n\nRecent observations:\n${(obs || "").slice(-3000)}` }],
         });
         const pruned = resp.content
@@ -910,7 +955,7 @@ Current time: ${new Date().toISOString()}`,
 
   // --- Wake Up ---
 
-  private async wakeUp(duration: number, onWake?: WakeCallback): Promise<void> {
+  private async wakeUp(actualSleptS: number, requestedS: number, onWake?: WakeCallback): Promise<void> {
     const observations = await this.readObservations();
     const reason = this.wakeReason;
     this.wakeReason = null;
@@ -918,8 +963,8 @@ Current time: ${new Date().toISOString()}`,
 
     const now = new Date().toISOString();
     let wakeMsg = reason
-      ? `[${now}] You were woken early (slept ${duration}s). Reason: ${reason}\n`
-      : `[${now}] You woke up after sleeping ${duration}s.\n`;
+      ? `[${now}] You were woken early — slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)}. Reason: ${reason}\n`
+      : `[${now}] You woke up after sleeping ${this.formatDuration(actualSleptS)}.\n`;
 
     if (observations) {
       wakeMsg += `\n${observations}\n`;
@@ -934,6 +979,14 @@ Current time: ${new Date().toISOString()}`,
     } else {
       this.pushMessage({ role: "user", content: wakeMsg });
     }
+  }
+
+  private formatDuration(seconds: number): string {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.round((seconds % 3600) / 60);
+    return m > 0 ? `${h}h${m}m` : `${h}h`;
   }
 
   // --- File Helpers ---
@@ -1006,6 +1059,30 @@ Current time: ${new Date().toISOString()}`,
       const isDup = existing.some((e) => e.slice(0, 30).toLowerCase() === sig);
       if (!isDup) {
         existing.push(rule);
+      }
+    }
+
+    // Hard cap: if rules exceed limit, trigger immediate LLM-assisted prune
+    if (existing.length > RULES_CAP) {
+      console.log(`[mind] rules exceed cap (${existing.length}/${RULES_CAP}), pruning…`);
+      try {
+        const resp = await this.client.messages.create({
+          model: MODEL,
+          max_tokens: 1024,
+          system: `You are pruning an autonomous creature's rules list which has grown too long. Keep the most important general behavioral principles. Drop rules that reference specific one-time tasks, are too narrow, or overlap. Merge similar rules. Target ${RULES_CAP} rules max. Output only the final rules, one per line starting with "- ".`,
+          messages: [{ role: "user", content: `Current rules (${existing.length}):\n${existing.join("\n")}` }],
+        });
+        const pruned = resp.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .map((b) => b.text)
+          .join("\n");
+        const prunedLines = pruned.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
+        if (prunedLines.length > 0 && prunedLines.length <= RULES_CAP) {
+          existing = prunedLines;
+          console.log(`[mind] cap-prune: ${existing.length} rules remaining`);
+        }
+      } catch (err) {
+        console.error("[mind] cap-prune failed:", err);
       }
     }
 
@@ -1111,11 +1188,24 @@ Current time: ${new Date().toISOString()}`,
         const actionSummaries = (last.actions || [])
           .map((a: any) => `  - ${a.tool}: ${a.summary || "ok"} (${a.ok ? "ok" : "FAIL"})`)
           .join("\n");
+        const requestedS = last.sleep_s || 0;
+        const actualSleptS = last.sleep_started_at
+          ? Math.round((Date.now() - new Date(last.sleep_started_at).getTime()) / 1000)
+          : requestedS;
+        let sleepInfo: string;
+        if (last.interrupted) {
+          sleepInfo = `Your previous session was interrupted (not a normal sleep). You were mid-task with ${(last.actions || []).length} actions completed. Resume what you were doing.`;
+        } else {
+          const sleepStarted = actualSleptS < requestedS * 0.9;
+          sleepInfo = sleepStarted
+            ? `Slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)} — you were interrupted early.`
+            : `Slept for ${this.formatDuration(actualSleptS)}.`;
+        }
         lastCheckpoint = `## Last Session\n\n`
           + `Ended at ${last.t} after ${last.turns || "?"} turns and ${(last.actions || []).length} actions.\n`
           + `Intent: ${last.intent || "unknown"}\n`
           + `Actions:\n${actionSummaries}\n`
-          + `Slept for ${last.sleep_s || "?"}s before this restart.\n`;
+          + `${sleepInfo}\n`;
       }
     } catch {
       // No history — fresh creature
@@ -1154,6 +1244,7 @@ Current time: ${new Date().toISOString()}`,
         ms: a.ms,
       })),
       sleep_s,
+      sleep_started_at: new Date().toISOString(),
     };
 
     await fs.appendFile(ITERATIONS_FILE, JSON.stringify(summary) + "\n", "utf-8");
