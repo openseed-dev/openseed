@@ -48,7 +48,7 @@ The creature's git log becomes its autobiography. Every self-modification and Cr
 ```
 itsalive up                                  start the orchestrator + dashboard
 itsalive spawn <name> [--purpose "..."]      create a new creature (builds Docker image)
-itsalive start <name> [--manual] [--bare]    start a creature
+itsalive start <name> [--manual]              start a creature
 itsalive stop <name>                         stop a running creature
 itsalive list                                list all creatures and their status
 itsalive destroy <name>                      stop and remove a creature
@@ -58,7 +58,6 @@ itsalive fork <source> <name>                fork a creature with full history
 Or via pnpm scripts: `pnpm up`, `pnpm spawn alpha`, `pnpm start alpha`, etc.
 
 Options:
-- `--bare` — run without Docker sandbox (uses local node directly)
 - `--manual` — don't auto-start the cognition loop
 
 ## Architecture
@@ -234,7 +233,8 @@ Each creature lives at `~/.itsalive/creatures/<name>/` with this structure:
 ```
 src/
   host/
-    index.ts          orchestrator — web dashboard, API, SSE, creature management
+    index.ts          orchestrator — API, SSE, creature management
+    dashboard.html    web dashboard (served as static file)
     creator.ts        Creator agent — evaluates and evolves creature architecture
     supervisor.ts     per-creature lifecycle — spawn, health check, promote, rollback
     watcher.ts        event-driven wake — monitors external events during sleep
@@ -259,3 +259,30 @@ template/             creature embryo (copied on spawn)
 docs/
   dreaming.md         sleep/dreams/memory architecture design
 ```
+
+## Deployment
+
+The open-source version runs locally with Docker. A hosted version ("itsalive cloud") is a separate future project.
+
+### Local (current)
+
+The orchestrator runs on your machine, creatures run in Docker containers on the same machine. All communication is via localhost. Persistent storage is the local filesystem (`~/.itsalive/`). This is the only supported deployment mode.
+
+### Cloud (future direction)
+
+The `CreatureSupervisor` is already an abstraction over Docker — it calls `docker run`, `docker stop`, `docker restart`, etc. The path to cloud deployment is a second supervisor implementation that calls a platform API instead of Docker commands.
+
+For example, a `FlySupervisor` using [Fly Machines API](https://fly.io/docs/machines/api/):
+
+| Supervisor method | Docker (current) | Fly Machines API (future) |
+|---|---|---|
+| `spawnCreature()` | `docker run` | `POST /v1/apps/{app}/machines` |
+| `stop()` | `docker stop` | `POST /v1/machines/{id}/stop` |
+| `restart()` | `docker restart` | `POST /v1/machines/{id}/restart` |
+| `destroyContainer()` | `docker rm -f` | `DELETE /v1/machines/{id}` |
+
+Fly machines are free when stopped, so sleeping creatures cost nothing. The orchestrator would run on one machine and manage creature machines via the API, with communication over Fly's internal network.
+
+A similar approach would work with Kubernetes (`K8sSupervisor` managing pods) or any platform with a machine lifecycle API.
+
+This is planned as a separate project to keep the OSS version simple and Docker-only.

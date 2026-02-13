@@ -1,9 +1,11 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { Event } from '../shared/types.js';
 import { CostTracker } from './costs.js';
@@ -35,10 +37,13 @@ export class Orchestrator {
   private creatorRunning: Set<string> = new Set();
   private costs = new CostTracker();
   private watcher: Watcher;
+  private dashboardHtml: string;
 
   constructor(port: number) {
     this.port = port;
     this.creator = new Creator(this.costs);
+    const thisDir = path.dirname(fileURLToPath(import.meta.url));
+    this.dashboardHtml = readFileSync(path.join(thisDir, 'dashboard.html'), 'utf-8');
     this.watcher = new Watcher(async (creature, reason) => {
       console.log(`[watcher] waking ${creature}: ${reason}`);
       const supervisor = this.supervisors.get(creature);
@@ -49,6 +54,7 @@ export class Orchestrator {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reason }),
         });
+        await this.emitEvent(creature, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'watcher' });
       } catch (err) {
         console.error(`[watcher] failed to wake ${creature}:`, err);
       }
@@ -157,18 +163,18 @@ export class Orchestrator {
 
   // --- Creature management ---
 
-  async startCreature(name: string, opts?: { bare?: boolean; manual?: boolean }): Promise<void> {
+  async startCreature(name: string, opts?: { manual?: boolean }): Promise<void> {
     if (this.supervisors.has(name)) throw new Error(`creature "${name}" is already running`);
 
     const dir = path.join(CREATURES_DIR, name);
     try { await fs.access(path.join(dir, 'BIRTH.json')); }
     catch { throw new Error(`creature "${name}" not found`); }
 
-    const sandboxed = !(opts?.bare) && this.isDockerAvailable() && this.hasDockerImage(name);
+    const sandboxed = this.isDockerAvailable() && this.hasDockerImage(name);
     const autoIterate = !(opts?.manual);
     const port = await this.allocatePort();
 
-    console.log(`[orchestrator] starting ${name} (${sandboxed ? 'sandboxed' : 'bare'}) on port ${port}`);
+    console.log(`[orchestrator] starting ${name} (${sandboxed ? 'docker' : 'no image — building required'}) on port ${port}`);
     await this.startCreatureInternal(name, dir, port, { sandboxed, autoIterate });
   }
 
@@ -353,7 +359,7 @@ export class Orchestrator {
 
       if (p === '/' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(this.renderDashboard());
+        res.end(this.dashboardHtml);
         return;
       }
 
@@ -514,6 +520,7 @@ export class Orchestrator {
               body: JSON.stringify({ reason }),
             });
             if (!res2.ok) throw new Error('creature rejected wake');
+            await this.emitEvent(name, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'manual' });
             console.log(`[${name}] force wake triggered: ${reason}`);
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
@@ -578,509 +585,6 @@ export class Orchestrator {
     server.listen(this.port, () => {
       console.log(`[orchestrator] listening on http://localhost:${this.port}`);
     });
-  }
-
-  // --- Dashboard ---
-
-  private renderDashboard(): string {
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <title>itsalive</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-      background: #0a0a0a; color: #ccc; font-size: 13px;
-      display: flex;
-    }
-
-    .sidebar {
-      position: sticky; top: 0; height: 100vh;
-      width: 220px; border-right: 1px solid #222;
-      display: flex; flex-direction: column; flex-shrink: 0;
-      overflow-y: auto;
-    }
-    .sidebar-header {
-      padding: 16px; color: #0f0; font-size: 16px; font-weight: bold;
-      border-bottom: 1px solid #222;
-    }
-    .creature-list { padding: 8px; flex: 1; }
-    .creature-item {
-      padding: 8px 12px; border-radius: 4px; cursor: pointer;
-      display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
-    }
-    .creature-item:hover { background: #1a1a1a; }
-    .creature-item.selected { background: #1a1a2a; border-left: 2px solid #58f; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot.stopped { background: #555; }
-    .dot.starting { background: #fa0; }
-    .dot.running { background: #0f0; }
-    .dot.sleeping { background: #f80; }
-    .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .creature-cost { color: #f80; font-size: 10px; margin-left: 4px; flex-shrink: 0; }
-    .btn {
-      background: #222; border: 1px solid #333; color: #aaa;
-      padding: 2px 6px; border-radius: 3px; cursor: pointer;
-      font-family: inherit; font-size: 11px;
-    }
-    .btn:hover { background: #333; color: #fff; }
-
-    .main {
-      flex: 1; min-width: 0; padding: 16px;
-    }
-    .main-header {
-      position: sticky; top: 0; z-index: 10; background: #0a0a0a;
-      padding: 12px 16px; margin: -16px -16px 12px -16px; border-bottom: 1px solid #222;
-      display: flex; align-items: center; gap: 12px;
-    }
-    .main-header h2 { color: #eee; font-size: 14px; margin: 0; }
-    .main-header .info { color: #555; font-size: 12px; }
-    .main-header .sha { color: #58f; }
-    .sidebar-view-tabs {
-      display: flex; gap: 4px; padding: 4px 12px 8px 28px;
-    }
-    .sidebar-view-tab {
-      padding: 3px 10px; cursor: pointer; border-radius: 3px;
-      background: #111; border: 1px solid #222; color: #666;
-      font-family: inherit; font-size: 11px;
-    }
-    .sidebar-view-tab:hover { color: #aaa; border-color: #333; }
-    .sidebar-view-tab.active { color: #58f; border-color: #58f; background: #1a1a2a; }
-    .events { display: flex; flex-direction: column; gap: 2px; }
-
-    .event { padding: 6px 12px; border-radius: 4px; border-left: 3px solid #333; background: #111; }
-    .event .time { color: #555; font-size: 11px; }
-    .event .clabel { color: #58f; font-size: 11px; margin-left: 4px; font-weight: bold; }
-    .event .type { font-weight: bold; margin-left: 8px; }
-
-    .event.host-boot { border-left-color: #666; }
-    .event.host-spawn { border-left-color: #58f; }
-    .event.host-promote { border-left-color: #0f0; }
-    .event.host-rollback { border-left-color: #f33; background: #1a0808; }
-    .event.creature-boot { border-left-color: #58f; }
-    .event.creature-thought { border-left-color: #888; }
-    .event.creature-sleep { border-left-color: #fa0; }
-    .event.creature-tool-call { border-left-color: #0af; }
-    .event.creature-tool-call.browser { border-left-color: #a6e; }
-    .event.creature-tool-call.fail { border-left-color: #f55; }
-    .event.creature-dream { border-left-color: #a6e; background: #0f0a15; }
-    .event.creature-dream.deep { border-left-color: #c8f; background: #120a1a; }
-    .event.creature-progress-check { border-left-color: #f80; background: #1a1208; }
-    .event.creator-evaluation { border-left-color: #0d4; background: #081a0a; }
-
-    .event .type.host { color: #666; }
-    .event .type.promote { color: #0f0; }
-    .event .type.rollback { color: #f33; }
-    .event .type.sleep { color: #fa0; }
-    .event .type.tool { color: #0af; }
-    .event .type.tool.browser { color: #a6e; }
-    .event .type.tool.fail { color: #f55; }
-    .event .type.thought { color: #aaa; }
-    .event .type.dream { color: #a6e; font-style: italic; }
-    .event .type.dream.deep { color: #c8f; font-weight: bold; }
-    .event .type.progress-check { color: #f80; }
-    .event .type.creator { color: #0d4; font-weight: bold; }
-    .event .type.boot { color: #58f; }
-
-    .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
-    .thought-summary { cursor: pointer; }
-    .thought-summary:hover { text-decoration: underline; }
-    .thought-body { display: none; margin-top: 6px; padding: 8px; background: #0d0d0d; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #aaa; font-size: 12px; }
-    .thought-body.open { display: block; }
-    .tool-cmd { color: #fff; background: #1a1a2a; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
-    .tool-status { margin-left: 6px; font-size: 11px; }
-    .tool-status.ok { color: #0f0; }
-    .tool-status.err { color: #f55; }
-    .tool-output { display: block; color: #888; margin-top: 4px; padding: 6px 8px; background: #0d0d0d; border-radius: 3px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
-    .tool-ms { color: #555; font-size: 11px; margin-left: 6px; }
-    .tool-detail { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #888; padding: 8px; background: #0d0d0d; border-radius: 4px; margin-top: 6px; }
-    .tool-detail-cmd { margin-bottom: 6px; }
-    .tool-detail-out { border-top: 1px solid #222; padding-top: 6px; }
-    .sha { color: #58f; }
-    .detail { color: #888; margin-left: 4px; }
-
-    .message-bar {
-      position: sticky; bottom: 0; background: #0a0a0a;
-      padding: 12px 0; margin-top: 12px; border-top: 1px solid #222;
-      display: none; gap: 8px;
-    }
-    .message-bar.visible { display: flex; }
-    .message-bar textarea {
-      flex: 1; background: #111; border: 1px solid #333;
-      color: #eee; padding: 8px 12px; border-radius: 4px;
-      font-family: inherit; font-size: 13px;
-      resize: vertical; min-height: 38px; max-height: 200px;
-    }
-    .message-bar textarea:focus { outline: none; border-color: #58f; }
-    .message-bar button {
-      background: #1a1a2a; border: 1px solid #58f; color: #58f;
-      padding: 8px 16px; border-radius: 4px; cursor: pointer;
-      font-family: inherit; font-size: 13px;
-    }
-    .message-bar button:hover { background: #2a2a4a; }
-
-    /* view-switcher removed — tabs are now in the sticky header */
-
-    .view { display: none; }
-    .view.active { display: block; }
-
-    .mind-tabs { display: flex; border-bottom: 1px solid #222; margin-bottom: 12px; }
-    .mind-tab {
-      padding: 8px 16px; cursor: pointer; color: #666;
-      font-size: 12px; border-bottom: 2px solid transparent;
-    }
-    .mind-tab:hover { color: #aaa; }
-    .mind-tab.active { color: #58f; border-bottom-color: #58f; }
-    .mind-content {
-      white-space: pre-wrap; word-break: break-word;
-      font-size: 12px; color: #bbb; line-height: 1.5;
-    }
-    .mind-content .dream-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #1a1a1a; }
-    .mind-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .mind-content .dream-time { color: #666; font-size: 11px; }
-    .mind-content .dream-deep { color: #c8f; font-size: 10px; font-weight: bold; margin-left: 6px; }
-    .mind-content .dream-reflection { color: #ccc; margin-top: 4px; }
-    .mind-content .obs-important { color: #e8e8e8; }
-    .mind-content .obs-minor { color: #666; }
-  </style>
-</head>
-<body>
-  <div class="sidebar">
-    <div class="sidebar-header">itsalive</div>
-    <div class="creature-list" id="creatures"></div>
-  </div>
-  <div class="main">
-    <div class="main-header" id="header">
-      <h2>all creatures</h2>
-    </div>
-    <div class="view active" id="log-view">
-      <div class="events" id="events"></div>
-      <div class="message-bar" id="msgbar">
-        <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}"></textarea>
-        <button onclick="sendMsg()">Send</button>
-      </div>
-    </div>
-    <div class="view" id="mind-view">
-      <div class="mind-tabs" id="mtabs"></div>
-      <div class="mind-content" id="mcontent"></div>
-    </div>
-  </div>
-
-  <script>
-    let selected = null;
-    let creatures = {};
-    const eventsEl = document.getElementById('events');
-    const headerEl = document.getElementById('header');
-    const msgBar = document.getElementById('msgbar');
-
-    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-    function ts(t) { return t ? t.slice(11, 19) : ''; }
-    function toggle(id) { document.getElementById(id)?.classList.toggle('open'); }
-    function summarize(text, max) {
-      if (!text) return '...';
-      const line = text.split('\\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))[0] || text.trim();
-      return line.length > max ? line.slice(0, max) + '...' : line;
-    }
-
-    function timeAgo(iso) {
-      if (!iso) return '';
-      const now = Date.now(), then = new Date(iso).getTime();
-      const s = Math.floor((now - then) / 1000);
-      if (s < 60) return 'just now';
-      if (s < 3600) return Math.floor(s/60) + 'm ago';
-      if (s < 86400) return Math.floor(s/3600) + 'h ago';
-      if (s < 172800) return 'yesterday';
-      return Math.floor(s/86400) + 'd ago';
-    }
-
-    function uid() { return 'u' + Date.now() + Math.random().toString(36).slice(2,6); }
-
-    function renderEvent(ev, showCreature) {
-      const t = ev.type;
-      let cls = t.replace(/\\./g, '-');
-      let body = '';
-      const cl = showCreature && ev.creature ? '<span class="clabel">' + esc(ev.creature) + '</span>' : '';
-
-      if (t === 'creature.sleep') {
-        const secs = ev.seconds || 30;
-        const acts = ev.actions || 0;
-        const id = uid();
-        body = cl + '<span class="type sleep">sleep</span>'
-          + '<span class="tool-ms">' + secs + 's / ' + acts + ' actions</span>'
-          + '<span class="intent-text thought-summary" onclick="toggle(\\''+id+'\\')"> \\u2014 ' + esc(summarize(ev.text, 120)) + '</span>'
-          + '<div class="thought-body" id="'+id+'">' + esc(ev.text || '') + '</div>';
-      } else if (t === 'creature.tool_call') {
-        const tn = ev.tool || 'bash';
-        const br = tn === 'browser';
-        cls += ev.ok ? '' : ' fail';
-        cls += br ? ' browser' : '';
-        const tc = 'type tool' + (br ? ' browser' : '') + (ev.ok ? '' : ' fail');
-        const oid = uid();
-        const cmdPreview = (ev.input || '').length > 80 ? (ev.input || '').slice(0,80) + '...' : (ev.input || '');
-        body = cl + '<span class="' + tc + ' thought-summary" onclick="toggle(\\''+oid+'\\')">\\u25b6 ' + esc(tn) + '</span>'
-          + '<code class="tool-cmd thought-summary" onclick="toggle(\\''+oid+'\\')"> ' + esc(cmdPreview) + '</code>'
-          + (ev.ok ? '<span class="tool-status ok">ok</span>' : '<span class="tool-status err">fail</span>')
-          + '<span class="tool-ms">' + (ev.ms||0) + 'ms</span>'
-          + '<div class="tool-detail thought-body" id="'+oid+'">'
-          + '<div class="tool-detail-cmd"><strong>input:</strong> ' + esc(ev.input || '') + '</div>'
-          + (ev.output ? '<div class="tool-detail-out"><strong>output:</strong>\\n' + esc(ev.output) + '</div>' : '')
-          + '</div>';
-      } else if (t === 'creature.thought') {
-        body = cl + '<span class="type thought">thought</span>'
-          + '<span class="intent-text"> ' + esc(ev.text || '') + '</span>';
-      } else if (t === 'creature.dream') {
-        const deep = ev.deep ? ' deep' : '';
-        cls += deep;
-        const oid = uid();
-        const label = ev.deep ? 'deep sleep' : 'dream';
-        body = cl + '<span class="type dream' + deep + '">' + label + '</span>'
-          + '<span class="tool-ms">' + (ev.observations || 0) + ' observations</span>'
-          + '<span class="intent-text thought-summary" onclick="toggle(\\''+oid+'\\')"> \\u2014 ' + esc(summarize(ev.priority || '', 120)) + '</span>'
-          + '<div class="thought-body" id="'+oid+'">'
-          + '<strong>Priority:</strong> ' + esc(ev.priority || '') + '\\n\\n'
-          + '<strong>Reflection:</strong>\\n' + esc(ev.reflection || '')
-          + '</div>';
-      } else if (t === 'creature.progress_check') {
-        body = cl + '<span class="type progress-check">progress check</span>'
-          + '<span class="tool-ms">' + (ev.actions || 0) + ' actions</span>';
-      } else if (t === 'creator.evaluation') {
-        const oid = uid();
-        const changes = (ev.changes || []);
-        const label = changes.length > 0 ? 'creator evolved' : 'creator evaluated';
-        body = cl + '<span class="type creator">' + label + '</span>'
-          + (changes.length > 0 ? '<span class="tool-ms">' + changes.length + ' files changed</span>' : '')
-          + '<span class="intent-text thought-summary" onclick="toggle(\\''+oid+'\\')"> \\u2014 ' + esc(summarize(ev.reasoning || '', 120)) + '</span>'
-          + '<div class="thought-body" id="'+oid+'">'
-          + '<strong>Trigger:</strong> ' + esc(ev.trigger || '') + '\\n\\n'
-          + '<strong>Reasoning:</strong>\\n' + esc(ev.reasoning || '')
-          + (changes.length > 0 ? '\\n\\n<strong>Changed files:</strong>\\n' + changes.map(f => '  - ' + esc(f)).join('\\n') : '')
-          + '</div>';
-      } else if (t === 'host.promote') {
-        body = cl + '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
-      } else if (t === 'host.rollback') {
-        body = cl + '<span class="type rollback">rollback</span><span class="detail">' + esc(ev.reason||'') + ' <span class="sha">' + (ev.from||'').slice(0,7) + '</span> \\u2192 <span class="sha">' + (ev.to||'').slice(0,7) + '</span></span>';
-      } else if (t === 'host.spawn') {
-        body = cl + '<span class="type boot">spawn</span><span class="detail">pid ' + (ev.pid||'?') + ' <span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
-      } else if (t === 'creature.boot') {
-        body = cl + '<span class="type boot">creature boot</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
-      } else if (t === 'host.boot') {
-        body = cl + '<span class="type host">host boot</span>';
-      } else {
-        body = cl + '<span class="type host">' + esc(t) + '</span>';
-      }
-
-      return '<div class="event ' + cls + '"><span class="time">' + ts(ev.t) + '</span>' + body + '</div>';
-    }
-
-    function isNearBottom() {
-      return (window.innerHeight + window.scrollY) >= document.body.scrollHeight - 150;
-    }
-
-    // SSE
-    const sse = new EventSource('/api/events');
-    sse.onmessage = (e) => {
-      const ev = JSON.parse(e.data);
-      if (selected === null || ev.creature === selected) {
-        const wasNear = isNearBottom();
-        eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
-        if (wasNear) window.scrollTo(0, document.body.scrollHeight);
-      }
-    };
-
-    let currentView = 'log';
-    let mindData = null;
-    let mindTab = 'purpose';
-    const logView = document.getElementById('log-view');
-    const mindView = document.getElementById('mind-view');
-    const mtabs = document.getElementById('mtabs');
-    const mcontent = document.getElementById('mcontent');
-
-    function switchView(v) {
-      currentView = v;
-      logView.classList.toggle('active', v === 'log');
-      mindView.classList.toggle('active', v === 'mind');
-      renderSidebar();
-      if (v === 'mind' && selected) {
-        if (!mindData) loadMind().then(renderMind);
-        else renderMind();
-      }
-    }
-
-    async function select(name) {
-      selected = name;
-      eventsEl.innerHTML = '';
-      mindData = null;
-      currentView = 'log';
-      if (name) {
-        headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
-          + '<button class="btn" onclick="wakeC(\\''+name+'\\')">wake</button>'
-          + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>'
-          + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\\''+name+'\\')">rebuild</button>'
-          + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\\''+name+'\\')">evolve</button>';
-        msgBar.classList.add('visible');
-        switchView('log');
-        try {
-          const res = await fetch('/api/creatures/' + name + '/events');
-          const events = await res.json();
-          for (const ev of events) {
-            eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, false));
-          }
-          window.scrollTo(0, document.body.scrollHeight);
-        } catch {}
-      } else {
-        headerEl.innerHTML = '<h2>all creatures</h2>';
-        msgBar.classList.remove('visible');
-        switchView('log');
-      }
-      renderSidebar();
-    }
-
-    async function loadMind() {
-      if (!selected) return;
-      try {
-        const res = await fetch('/api/creatures/' + selected + '/files');
-        mindData = await res.json();
-      } catch { mindData = {}; }
-    }
-
-    function selectMindTab(tab) {
-      mindTab = tab;
-      renderMind();
-    }
-
-    function renderMind() {
-      if (!mindData) { mcontent.innerHTML = 'Loading...'; return; }
-      const tabs = ['purpose','observations','rules','dreams','diary','creator'];
-      mtabs.innerHTML = tabs.map(t =>
-        '<div class="mind-tab' + (mindTab === t ? ' active' : '') + '" onclick="selectMindTab(\\''+t+'\\')">' + t + '</div>'
-      ).join('') + '<div class="mind-tab" onclick="loadMind().then(renderMind)" style="margin-left:auto;color:#444">\\u21bb</div>';
-
-      let html = '';
-      if (mindTab === 'purpose') {
-        html = esc(mindData.purpose || 'No PURPOSE.md');
-      } else if (mindTab === 'diary') {
-        html = esc(mindData.diary || 'No diary entries yet.');
-      } else if (mindTab === 'rules') {
-        html = esc(mindData.rules || 'No rules yet.');
-      } else if (mindTab === 'observations') {
-        const obs = mindData.observations || '';
-        html = obs ? obs.split('\\n').map(l => {
-          if (l.startsWith('RED')) return '<span style="color:#f55">' + esc(l) + '</span>';
-          if (l.startsWith('YLW')) return '<span style="color:#fa0">' + esc(l) + '</span>';
-          if (l.startsWith('GRN')) return '<span style="color:#666">' + esc(l) + '</span>';
-          if (l.startsWith('[!]')) return '<span class="obs-important">' + esc(l) + '</span>';
-          if (l.startsWith('[.]')) return '<span class="obs-minor">' + esc(l) + '</span>';
-          return esc(l);
-        }).join('\\n') : 'No observations yet.';
-      } else if (mindTab === 'dreams') {
-        const dreams = mindData.dreams || [];
-        if (dreams.length === 0) { html = 'No dreams yet.'; }
-        else {
-          html = dreams.map(d =>
-            '<div class="dream-entry">'
-            + '<span class="dream-time">' + timeAgo(d.t) + ' \\u2014 ' + (d.actions||0) + ' actions</span>'
-            + (d.deep ? '<span class="dream-deep">deep sleep</span>' : '')
-            + '\\n<span class="dream-reflection">' + esc(d.reflection || '') + '</span>'
-            + '</div>'
-          ).reverse().join('');
-        }
-      } else if (mindTab === 'creator') {
-        const logs = mindData.creatorLog || [];
-        if (logs.length === 0) { html = 'No creator evaluations yet.'; }
-        else {
-          html = logs.map(e =>
-            '<div class="dream-entry">'
-            + '<span class="dream-time">' + (e.t || '').slice(0,16) + ' \\u2014 trigger: ' + esc(e.trigger || '') + (e.changed ? ' \\u2014 <span style="color:#0d4">changed</span>' : ' \\u2014 no changes') + '</span>\\n'
-            + '<span class="dream-reflection">' + esc(e.reasoning || '') + '</span>'
-            + (e.changes && e.changes.length > 0 ? '\\n<span style="color:#0d4">Files: ' + e.changes.map(c => esc(c.file || c)).join(', ') + '</span>' : '')
-            + '</div>'
-          ).reverse().join('');
-        }
-      }
-      mcontent.innerHTML = html;
-    }
-
-    function fmtCost(usd) { return usd < 0.01 ? '<$0.01' : '$' + usd.toFixed(2); }
-    function creatureCost(n) {
-      const c = usageData[n] || { cost_usd: 0 };
-      const cr = usageData['creator:' + n] || { cost_usd: 0 };
-      return c.cost_usd + cr.cost_usd;
-    }
-
-    function renderSidebar() {
-      const names = Object.keys(creatures).sort();
-      let html = '<div class="creature-item' + (selected === null ? ' selected' : '') + '" onclick="select(null)">'
-        + '<span class="cname" style="color:#888">all</span></div>';
-      for (const n of names) {
-        const c = creatures[n];
-        const sel = selected === n ? ' selected' : '';
-        const dot = '<span class="dot ' + c.status + '"></span>';
-        const cost = creatureCost(n);
-        const costLabel = cost > 0 ? '<span class="creature-cost">' + fmtCost(cost) + '</span>' : '';
-        let act = '';
-        if (c.status === 'stopped') {
-          act = '<button class="btn" onclick="event.stopPropagation();startC(\\''+n+'\\')">start</button>';
-        } else {
-          act = '<button class="btn" onclick="event.stopPropagation();stopC(\\''+n+'\\')">stop</button>';
-        }
-        html += '<div class="creature-item' + sel + '" onclick="select(\\''+n+'\\')">'
-          + dot + '<span class="cname">' + esc(n) + '</span>' + costLabel + act + '</div>';
-        if (selected === n) {
-          html += '<div class="sidebar-view-tabs">'
-            + '<button class="sidebar-view-tab' + (currentView === 'log' ? ' active' : '') + '" onclick="event.stopPropagation();switchView(\\'log\\')">log</button>'
-            + '<button class="sidebar-view-tab' + (currentView === 'mind' ? ' active' : '') + '" onclick="event.stopPropagation();switchView(\\'mind\\')">mind</button>'
-            + '</div>';
-        }
-      }
-      if (totalCost > 0) {
-        html += '<div style="padding:12px;border-top:1px solid #222;color:#666;font-size:11px;text-align:right;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>';
-      }
-      document.getElementById('creatures').innerHTML = html;
-    }
-
-    async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
-    async function stopC(n) { await fetch('/api/creatures/'+n+'/stop',{method:'POST'}); refresh(); }
-    async function restartC(n) { await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
-    async function rebuildC(n) { if(confirm('Rebuild destroys the container environment. Continue?')) { await fetch('/api/creatures/'+n+'/rebuild',{method:'POST'}); refresh(); } }
-    async function wakeC(n) { await fetch('/api/creatures/'+n+'/wake',{method:'POST'}); }
-    async function evolveC(n) { await fetch('/api/creatures/'+n+'/evolve',{method:'POST'}); }
-    async function sendMsg() {
-      if (!selected) return;
-      const inp = document.getElementById('msg');
-      const text = inp.value.trim();
-      if (!text) return;
-      await fetch('/api/creatures/'+selected+'/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
-      inp.value = '';
-    }
-
-    let usageData = {};
-    let totalCost = 0;
-
-    async function refresh() {
-      try {
-        const [crRes, usRes] = await Promise.all([fetch('/api/creatures'), fetch('/api/usage')]);
-        creatures = {};
-        for (const c of await crRes.json()) creatures[c.name] = c;
-        const ud = await usRes.json();
-        usageData = ud.usage || {};
-        totalCost = ud.total || 0;
-        renderSidebar();
-        if (selected && creatures[selected]) {
-          const el = document.getElementById('cinfo');
-          if (el) {
-            const c = creatures[selected];
-            el.innerHTML = '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \\u00b7 ' + c.status;
-          }
-        }
-      } catch {}
-    }
-
-    refresh();
-    setInterval(refresh, 2000);
-  </script>
-</body>
-</html>`;
   }
 }
 

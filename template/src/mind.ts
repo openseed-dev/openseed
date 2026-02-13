@@ -272,6 +272,8 @@ export type ProgressCheckCallback = (actions: number) => Promise<void>;
 
 export type SpecialToolCallback = (tool: string, reason: string) => Promise<void>;
 
+export type WakeCallback = (reason: string, source: "manual" | "watcher" | "timer") => Promise<void>;
+
 export class Mind {
   private client: Anthropic;
   private memory: Memory;
@@ -341,6 +343,7 @@ export class Mind {
     onDream?: DreamCallback,
     onProgressCheck?: ProgressCheckCallback,
     onSpecialTool?: SpecialToolCallback,
+    onWake?: WakeCallback,
   ): Promise<never> {
     this.onSpecialTool = onSpecialTool || null;
     this.purpose = await this.loadPurpose();
@@ -371,7 +374,7 @@ export class Mind {
         console.log(`[mind] forced sleep ${DEEP_SLEEP_PAUSE}s`);
         await this.interruptibleSleep(DEEP_SLEEP_PAUSE * 1000);
 
-        await this.wakeUp(DEEP_SLEEP_PAUSE);
+        await this.wakeUp(DEEP_SLEEP_PAUSE, onWake);
         actionsSinceSleep = [];
         monologueSinceSleep = "";
         this.fatigueWarned = false;
@@ -558,10 +561,11 @@ export class Mind {
         await this.interruptibleSleep(actualPause * 1000);
 
         if (consolidated) {
-          await this.wakeUp(actualPause);
+          await this.wakeUp(actualPause, onWake);
         } else {
           const reason = this.wakeReason;
           this.wakeReason = null;
+          if (!reason && onWake) await onWake("Sleep timer expired", "timer");
           const now = new Date().toISOString();
           const wakeText = reason
             ? `[${now}] You were woken early (slept ${sleepSeconds}s). Reason: ${reason}. Continue where you left off.`
@@ -886,10 +890,11 @@ Current time: ${new Date().toISOString()}`,
 
   // --- Wake Up ---
 
-  private async wakeUp(duration: number): Promise<void> {
+  private async wakeUp(duration: number, onWake?: WakeCallback): Promise<void> {
     const observations = await this.readObservations();
     const reason = this.wakeReason;
     this.wakeReason = null;
+    if (!reason && onWake) await onWake("Sleep timer expired", "timer");
 
     const now = new Date().toISOString();
     let wakeMsg = reason

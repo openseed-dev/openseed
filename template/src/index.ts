@@ -231,7 +231,13 @@ class Creature {
         async (tool, reason) => {
           await this.emit({ type: `creature.${tool}`, reason });
           console.log(`[creature] ${tool}: ${reason.slice(0, 80)}`);
-        }
+        },
+
+        // onWake — emit wake event (only for natural timer expiry; manual/watcher wakes are emitted by orchestrator)
+        async (reason, source) => {
+          await this.emit({ type: "creature.wake", reason, source });
+          console.log(`[creature] wake (${source}): ${reason}`);
+        },
       );
     } catch (err) {
       console.error("[creature] cognition crashed:", err);

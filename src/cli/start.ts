@@ -3,7 +3,6 @@ import { readOrchestratorInfo } from './ports.js';
 interface StartOptions {
   name: string;
   manual: boolean;
-  bare: boolean;
 }
 
 export async function start(opts: StartOptions): Promise<void> {
@@ -17,7 +16,7 @@ export async function start(opts: StartOptions): Promise<void> {
     const res = await fetch(`http://127.0.0.1:${info.port}/api/creatures/${opts.name}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bare: opts.bare, manual: opts.manual }),
+      body: JSON.stringify({ manual: opts.manual }),
     });
 
     if (!res.ok) {

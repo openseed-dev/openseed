@@ -16,7 +16,7 @@ function usage(): never {
 commands:
   up [--port 7770]                start the orchestrator + dashboard
   spawn <name> [--purpose "..."]  create a new creature from template
-  start <name> [--manual] [--bare] start a creature (requires orchestrator)
+  start <name> [--manual]          start a creature (requires orchestrator)
   stop <name>                      stop a running creature
   list                             list all creatures and their status
   destroy <name>                   stop and remove a creature
@@ -24,7 +24,6 @@ commands:
 
 options:
   --port <n>                       orchestrator port (default 7770)
-  --bare                           run creature without Docker sandbox
   --manual                         don't auto-start cognition loop
   --help                           show this help
 `);
@@ -68,12 +67,11 @@ async function main() {
     case "start": {
       const name = args.find((a) => !a.startsWith("--"));
       if (!name) {
-        console.error("usage: itsalive start <name> [--manual] [--bare]");
+        console.error("usage: itsalive start <name> [--manual]");
         process.exit(1);
       }
       const manual = hasFlag(args, "--manual");
-      const bare = hasFlag(args, "--bare");
-      await start({ name, manual, bare });
+      await start({ name, manual });
       break;
     }
 

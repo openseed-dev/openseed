@@ -89,18 +89,14 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
   execSync("git add -A", { cwd: dir, stdio: "pipe" });
   execSync('git commit -m "genesis"', { cwd: dir, stdio: "pipe" });
 
-  // Build Docker image if Docker is available
-  if (isDockerAvailable()) {
-    console.log("building docker image...");
-    try {
-      execSync(`docker build -t creature-${opts.name} .`, { cwd: dir, stdio: "inherit" });
-      console.log(`docker image creature-${opts.name} built`);
-    } catch (err) {
-      console.warn("docker build failed — creature will run in bare mode");
-    }
-  } else {
-    console.log("docker not available — creature will run in bare mode");
+  // Build Docker image
+  if (!isDockerAvailable()) {
+    console.error("docker is required but not available. install Docker and try again.");
+    process.exit(1);
   }
+  console.log("building docker image...");
+  execSync(`docker build -t creature-${opts.name} .`, { cwd: dir, stdio: "inherit" });
+  console.log(`docker image creature-${opts.name} built`);
 
   console.log(`creature "${opts.name}" spawned at ${dir}`);
   console.log(`  id: ${birth.id}`);
