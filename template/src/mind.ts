@@ -746,6 +746,13 @@ You have three jobs:
    Rules should be general principles, not task-specific instructions. Don't encode "always do X first" if X is a one-time task.
    If nothing warrants a new rule, write "none".
 
+4. WORKFLOWS — If you changed HOW you do something this session (adopted a new tool,
+   switched to a better approach, set up a new pipeline), capture it as a RED observation:
+   RED HH:MM WORKFLOW: Use janee for GitHub API calls instead of curl+env
+   RED HH:MM WORKFLOW: Check email via check_email.py not browser login
+   These tell your future self to USE what you built instead of falling back to old habits.
+   Only add if you genuinely adopted a new approach this session. Skip if nothing changed.
+
 ${existingRules ? `Your current rules:\n${existingRules}\n\nDo NOT repeat existing rules.` : "You have no rules yet."}
 
 ${recentObs ? `Current observations (for context — don't repeat these):\n${recentObs.slice(-2000)}` : "No observations yet."}
@@ -1213,8 +1220,22 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
 
     const observations = await this.readObservations();
 
+    // Extract WORKFLOW lines from observations — these are behavioral shifts that override old habits
+    const workflows: string[] = [];
+    if (observations) {
+      for (const line of observations.split("\n")) {
+        const match = line.match(/WORKFLOW:\s*(.+)/);
+        if (match) workflows.push(match[1].trim());
+      }
+    }
+
     let context = "";
     if (lastCheckpoint) context += lastCheckpoint + "\n";
+    if (workflows.length > 0) {
+      context += "## Active Workflows\n\nThese are approaches you adopted. Use them instead of old habits:\n";
+      for (const w of workflows) context += `- ${w}\n`;
+      context += "\n";
+    }
     if (observations) {
       context += observations + "\n\n";
     }
