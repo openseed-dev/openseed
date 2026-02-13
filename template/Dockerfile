@@ -5,6 +5,11 @@ RUN apt-get update \
        ca-certificates git curl jq wget python3 pip sudo unzip ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
+# GitHub CLI — creatures need this for GitHub workflows
+RUN (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg) \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y gh && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable
 
 WORKDIR /creature
@@ -23,4 +28,6 @@ RUN mkdir -p .self workspace
 
 EXPOSE 7778
 
-CMD ["npx", "tsx", "src/index.ts"]
+# Sync node_modules (fast no-op when nothing changed), then start
+ENV CI=true
+CMD ["sh", "-c", "pnpm install --frozen-lockfile 2>/dev/null; exec npx tsx src/index.ts"]

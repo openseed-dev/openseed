@@ -13,6 +13,7 @@ import {
   CreatureSupervisor,
   SupervisorConfig,
 } from './supervisor.js';
+import { Watcher } from './watcher.js';
 
 const ITSALIVE_HOME = path.join(os.homedir(), '.itsalive');
 const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
@@ -33,10 +34,25 @@ export class Orchestrator {
   private creator: Creator;
   private creatorRunning: Set<string> = new Set();
   private costs = new CostTracker();
+  private watcher: Watcher;
 
   constructor(port: number) {
     this.port = port;
     this.creator = new Creator(this.costs);
+    this.watcher = new Watcher(async (creature, reason) => {
+      console.log(`[watcher] waking ${creature}: ${reason}`);
+      const supervisor = this.supervisors.get(creature);
+      if (!supervisor) return;
+      try {
+        await fetch(`http://127.0.0.1:${supervisor.port}/wake`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+      } catch (err) {
+        console.error(`[watcher] failed to wake ${creature}:`, err);
+      }
+    });
   }
 
   async start() {
@@ -212,6 +228,52 @@ export class Orchestrator {
         console.error(`[creator] auto-trigger failed for ${name}:`, err);
       });
     }
+
+    // Handle creature sleep with watch conditions
+    if (event.type === 'creature.sleep' && (event as any).watch?.length) {
+      const supervisor = this.supervisors.get(name);
+      if (supervisor) {
+        const containerName = `creature-${name}`;
+        this.watcher.addWatch(name, containerName, (event as any).watch);
+      }
+    }
+
+    // Handle creature autonomy: request_restart
+    if (event.type === 'creature.request_restart') {
+      const reason = (event as any).reason || 'creature requested restart';
+      console.log(`[${name}] creature requested restart: ${reason}`);
+      const supervisor = this.supervisors.get(name);
+      const dir = path.join(CREATURES_DIR, name);
+      if (supervisor) {
+        try {
+          execSync('npx tsx --check src/mind.ts src/index.ts', {
+            cwd: dir, encoding: 'utf-8', timeout: 30_000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          execSync(`git add -A && git commit -m "creature: self-modification — ${reason.slice(0, 60)}" --allow-empty`, {
+            cwd: dir, stdio: 'ignore',
+          });
+          // docker restart — process restarts, container environment preserved
+          await supervisor.restart();
+          console.log(`[${name}] creature-requested restart completed`);
+        } catch (err: any) {
+          const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
+          console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
+          try {
+            await this.sendMessage(name, `[SYSTEM] Your restart request failed — TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`);
+          } catch {}
+        }
+      }
+    }
+
+    // Handle creature autonomy: request_evolution
+    if (event.type === 'creature.request_evolution') {
+      const reason = (event as any).reason || 'creature requested evolution';
+      console.log(`[${name}] creature requested evolution: ${reason}`);
+      this.triggerCreator(name, `creature_request: ${reason}`).catch((err) => {
+        console.error(`[creator] creature-requested evolution failed for ${name}:`, err);
+      });
+    }
   }
 
   async triggerCreator(name: string, trigger: string): Promise<void> {
@@ -228,11 +290,15 @@ export class Orchestrator {
       throw new Error(`creature "${name}" not found or not running`);
     }
 
+    // Extract creature request from trigger string
+    const creatureRequest = trigger.startsWith('creature_request: ')
+      ? trigger.slice(18) : undefined;
+
     this.creatorRunning.add(name);
     try {
       await this.creator.evaluate(name, dir, store, supervisor, trigger, async (n, ev) => {
         await this.emitEvent(n, ev);
-      });
+      }, creatureRequest);
     } finally {
       this.creatorRunning.delete(name);
     }
@@ -411,6 +477,21 @@ export class Orchestrator {
           return;
         }
 
+        if (action === 'rebuild' && req.method === 'POST') {
+          try {
+            const supervisor = this.supervisors.get(name);
+            if (!supervisor) throw new Error(`creature "${name}" is not running`);
+            const dir = path.join(CREATURES_DIR, name);
+            console.log(`[${name}] developer-initiated rebuild`);
+            execSync(`docker build -t creature-${name} .`, {
+              cwd: dir, stdio: 'ignore', timeout: 120_000,
+            });
+            await supervisor.rebuild();
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
         if (action === 'evolve' && req.method === 'POST') {
           try {
             this.triggerCreator(name, 'manual').catch((err) => {
@@ -425,9 +506,15 @@ export class Orchestrator {
           try {
             const supervisor = this.supervisors.get(name);
             if (!supervisor) throw new Error(`creature "${name}" is not running`);
-            const res2 = await fetch(`http://127.0.0.1:${supervisor.port}/wake`, { method: 'POST' });
+            const body = await readBody(req);
+            const reason = body ? (JSON.parse(body).reason || 'Your creator woke you manually') : 'Your creator woke you manually';
+            const res2 = await fetch(`http://127.0.0.1:${supervisor.port}/wake`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason }),
+            });
             if (!res2.ok) throw new Error('creature rejected wake');
-            console.log(`[${name}] force wake triggered`);
+            console.log(`[${name}] force wake triggered: ${reason}`);
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
@@ -459,7 +546,7 @@ export class Orchestrator {
             purpose: await read('PURPOSE.md'),
             diary: await read('self/diary.md'),
             observations: await read('.self/observations.md'),
-            priorities: await read('.self/priorities.md'),
+            rules: await read('.self/rules.md'),
             dreams: await readJsonl('.self/dreams.jsonl', 10),
             creatorLog: await readJsonl('.self/creator-log.jsonl', 10),
           };
@@ -649,11 +736,11 @@ export class Orchestrator {
       white-space: pre-wrap; word-break: break-word;
       font-size: 12px; color: #bbb; line-height: 1.5;
     }
-    .mind-content .dream-entry { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1a1a1a; }
+    .mind-content .dream-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #1a1a1a; }
     .mind-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .mind-content .dream-time { color: #555; font-size: 11px; }
-    .mind-content .dream-priority { color: #a6e; }
-    .mind-content .dream-reflection { color: #888; }
+    .mind-content .dream-time { color: #666; font-size: 11px; }
+    .mind-content .dream-deep { color: #c8f; font-size: 10px; font-weight: bold; margin-left: 6px; }
+    .mind-content .dream-reflection { color: #ccc; margin-top: 4px; }
     .mind-content .obs-important { color: #e8e8e8; }
     .mind-content .obs-minor { color: #666; }
   </style>
@@ -694,6 +781,17 @@ export class Orchestrator {
       if (!text) return '...';
       const line = text.split('\\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))[0] || text.trim();
       return line.length > max ? line.slice(0, max) + '...' : line;
+    }
+
+    function timeAgo(iso) {
+      if (!iso) return '';
+      const now = Date.now(), then = new Date(iso).getTime();
+      const s = Math.floor((now - then) / 1000);
+      if (s < 60) return 'just now';
+      if (s < 3600) return Math.floor(s/60) + 'm ago';
+      if (s < 86400) return Math.floor(s/3600) + 'h ago';
+      if (s < 172800) return 'yesterday';
+      return Math.floor(s/86400) + 'd ago';
     }
 
     function uid() { return 'u' + Date.now() + Math.random().toString(36).slice(2,6); }
@@ -818,6 +916,7 @@ export class Orchestrator {
         headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
           + '<button class="btn" onclick="wakeC(\\''+name+'\\')">wake</button>'
           + '<button class="btn" onclick="restartC(\\''+name+'\\')">restart</button>'
+          + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\\''+name+'\\')">rebuild</button>'
           + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\\''+name+'\\')">evolve</button>';
         msgBar.classList.add('visible');
         switchView('log');
@@ -852,7 +951,7 @@ export class Orchestrator {
 
     function renderMind() {
       if (!mindData) { mcontent.innerHTML = 'Loading...'; return; }
-      const tabs = ['purpose','observations','dreams','priorities','diary','creator'];
+      const tabs = ['purpose','observations','rules','dreams','diary','creator'];
       mtabs.innerHTML = tabs.map(t =>
         '<div class="mind-tab' + (mindTab === t ? ' active' : '') + '" onclick="selectMindTab(\\''+t+'\\')">' + t + '</div>'
       ).join('') + '<div class="mind-tab" onclick="loadMind().then(renderMind)" style="margin-left:auto;color:#444">\\u21bb</div>';
@@ -862,11 +961,14 @@ export class Orchestrator {
         html = esc(mindData.purpose || 'No PURPOSE.md');
       } else if (mindTab === 'diary') {
         html = esc(mindData.diary || 'No diary entries yet.');
-      } else if (mindTab === 'priorities') {
-        html = esc(mindData.priorities || 'No priorities yet.');
+      } else if (mindTab === 'rules') {
+        html = esc(mindData.rules || 'No rules yet.');
       } else if (mindTab === 'observations') {
         const obs = mindData.observations || '';
         html = obs ? obs.split('\\n').map(l => {
+          if (l.startsWith('RED')) return '<span style="color:#f55">' + esc(l) + '</span>';
+          if (l.startsWith('YLW')) return '<span style="color:#fa0">' + esc(l) + '</span>';
+          if (l.startsWith('GRN')) return '<span style="color:#666">' + esc(l) + '</span>';
           if (l.startsWith('[!]')) return '<span class="obs-important">' + esc(l) + '</span>';
           if (l.startsWith('[.]')) return '<span class="obs-minor">' + esc(l) + '</span>';
           return esc(l);
@@ -877,9 +979,9 @@ export class Orchestrator {
         else {
           html = dreams.map(d =>
             '<div class="dream-entry">'
-            + '<span class="dream-time">' + (d.t || '').slice(0,16) + (d.deep ? ' (deep sleep)' : '') + ' \\u2014 ' + (d.actions||0) + ' actions</span>\\n'
-            + '<span class="dream-priority">Priority: ' + esc(d.priority || '') + '</span>\\n'
-            + '<span class="dream-reflection">' + esc(d.reflection || '') + '</span>'
+            + '<span class="dream-time">' + timeAgo(d.t) + ' \\u2014 ' + (d.actions||0) + ' actions</span>'
+            + (d.deep ? '<span class="dream-deep">deep sleep</span>' : '')
+            + '\\n<span class="dream-reflection">' + esc(d.reflection || '') + '</span>'
             + '</div>'
           ).reverse().join('');
         }
@@ -940,6 +1042,7 @@ export class Orchestrator {
     async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
     async function stopC(n) { await fetch('/api/creatures/'+n+'/stop',{method:'POST'}); refresh(); }
     async function restartC(n) { await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
+    async function rebuildC(n) { if(confirm('Rebuild destroys the container environment. Continue?')) { await fetch('/api/creatures/'+n+'/rebuild',{method:'POST'}); refresh(); } }
     async function wakeC(n) { await fetch('/api/creatures/'+n+'/wake',{method:'POST'}); }
     async function evolveC(n) { await fetch('/api/creatures/'+n+'/evolve',{method:'POST'}); }
     async function sendMsg() {

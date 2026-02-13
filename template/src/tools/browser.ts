@@ -276,6 +276,14 @@ export async function executeBrowser(
   }
 }
 
+export async function closeBrowser(): Promise<void> {
+  if (context) {
+    try { await context.close(); } catch {}
+    context = null;
+    defaultPage = null;
+  }
+}
+
 export const browserTool = {
   name: "browser",
   description: `Control a headless Chromium browser with a persistent profile. Cookies, sessions, logins, and localStorage survive across restarts.

@@ -3,6 +3,8 @@ import {
   execSync,
   spawn,
 } from 'node:child_process';
+import fsSync from 'node:fs';
+import path from 'node:path';
 
 import { Event } from '../shared/types.js';
 import {
@@ -14,6 +16,8 @@ import {
 
 const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 30_000;
+const ROLLBACK_DIR = path.join(process.env.HOME || '/tmp', '.itsalive', 'rollbacks');
+const MAX_LOG_LINES = 50;
 
 export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping';
 
@@ -42,6 +46,7 @@ export class CreatureSupervisor {
   private expectingExit = false;
   private config: SupervisorConfig;
   private onEvent: (name: string, event: Event) => Promise<void>;
+  private recentOutput: string[] = [];
 
   constructor(
     config: SupervisorConfig,
@@ -64,18 +69,48 @@ export class CreatureSupervisor {
 
   async stop(): Promise<void> {
     this.expectingExit = true;
-    this.killCreature();
     this.clearTimers();
+    if (this.config.sandboxed) {
+      // Graceful stop — container persists in exited state
+      try { execSync(`docker stop ${this.containerName()}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
+    } else if (this.creature) {
+      this.creature.kill();
+    }
     this.status = 'stopped';
     this.creature = null;
   }
 
   async restart(): Promise<void> {
     this.expectingExit = true;
-    this.killCreature();
     this.clearTimers();
     this.healthyAt = null;
+    this.currentSHA = getCurrentSHA(this.dir);
+
+    if (this.config.sandboxed) {
+      // docker restart: stops then starts the same container (writable layer preserved)
+      console.log(`[${this.name}] restarting container (environment preserved)`);
+      try {
+        execSync(`docker restart ${this.containerName()}`, { stdio: 'ignore', timeout: 30_000 });
+      } catch {
+        console.log(`[${this.name}] restart failed, spawning fresh`);
+      }
+    } else if (this.creature) {
+      this.creature.kill();
+    }
+
     this.creature = null;
+    this.status = 'starting';
+    await this.spawnCreature();
+  }
+
+  // Full rebuild: destroys container (writable layer lost). Developer-only.
+  async rebuild(): Promise<void> {
+    this.expectingExit = true;
+    this.clearTimers();
+    this.healthyAt = null;
+    this.destroyContainer();
+    this.creature = null;
+    this.currentSHA = getCurrentSHA(this.dir);
     this.status = 'starting';
     await this.spawnCreature();
   }
@@ -110,6 +145,18 @@ export class CreatureSupervisor {
     }
   }
 
+  private containerExists(): boolean {
+    try {
+      execSync(
+        `docker inspect ${this.containerName()}`,
+        { stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async emit(event: Event) {
     await this.onEvent(this.name, event);
   }
@@ -123,15 +170,40 @@ export class CreatureSupervisor {
     return `creature-${this.name}`;
   }
 
-  private killCreature() {
+  // Destroy container entirely (kill + rm). Only for rebuild.
+  private destroyContainer() {
     if (this.config.sandboxed) {
       try { execSync(`docker kill ${this.containerName()}`, { stdio: 'ignore' }); } catch {}
-      // Wait for container to die, then force remove
       try { execSync(`docker wait ${this.containerName()}`, { stdio: 'ignore', timeout: 5000 }); } catch {}
       try { execSync(`docker rm -f ${this.containerName()}`, { stdio: 'ignore' }); } catch {}
     } else if (this.creature) {
       this.creature.kill();
     }
+  }
+
+  private createContainer(
+    cname: string, dir: string, port: number,
+    orchestratorPort: number, autoIterate: boolean, name: string,
+  ): ChildProcess {
+    console.log(`[${name}] creating new container`);
+    return spawn('docker', [
+      'run', '--init',
+      '--name', cname,
+      '--memory', '2g',
+      '--cpus', '1.5',
+      '-p', `${port}:7778`,
+      '-v', `${dir}:/creature`,
+      '-v', `${cname}-node-modules:/creature/node_modules`,
+      '-e', `ANTHROPIC_API_KEY=creature:${name}`,
+      '-e', `ANTHROPIC_BASE_URL=http://host.docker.internal:${orchestratorPort}`,
+      '-e', `HOST_URL=http://host.docker.internal:${orchestratorPort}`,
+      '-e', `CREATURE_NAME=${name}`,
+      '-e', 'PORT=7778',
+      '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
+      `creature-${name}`,
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   }
 
   private async spawnCreature() {
@@ -144,34 +216,31 @@ export class CreatureSupervisor {
       const cname = this.containerName();
 
       if (this.isContainerRunning()) {
+        // Case 1: container is already running — reconnect
         console.log(`[${name}] reconnecting to running container`);
         this.creature = spawn('docker', ['logs', '-f', '--tail', '50', cname], {
           stdio: ['ignore', 'pipe', 'pipe'],
         });
         reconnected = true;
+      } else if (this.containerExists()) {
+        // Case 2: container exists but is stopped — try to start it (preserves writable layer)
+        console.log(`[${name}] starting existing container (environment preserved)`);
+        try {
+          execSync(`docker start ${cname}`, { stdio: 'ignore', timeout: 15_000 });
+          // Attach to running container
+          this.creature = spawn('docker', ['logs', '-f', '--tail', '50', cname], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          reconnected = true;
+        } catch {
+          // Start failed — remove and create fresh
+          console.log(`[${name}] start failed, creating fresh container`);
+          try { execSync(`docker rm -f ${cname}`, { stdio: 'ignore' }); } catch {}
+          this.creature = this.createContainer(cname, dir, port, orchestratorPort, autoIterate, name);
+        }
       } else {
-        try { execSync(`docker rm -f ${cname}`, { stdio: 'ignore' }); } catch {}
-
-        this.creature = spawn('docker', [
-          'run', '--rm', '--init',
-          '--name', cname,
-          '--memory', '2g',
-          '--cpus', '1.5',
-          '-p', `${port}:7778`,
-          '-v', `${dir}:/creature`,
-          '-v', `${cname}-node-modules:/creature/node_modules`,
-          '-e', `ANTHROPIC_API_KEY=creature:${name}`,
-          '-e', `ANTHROPIC_BASE_URL=http://host.docker.internal:${orchestratorPort}`,
-          '-e', `HOST_URL=http://host.docker.internal:${orchestratorPort}`,
-          '-e', `CREATURE_NAME=${name}`,
-          '-e', 'PORT=7778',
-          '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
-          `creature-${name}`,
-        ], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-
-        console.log(`[${name}] spawned container`);
+        // Case 3: no container — create fresh
+        this.creature = this.createContainer(cname, dir, port, orchestratorPort, autoIterate, name);
       }
     } else {
       this.creature = spawn('npx', ['tsx', 'src/index.ts'], {
@@ -187,14 +256,19 @@ export class CreatureSupervisor {
       });
     }
 
+    this.recentOutput = [];
     this.creature.stdout?.on('data', (data: Buffer) => {
       for (const line of data.toString().split('\n').filter(Boolean)) {
         console.log(`[${name}] ${line}`);
+        this.recentOutput.push(line);
+        if (this.recentOutput.length > MAX_LOG_LINES) this.recentOutput.shift();
       }
     });
     this.creature.stderr?.on('data', (data: Buffer) => {
       for (const line of data.toString().split('\n').filter(Boolean)) {
         console.error(`[${name}] ${line}`);
+        this.recentOutput.push(`STDERR: ${line}`);
+        if (this.recentOutput.length > MAX_LOG_LINES) this.recentOutput.shift();
       }
     });
 
@@ -274,8 +348,9 @@ export class CreatureSupervisor {
     console.log(`[${this.name}] rollback: ${reason}`);
     const from = this.currentSHA;
     const to = this.lastGoodSHA;
+    const lastOutput = this.recentOutput.slice(-20).join('\n');
 
-    this.killCreature();
+    this.expectingExit = true;
     this.clearTimers();
 
     await this.emit({
@@ -286,7 +361,37 @@ export class CreatureSupervisor {
       reason,
     });
 
+    // Write rollback log for Creator feedback
+    try {
+      fsSync.mkdirSync(ROLLBACK_DIR, { recursive: true });
+      const entry = JSON.stringify({
+        t: new Date().toISOString(),
+        reason,
+        from,
+        to,
+        lastOutput: lastOutput.slice(0, 1000),
+      });
+      fsSync.appendFileSync(path.join(ROLLBACK_DIR, `${this.name}.jsonl`), entry + '\n');
+    } catch {}
+
+    // Revert code (bind mount makes this immediately visible inside container)
     resetToSHA(this.dir, to);
+
+    // For sandboxed containers: use docker restart to preserve environment
+    if (this.config.sandboxed && this.containerExists()) {
+      try {
+        execSync(`docker restart ${this.containerName()}`, { stdio: 'ignore', timeout: 30_000 });
+      } catch {
+        // Container restart failed — destroy and recreate
+        this.destroyContainer();
+      }
+    } else if (this.config.sandboxed) {
+      // No container — spawnCreature will create one
+    } else if (this.creature) {
+      this.creature.kill();
+    }
+
+    this.creature = null;
     this.status = 'starting';
     await this.spawnCreature();
   }

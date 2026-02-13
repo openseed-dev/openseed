@@ -4,48 +4,26 @@ import path from 'node:path';
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import { CostTracker } from './costs.js';
 import { Event } from '../shared/types.js';
+import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
 import { CreatureSupervisor } from './supervisor.js';
 
 const MODEL = 'claude-opus-4-6';
 const MAX_TURNS = 30;
 const CREATOR_LOG = '.self/creator-log.jsonl';
+const ROLLBACK_DIR = path.join(process.env.HOME || '/tmp', '.itsalive', 'rollbacks');
 
 const TOOLS: Anthropic.Tool[] = [
   {
-    name: 'read_file',
-    description: 'Read a file from the creature\'s directory. Path is relative to the creature root.',
+    name: 'bash',
+    description: 'Run a shell command. Working directory is the creature\'s repo root. Full access — grep, sed, cat, git, npx, docker exec, anything. Use this for reading files, making edits, validating code, etc. 60s timeout.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        path: { type: 'string', description: 'Relative path (e.g. "src/mind.ts", ".self/rules.md")' },
+        command: { type: 'string', description: 'Shell command to execute' },
       },
-      required: ['path'],
-    },
-  },
-  {
-    name: 'write_file',
-    description: 'Write/overwrite a file in the creature\'s directory. Path is relative to creature root.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: { type: 'string', description: 'Relative path' },
-        content: { type: 'string', description: 'Full file content' },
-      },
-      required: ['path', 'content'],
-    },
-  },
-  {
-    name: 'list_files',
-    description: 'List files in the creature\'s directory, optionally filtered by subdirectory.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        subdir: { type: 'string', description: 'Subdirectory to list (default: root). e.g. "src", ".self", "src/tools"' },
-      },
-      required: [],
+      required: ['command'],
     },
   },
   {
@@ -80,17 +58,8 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'suspend',
-    description: 'Stop the creature\'s container. Call this before making code changes.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: 'rebuild_and_restart',
-    description: 'Rebuild the creature\'s Docker image and restart it. Call after writing code changes.',
+    name: 'restart',
+    description: 'Validate TypeScript, git commit changes, and restart the creature process. The container stays alive (environment preserved) — only the process restarts. Call after making code changes.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -131,29 +100,61 @@ Read the creature's recent dreams, rules, observations, and events. Get a feel f
 
 ## What You Can Change
 
-You can modify any file in the creature's directory:
-- **src/mind.ts** — the cognitive core. System prompt, consolidation logic, sleep/wake, progress checks, fatigue. This is where the biggest leverage is.
-- **src/tools/** — tool implementations (bash, browser). You can change timeouts, add tools, modify behavior.
+You have full bash access to the creature's directory (bind-mounted at /creature in the container). Code edits via bash are immediately available inside the container.
+
+Modifiable files:
+- **src/mind.ts** — the cognitive core. System prompt, consolidation, sleep/wake, progress checks. Biggest leverage.
+- **src/tools/** — tool implementations (bash, browser). Change timeouts, add tools, modify behavior.
 - **src/index.ts** — the creature's main loop and event emission.
 - **PURPOSE.md** — the creature's purpose (change with extreme caution).
 - **.self/rules.md** — learned behavioral rules.
+- **.self/observations.md** — the creature's long-term memory (priority-tagged observations).
+
+Use bash to grep, read, sed, or write files. Use \`npx tsx --check src/mind.ts src/index.ts\` to validate TypeScript before restarting.
+
+## Modifying the Creature's Environment
+
+The creature runs in a long-lived Docker container. Its writable layer persists across restarts.
+To install packages or modify the container environment:
+
+\`\`\`
+docker exec creature-${name} apt-get install -y foo
+docker exec creature-${name} pip install bar
+\`\`\`
+
+These changes survive normal restarts because the container is not destroyed. Only a developer-initiated image rebuild resets the environment (rare).
+
+Use this when you notice the creature is struggling because it's missing a tool or dependency.
 
 ## How to Make Changes
 
-1. Read the creature's current state (dreams, events, rules, code)
+1. Read state with bash (grep, cat, etc.) and structured tools (read_events, read_dreams)
 2. Diagnose what's working and what isn't
-3. If changes are needed: call suspend() first, then write your changes, then rebuild_and_restart()
-4. If no changes needed: call done() with your reasoning
+3. If code changes needed: make edits via bash → restart()
+4. If environment changes needed: docker exec to install packages (no restart needed)
+5. If no changes needed: done() with your reasoning
+
+No need to suspend the creature before editing — code is bind-mounted and only takes effect after restart(). Docker exec runs independently of the creature's process.
+
+## Memory System
+
+The creature uses observational memory with priority tags:
+- RED — critical facts that survive all pruning (commitments, bans, credentials)
+- YLW — important context (project status, patterns)
+- GRN — informational (minor details, pruned after 48h)
+
+When editing .self/observations.md, preserve all RED entries unless they have an expired timestamp.
 
 ## Important Principles
 
 - **Be targeted.** Don't rewrite everything. Identify one or two specific improvements.
-- **Check your previous interventions.** Read .self/creator-log.jsonl to see what you changed before and whether it helped. Don't repeat failed experiments.
-- **Preserve what works.** If the creature has learned good rules or developed effective patterns, don't disrupt them.
-- **Git safety net exists.** If your changes break the creature, it will be rolled back automatically. Be bold but thoughtful.
-- **Think in terms of cognitive architecture, not tasks.** Don't tell the creature WHAT to do — change HOW it thinks.
-- **Be efficient.** You have a limited number of turns. Read what you need, make your changes, and call done(). Don't exhaustively read every file — skim, diagnose, act.
-- **Always call done().** When you're finished (whether you made changes or not), you MUST call done() with your reasoning. This is how your evaluation gets logged.`;
+- **Check your previous interventions.** Read .self/creator-log.jsonl to see what worked and what was rolled back.
+- **Preserve what works.** Don't disrupt effective patterns or learned rules.
+- **Preserve time-bound commitments.** RED observations with dates are sacred — keep them.
+- **Validate before restarting.** Run \`npx tsx --check\` before calling restart().
+- **Think in cognitive architecture, not tasks.** Change HOW it thinks, not WHAT it does.
+- **Be efficient.** You have limited turns. Skim, diagnose, act, done().
+- **Always call done().** This is how your evaluation gets logged.`;
 }
 
 export class Creator {
@@ -172,13 +173,12 @@ export class Creator {
     supervisor: CreatureSupervisor,
     trigger: string,
     onEvent: (name: string, event: Event) => Promise<void>,
+    creatureRequest?: string,
   ): Promise<void> {
     console.log(`[creator] evaluating creature "${name}" (trigger: ${trigger})`);
 
     const system = buildCreatorPrompt(name);
-
-    // Build initial context
-    const context = await this.buildContext(name, dir, store);
+    const context = await this.buildContext(name, dir, store, creatureRequest);
 
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: context },
@@ -207,7 +207,6 @@ export class Creator {
         break;
       }
 
-      // Track token costs
       if (this.costs && response.usage) {
         this.costs.record(`creator:${name}`, response.usage.input_tokens, response.usage.output_tokens);
       }
@@ -239,29 +238,23 @@ export class Creator {
 
         try {
           switch (tu.name) {
-            case 'read_file': {
-              const filePath = path.join(dir, args.path as string);
-              result = await fs.readFile(filePath, 'utf-8');
-              break;
-            }
-
-            case 'write_file': {
-              const filePath = path.join(dir, args.path as string);
-              await fs.mkdir(path.dirname(filePath), { recursive: true });
-              await fs.writeFile(filePath, args.content as string, 'utf-8');
-              changedFiles.push(args.path as string);
-              result = `Written: ${args.path}`;
-              console.log(`[creator] wrote ${args.path}`);
-              break;
-            }
-
-            case 'list_files': {
-              const subdir = args.subdir as string || '.';
-              const target = path.join(dir, subdir);
-              const entries = await fs.readdir(target, { withFileTypes: true });
-              result = entries
-                .map((e) => `${e.isDirectory() ? 'd' : 'f'} ${e.name}`)
-                .join('\n');
+            case 'bash': {
+              const command = args.command as string;
+              console.log(`[creator] bash: ${command.slice(0, 100)}`);
+              try {
+                const output = execSync(command, {
+                  cwd: dir,
+                  encoding: 'utf-8',
+                  timeout: 60_000,
+                  maxBuffer: 1024 * 1024,
+                  stdio: ['pipe', 'pipe', 'pipe'],
+                });
+                result = output || '(no output)';
+              } catch (err: any) {
+                const stderr = err.stderr || '';
+                const stdout = err.stdout || '';
+                result = `Exit code ${err.status || 1}\nstdout: ${stdout}\nstderr: ${stderr}`;
+              }
               break;
             }
 
@@ -290,7 +283,7 @@ export class Creator {
                   try { return JSON.parse(l); } catch { return null; }
                 }).filter(Boolean);
                 result = dreams.map((d: any) =>
-                  `[${d.t?.slice(0, 16)}] ${d.actions} actions | deep=${d.deep}\nReflection: ${d.reflection}\nPriority: ${d.priority}\nObservations: ${d.observations}`
+                  `[${d.t?.slice(0, 16)}] ${d.actions} actions | deep=${d.deep}\nReflection: ${d.reflection}\nObservations: ${d.observations}`
                 ).join('\n\n');
               } catch {
                 result = 'No dreams yet.';
@@ -304,44 +297,40 @@ export class Creator {
               break;
             }
 
-            case 'suspend': {
-              console.log(`[creator] suspending creature "${name}"`);
-              // Git commit current state before changes
+            case 'restart': {
+              console.log(`[creator] restarting creature "${name}"`);
+              // Pre-flight TypeScript check
               try {
-                execSync('git add -A && git commit -m "creator: pre-evolution snapshot" --allow-empty', {
-                  cwd: dir, stdio: 'ignore',
+                execSync('npx tsx --check src/mind.ts src/index.ts', {
+                  cwd: dir, encoding: 'utf-8', timeout: 30_000,
+                  stdio: ['pipe', 'pipe', 'pipe'],
                 });
-              } catch {}
-              await supervisor.stop();
-              result = 'Creature suspended. You can now write changes.';
-              break;
-            }
-
-            case 'rebuild_and_restart': {
-              console.log(`[creator] rebuilding and restarting creature "${name}"`);
-              // Git commit the changes
-              try {
-                execSync(`git add -A && git commit -m "creator: ${changedFiles.join(', ')}"`, {
-                  cwd: dir, stdio: 'ignore',
-                });
-              } catch {}
-              // Rebuild Docker image
-              try {
-                execSync(`docker build -t creature-${name} .`, {
-                  cwd: dir, stdio: 'ignore', timeout: 120_000,
-                });
-              } catch (err) {
-                result = `Docker build failed: ${err instanceof Error ? err.message : String(err)}`;
+              } catch (err: any) {
+                result = `TypeScript check failed — fix the errors before restarting:\n${err.stderr || err.stdout || err.message}`;
+                console.log(`[creator] TypeScript check failed`);
                 break;
               }
-              await supervisor.start();
-              result = 'Creature rebuilt and restarted.';
+
+              // Git commit
+              try {
+                const diff = execSync('git diff --name-only', { cwd: dir, encoding: 'utf-8' }).trim();
+                const files = diff.split('\n').filter(Boolean);
+                files.forEach((f) => { if (!changedFiles.includes(f)) changedFiles.push(f); });
+                execSync(`git add -A && git commit -m "creator: ${files.join(', ') || 'changes'}"`, {
+                  cwd: dir, stdio: 'ignore',
+                });
+              } catch {}
+
+              // Restart the process (container stays alive, environment preserved)
+              await supervisor.restart();
+              result = 'TypeScript validated, code committed, creature restarted. Container environment preserved.';
+              changed = true;
               break;
             }
 
             case 'done': {
               reasoning = args.reasoning as string;
-              changed = args.changed as boolean;
+              changed = (args.changed as boolean) || changed;
               finished = true;
               result = 'Evaluation complete.';
               break;
@@ -363,7 +352,6 @@ export class Creator {
 
       messages.push({ role: 'assistant', content: response.content });
 
-      // Nudge to wrap up when running low on turns
       const turnsLeft = MAX_TURNS - turns;
       if (turnsLeft <= 5 && !finished) {
         const nudge: Anthropic.TextBlockParam = {
@@ -380,7 +368,6 @@ export class Creator {
       reasoning = 'Evaluation hit turn limit without calling done().';
     }
 
-    // Log the evaluation
     const logEntry = {
       t: new Date().toISOString(),
       trigger,
@@ -400,7 +387,6 @@ export class Creator {
       } catch {}
     }
 
-    // Emit event
     await onEvent(name, {
       t: new Date().toISOString(),
       type: 'creator.evaluation',
@@ -412,8 +398,12 @@ export class Creator {
     console.log(`[creator] evaluation complete for "${name}" — changed=${changed}, turns=${turns}`);
   }
 
-  private async buildContext(name: string, dir: string, store: EventStore): Promise<string> {
+  private async buildContext(name: string, dir: string, store: EventStore, creatureRequest?: string): Promise<string> {
     let context = `Evaluate creature "${name}". Read its state and decide whether its cognitive architecture needs improvement.\n\n`;
+
+    if (creatureRequest) {
+      context += `## Creature's Request\n\nThe creature itself asked for this evaluation:\n"${creatureRequest}"\n\n`;
+    }
 
     // Previous creator evaluations
     try {
@@ -431,7 +421,26 @@ export class Creator {
       }
     } catch {}
 
-    context += 'Start by reading the creature\'s recent dreams, rules, events, and source code to get a feel for how it\'s doing.\n';
+    // Recent rollback history
+    try {
+      const rollbackFile = path.join(ROLLBACK_DIR, `${name}.jsonl`);
+      const rollbackContent = await fs.readFile(rollbackFile, 'utf-8');
+      const lines = rollbackContent.trim().split('\n').filter((l) => l);
+      const recent = lines.slice(-5).map((l) => {
+        try { return JSON.parse(l); } catch { return null; }
+      }).filter(Boolean);
+
+      if (recent.length > 0) {
+        context += '## Recent Rollbacks\n\nThese are recent rollback events — your previous changes may have caused some of these:\n\n';
+        for (const r of recent) {
+          context += `[${r.t?.slice(0, 19)}] reason=${r.reason}, from=${r.from?.slice(0, 7)}, to=${r.to?.slice(0, 7)}\n`;
+          if (r.lastOutput) context += `Last output: ${r.lastOutput.slice(0, 300)}\n`;
+          context += '\n';
+        }
+      }
+    } catch {}
+
+    context += 'Start by reading the creature\'s state with bash (cat .self/observations.md, cat .self/rules.md, etc.) and the structured tools (read_events, read_dreams). Then diagnose and act.\n';
     return context;
   }
 }

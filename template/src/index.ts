@@ -83,9 +83,15 @@ class Creature {
       }
 
       if (url.pathname === "/wake" && req.method === "POST") {
-        this.mind.forceWake();
-        res.writeHead(200);
-        res.end("ok");
+        let body = "";
+        req.on("data", (chunk: string) => (body += chunk));
+        req.on("end", () => {
+          let reason: string | undefined;
+          try { reason = JSON.parse(body).reason; } catch {}
+          this.mind.forceWake(reason || "Your creator woke you manually");
+          res.writeHead(200);
+          res.end("ok");
+        });
         return;
       }
 
@@ -187,12 +193,13 @@ class Creature {
         },
 
         // onSleep — emit sleep checkpoint event to host
-        async (seconds, summary, actions) => {
+        async (seconds, summary, actions, watch) => {
           await this.emit({
             type: "creature.sleep",
             seconds,
             text: summary,
             actions,
+            ...(watch?.length ? { watch } : {}),
           });
           console.log(`[creature] sleeping ${seconds}s — ${summary.slice(0, 80)}`);
         },
@@ -218,6 +225,12 @@ class Creature {
         async (actions) => {
           await this.emit({ type: "creature.progress_check", actions });
           console.log(`[creature] progress check at ${actions} actions`);
+        },
+
+        // onSpecialTool — emit request_restart or request_evolution events
+        async (tool, reason) => {
+          await this.emit({ type: `creature.${tool}`, reason });
+          console.log(`[creature] ${tool}: ${reason.slice(0, 80)}`);
         }
       );
     } catch (err) {
