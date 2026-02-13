@@ -2,6 +2,16 @@
 
 A hatchery for autonomous, self-evolving creatures. Each creature lives in its own git repo, runs in a long-lived Docker container, thinks with Claude Opus 4.6, and has a Creator agent that evolves its cognitive architecture over time.
 
+## Why
+
+Most AI agent systems treat the agent as a function — task in, result out, done. itsalive treats the agent as a **process**: something that exists continuously, has a purpose rather than a task, and accumulates identity over time.
+
+The biological metaphors aren't decoration — they solve real engineering problems. **Fatigue** prevents agents from burning through context doing nothing useful. **Sleep** forces memory consolidation: the conversation resets, but important things survive as observations and rules. **Dreams** are honest self-assessment — a separate LLM call that looks at what the creature *actually did* and produces a reflection. **Observations** are long-term memory without embeddings or vector databases — just priority-tagged text in a markdown file. **Rules** are behavioral learning injected into the system prompt — the creature literally cannot forget them.
+
+The two-agent architecture is where it gets interesting. The **creature** learns within its lifetime — behavioral rules, observations, what works. The **Creator** learns across lifetimes — watching the creature's dreams and logs, then modifying its actual source code. Two timescales of adaptation: fast behavioral learning, slow architectural evolution. The creature stays focused on its purpose; the Creator focuses on making the creature better at its purpose.
+
+Everything is radically legible. Every piece of state is a text file. Dreams are JSONL. Rules are markdown. The git log is the creature's autobiography. You can open the dashboard and see what a creature is thinking, what it dreamed about, what rules it's learned, and what the Creator changed and why.
+
 ## Quick start
 
 ```bash
