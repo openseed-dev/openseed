@@ -19,7 +19,32 @@
     .sidebar-header {
       padding: 16px; color: #0f0; font-size: 16px; font-weight: bold;
       border-bottom: 1px solid #222;
+      display: flex; align-items: center; justify-content: space-between;
     }
+    .sidebar-header .spawn-btn {
+      background: none; border: 1px solid #333; color: #666;
+      width: 22px; height: 22px; border-radius: 3px; cursor: pointer;
+      font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    }
+    .sidebar-header .spawn-btn:hover { color: #0f0; border-color: #0f0; }
+    .spawn-form {
+      display: none; padding: 12px; border-bottom: 1px solid #222; background: #111;
+    }
+    .spawn-form.visible { display: flex; flex-direction: column; gap: 8px; }
+    .spawn-form input, .spawn-form textarea {
+      background: #0a0a0a; border: 1px solid #333; color: #eee;
+      padding: 6px 8px; border-radius: 3px; font-family: inherit; font-size: 12px;
+    }
+    .spawn-form input:focus, .spawn-form textarea:focus { outline: none; border-color: #58f; }
+    .spawn-form textarea { resize: vertical; min-height: 48px; }
+    .spawn-form button {
+      background: #1a2a1a; border: 1px solid #0f0; color: #0f0;
+      padding: 6px 12px; border-radius: 3px; cursor: pointer;
+      font-family: inherit; font-size: 12px;
+    }
+    .spawn-form button:hover { background: #2a3a2a; }
+    .spawn-form button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .spawn-form .spawn-error { color: #f55; font-size: 11px; }
     .creature-list { padding: 8px; flex: 1; }
     .creature-item {
       padding: 8px 12px; border-radius: 4px; cursor: pointer;
@@ -87,6 +112,7 @@
     .event.creature-thought { border-left-color: #888; }
     .event.creature-sleep { border-left-color: #fa0; }
     .event.creature-wake { border-left-color: #0af; }
+    .event.creature-message { border-left-color: #58f; background: #0a0a1a; }
     .event.creature-tool-call { border-left-color: #0af; }
     .event.creature-tool-call.browser { border-left-color: #a6e; }
     .event.creature-tool-call.fail { border-left-color: #f55; }
@@ -100,6 +126,7 @@
     .event .type.rollback { color: #f33; }
     .event .type.sleep { color: #fa0; }
     .event .type.wake { color: #0af; }
+    .event .type.message { color: #58f; }
     .event .type.tool { color: #0af; }
     .event .type.tool.browser { color: #a6e; }
     .event .type.tool.fail { color: #f55; }
@@ -162,7 +189,16 @@
 </head>
 <body>
   <div class="sidebar">
-    <div class="sidebar-header">itsalive</div>
+    <div class="sidebar-header">
+      <span>itsalive</span>
+      <button class="spawn-btn" onclick="toggleSpawnForm()" title="Spawn new creature">+</button>
+    </div>
+    <div class="spawn-form" id="spawnForm">
+      <input id="spawnName" placeholder="name (lowercase)" maxlength="32" />
+      <textarea id="spawnPurpose" placeholder="purpose (optional)" rows="3"></textarea>
+      <button id="spawnBtn" onclick="spawnC()">spawn</button>
+      <div class="spawn-error" id="spawnError"></div>
+    </div>
     <div class="creature-list" id="creatures"></div>
   </div>
   <div class="main">
@@ -230,6 +266,9 @@
         body = cl + '<span class="type wake">wake</span>'
           + '<span class="tool-ms">' + esc(ev.source || '') + '</span>'
           + '<span class="detail"> \u2014 ' + esc(ev.reason || '') + '</span>';
+      } else if (t === 'creature.message') {
+        body = cl + '<span class="type message">' + esc(ev.source || 'user') + '</span>'
+          + '<span class="intent-text"> ' + esc(ev.text || '') + '</span>';
       } else if (t === 'creature.tool_call') {
         const tn = ev.tool || 'bash';
         const br = tn === 'browser';
@@ -392,7 +431,8 @@
           + '<button class="btn" onclick="wakeC(\'' + name + '\')">wake</button>'
           + '<button class="btn" onclick="restartC(\'' + name + '\')">restart</button>'
           + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\'' + name + '\')">rebuild</button>'
-          + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\'' + name + '\')">evolve</button>';
+          + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\'' + name + '\')">evolve</button>'
+          + '<button class="btn" style="color:#f55;border-color:#f55" onclick="destroyC(\'' + name + '\')">destroy</button>';
         try {
           const res = await fetch('/api/creatures/' + name + '/events');
           const events = await res.json();
@@ -455,6 +495,45 @@
     async function rebuildC(n) { if(confirm('Rebuild destroys the container environment. Continue?')) { await fetch('/api/creatures/'+n+'/rebuild',{method:'POST'}); refresh(); } }
     async function wakeC(n) { await fetch('/api/creatures/'+n+'/wake',{method:'POST'}); }
     async function evolveC(n) { await fetch('/api/creatures/'+n+'/evolve',{method:'POST'}); }
+
+    function toggleSpawnForm() {
+      document.getElementById('spawnForm').classList.toggle('visible');
+      document.getElementById('spawnError').textContent = '';
+    }
+
+    async function spawnC() {
+      const nameEl = document.getElementById('spawnName');
+      const purposeEl = document.getElementById('spawnPurpose');
+      const errEl = document.getElementById('spawnError');
+      const btn = document.getElementById('spawnBtn');
+      const name = nameEl.value.trim();
+      if (!name) { errEl.textContent = 'name is required'; return; }
+      btn.disabled = true;
+      btn.textContent = 'spawning...';
+      errEl.textContent = '';
+      try {
+        const res = await fetch('/api/creatures', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, purpose: purposeEl.value.trim() }),
+        });
+        if (!res.ok) { errEl.textContent = await res.text(); return; }
+        nameEl.value = '';
+        purposeEl.value = '';
+        document.getElementById('spawnForm').classList.remove('visible');
+        await refresh();
+        select(name);
+      } catch (e) { errEl.textContent = e.message; }
+      finally { btn.disabled = false; btn.textContent = 'spawn'; }
+    }
+
+    async function destroyC(n) {
+      if (!confirm('Destroy creature "' + n + '"? This cannot be undone.')) return;
+      await fetch('/api/creatures/' + n + '/destroy', { method: 'POST' });
+      await refresh();
+      select(null);
+    }
+
     async function sendMsg() {
       if (!selected) return;
       const inp = document.getElementById('msg');

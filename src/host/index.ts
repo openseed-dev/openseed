@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
@@ -26,6 +27,18 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     req.on('data', (chunk: string) => (body += chunk));
     req.on('end', () => resolve(body));
   });
+}
+
+const COPY_SKIP = new Set(['node_modules', '.git', '.self']);
+async function copyDir(src: string, dest: string): Promise<void> {
+  await fs.mkdir(dest, { recursive: true });
+  for (const entry of await fs.readdir(src, { withFileTypes: true })) {
+    if (COPY_SKIP.has(entry.name)) continue;
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) await copyDir(s, d);
+    else await fs.copyFile(s, d);
+  }
 }
 
 export class Orchestrator {
@@ -215,6 +228,58 @@ export class Orchestrator {
     await supervisor.restart();
   }
 
+  async spawnCreature(name: string, dir: string, purpose?: string): Promise<void> {
+    const thisDir = path.dirname(fileURLToPath(import.meta.url));
+    const tpl = path.resolve(thisDir, '..', '..', 'template');
+    try { await fs.access(tpl); } catch { throw new Error('template directory not found'); }
+
+    await fs.mkdir(CREATURES_DIR, { recursive: true });
+    await copyDir(tpl, dir);
+
+    const birth = {
+      id: crypto.randomUUID(),
+      name,
+      born: new Date().toISOString(),
+      template_version: '0.0.0',
+      parent: null,
+    };
+    await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
+
+    if (purpose) {
+      await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${purpose}\n`);
+    }
+
+    console.log(`[orchestrator] spawning "${name}" — installing deps...`);
+    execSync('pnpm install --silent', { cwd: dir, stdio: 'pipe' });
+
+    execSync('git init', { cwd: dir, stdio: 'pipe' });
+    execSync('git add -A', { cwd: dir, stdio: 'pipe' });
+    execSync('git commit -m "genesis"', { cwd: dir, stdio: 'pipe' });
+
+    if (!this.isDockerAvailable()) throw new Error('docker is required but not available');
+    console.log(`[orchestrator] spawning "${name}" — building docker image...`);
+    execSync(`docker build -t creature-${name} .`, { cwd: dir, stdio: 'pipe' });
+    console.log(`[orchestrator] creature "${name}" spawned`);
+  }
+
+  async destroyCreature(name: string): Promise<void> {
+    const dir = path.join(CREATURES_DIR, name);
+    try { await fs.access(path.join(dir, 'BIRTH.json')); }
+    catch { throw new Error(`creature "${name}" not found`); }
+
+    // Stop if running
+    if (this.supervisors.has(name)) {
+      await this.stopCreature(name);
+    }
+    // Docker cleanup
+    try { execSync(`docker kill creature-${name}`, { stdio: 'ignore' }); } catch {}
+    try { execSync(`docker rm -f creature-${name}`, { stdio: 'ignore' }); } catch {}
+    try { execSync(`docker rmi creature-${name}`, { stdio: 'ignore' }); } catch {}
+
+    await fs.rm(dir, { recursive: true, force: true });
+    console.log(`[orchestrator] creature "${name}" destroyed`);
+  }
+
   // --- Events ---
 
   private async emitEvent(name: string, event: Event) {
@@ -266,7 +331,7 @@ export class Orchestrator {
           const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
           console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
           try {
-            await this.sendMessage(name, `[SYSTEM] Your restart request failed — TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`);
+            await this.sendMessage(name, `[SYSTEM] Your restart request failed — TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
           } catch {}
         }
       }
@@ -324,7 +389,7 @@ export class Orchestrator {
     await this.emitEvent(name, event);
   }
 
-  async sendMessage(name: string, text: string): Promise<void> {
+  async sendMessage(name: string, text: string, source: 'user' | 'creator' | 'system' = 'user'): Promise<void> {
     const supervisor = this.supervisors.get(name);
     if (!supervisor) throw new Error(`creature "${name}" is not running`);
 
@@ -335,7 +400,8 @@ export class Orchestrator {
     });
 
     if (!res.ok) throw new Error(`creature rejected message: ${await res.text()}`);
-    console.log(`[${name}] creator message injected: ${text.slice(0, 80)}`);
+    await this.emitEvent(name, { t: new Date().toISOString(), type: 'creature.message', text, source });
+    console.log(`[${name}] message (${source}): ${text.slice(0, 80)}`);
   }
 
   async listCreatures(): Promise<Array<{ name: string; status: string; sha: string | null; port: number | null }>> {
@@ -382,11 +448,14 @@ export class Orchestrator {
             body,
           });
           const respBody = await upstream.text();
-          // Track tokens
+          // Track tokens + log response metadata
           try {
             const parsed = JSON.parse(respBody);
             if (parsed.usage) {
               this.costs.record(creatureName, parsed.usage.input_tokens || 0, parsed.usage.output_tokens || 0);
+            }
+            if (parsed.stop_reason) {
+              console.log(`[proxy:${creatureName}] stop_reason=${parsed.stop_reason} content_blocks=${(parsed.content || []).length}`);
             }
           } catch {}
           res.writeHead(upstream.status, {
@@ -411,6 +480,21 @@ export class Orchestrator {
         const creatures = await this.listCreatures();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(creatures));
+        return;
+      }
+
+      if (p === '/api/creatures' && req.method === 'POST') {
+        try {
+          const body = JSON.parse(await readBody(req));
+          const name = (body.name || '').trim();
+          const purpose = (body.purpose || '').trim();
+          if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
+          const dir = path.join(CREATURES_DIR, name);
+          try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e: any) { if (e.message.includes('already exists')) throw e; }
+          await this.spawnCreature(name, dir, purpose);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, name }));
+        } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }
 
@@ -532,6 +616,14 @@ export class Orchestrator {
             const body = await readBody(req);
             const { text } = JSON.parse(body);
             await this.sendMessage(name, text);
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'destroy' && req.method === 'POST') {
+          try {
+            await this.destroyCreature(name);
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;

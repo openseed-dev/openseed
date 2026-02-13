@@ -163,7 +163,7 @@ class Creature {
           let output: string;
 
           if (tool === "bash") {
-            input = args.command as string;
+            input = String(args.command || args.cmd || args.script || "(empty)");
             output = result.ok
               ? String((result.data as any)?.stdout || "").slice(0, 1000)
               : String(result.error || "").slice(0, 1000);

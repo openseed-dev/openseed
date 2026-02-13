@@ -268,6 +268,7 @@ export class Creator {
                 if (type === 'creature.tool_call') return `${t} tool ${(e as any).ok ? 'ok' : 'FAIL'}: ${(e as any).tool} ${((e as any).input || '').slice(0, 100)}`;
                 if (type === 'creature.sleep') return `${t} sleep ${(e as any).seconds}s (${(e as any).actions} actions)`;
                 if (type === 'creature.wake') return `${t} WAKE (${(e as any).source}): ${(e as any).reason}`;
+                if (type === 'creature.message') return `${t} MSG (${(e as any).source}): ${((e as any).text || '').slice(0, 150)}`;
                 if (type === 'creature.dream') return `${t} dream: ${((e as any).priority || '').slice(0, 120)}`;
                 if (type === 'creature.progress_check') return `${t} progress_check (${(e as any).actions} actions)`;
                 return `${t} ${type}`;

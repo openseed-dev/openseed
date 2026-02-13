@@ -289,6 +289,7 @@ export class Mind {
   private monologueSinceDream = "";
   private fatigueWarned = false;
   private actionsSinceProgressCheck = 0;
+  private progressCheckCount = 0;
   private sleepResolve: (() => void) | null = null;
   private onSpecialTool: SpecialToolCallback | null = null;
 
@@ -379,6 +380,7 @@ export class Mind {
         monologueSinceSleep = "";
         this.fatigueWarned = false;
         this.actionsSinceProgressCheck = 0;
+        this.progressCheckCount = 0;
         continue;
       }
 
@@ -404,12 +406,13 @@ export class Mind {
       try {
         response = await this.client.messages.create({
           model: MODEL,
-          max_tokens: 4096,
+          max_tokens: 16384,
           system: this.systemPrompt,
           tools: this.tools,
           messages: this.messages,
         });
         retryDelay = 1000;
+        console.log(`[mind] LLM: stop_reason=${response.stop_reason} blocks=${response.content.map(b => b.type === 'tool_use' ? `tool_use(${(b as any).name},input_keys=${Object.keys((b as any).input || {})})` : b.type).join(',')}`);
       } catch (err: any) {
         if (err?.status === 400 && this.messages.length > 2) {
           console.error(`[mind] 400 bad request — dropping last 2 messages to recover`);
@@ -506,14 +509,22 @@ export class Mind {
         });
       }
 
-      // Progress check: force self-evaluation every N actions
+      // Progress check: escalating self-evaluation every N actions
       if (this.actionsSinceProgressCheck >= PROGRESS_CHECK_INTERVAL) {
+        this.progressCheckCount++;
         const rules = await this.readRules();
         const rulesReminder = rules ? `\nYour learned rules:\n${rules}\n` : "";
-        const checkMsg = `[SYSTEM] Progress check — you've taken ${this.actionsSinceProgressCheck} actions since the last check.${rulesReminder}\nIn one sentence: what concrete, tangible result did you achieve (a file created, a message posted, a response received, a problem solved)? If you cannot point to one, you are stuck. STOP what you're doing and try a fundamentally different approach — or move on to a different task entirely. Are you following your rules?`;
+        let checkMsg: string;
+        if (this.progressCheckCount === 1) {
+          checkMsg = `[SYSTEM] Check-in — ${this.actionsSinceProgressCheck} actions so far.${rulesReminder}\nBriefly: what are you working toward and is it on track?`;
+        } else if (this.progressCheckCount === 2) {
+          checkMsg = `[SYSTEM] Progress check — ${this.actionsSinceProgressCheck} more actions (${this.progressCheckCount * PROGRESS_CHECK_INTERVAL} total).${rulesReminder}\nWhat concrete result have you achieved so far? A file created, a message posted, a problem solved? If nothing yet, consider whether your current approach is working.`;
+        } else {
+          checkMsg = `[SYSTEM] Progress check — ${this.progressCheckCount * PROGRESS_CHECK_INTERVAL} actions this session.${rulesReminder}\nName one concrete, tangible result. If you can't, you may be stuck — try a different approach or move on to a different task. Are you following your rules?`;
+        }
         (toolResults as any[]).push({ type: "text", text: checkMsg });
         if (onProgressCheck) await onProgressCheck(this.actionsSinceProgressCheck);
-        console.log(`[mind] progress check injected at ${this.actionsSinceProgressCheck} actions`);
+        console.log(`[mind] progress check #${this.progressCheckCount} at ${this.actionsSinceProgressCheck} actions`);
         this.actionsSinceProgressCheck = 0;
       }
 
@@ -588,6 +599,7 @@ export class Mind {
         monologueSinceSleep = "";
         this.fatigueWarned = false;
         this.actionsSinceProgressCheck = 0;
+        this.progressCheckCount = 0;
       }
 
       // Emergency overflow protection (shouldn't normally trigger — consolidation handles it)
@@ -1015,8 +1027,12 @@ Current time: ${new Date().toISOString()}`,
     try {
       switch (name) {
         case "bash": {
-          const { command, timeout } = args as { command: string; timeout?: number };
-          const result = await executeBash(command, { timeout });
+          const cmd = (args as any).command || (args as any).cmd || (args as any).script;
+          if (!cmd || typeof cmd !== "string") {
+            return { ok: false, error: "Missing 'command' parameter. Usage: bash({ command: \"your shell command here\" })" };
+          }
+          const timeout = (args as any).timeout as number | undefined;
+          const result = await executeBash(cmd, { timeout });
 
           if (result.exitCode !== 0) {
             return {
