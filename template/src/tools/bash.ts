@@ -1,4 +1,12 @@
-import { spawn } from "node:child_process";
+import { spawn } from 'node:child_process';
+import {
+  closeSync,
+  openSync,
+  readFileSync,
+  unlinkSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export interface BashResult {
   stdout: string;
@@ -15,6 +23,8 @@ const NON_INTERACTIVE_ENV = {
   SSH_BATCH_MODE: "yes",
 };
 
+let bashSeq = 0;
+
 export async function executeBash(
   command: string,
   options: {
@@ -24,51 +34,68 @@ export async function executeBash(
 ): Promise<BashResult> {
   const { cwd = process.cwd(), timeout = 120000 } = options;
 
+  // Use temp files instead of pipes so background processes (nohup, &) don't
+  // get SIGPIPE when the foreground bash exits and Node closes the pipe FDs.
+  const id = `bash_${process.pid}_${++bashSeq}`;
+  const outPath = join(tmpdir(), `${id}.out`);
+  const errPath = join(tmpdir(), `${id}.err`);
+  const outFd = openSync(outPath, "w");
+  const errFd = openSync(errPath, "w");
+
   return new Promise((resolve) => {
     const proc = spawn("bash", ["-c", command], {
       cwd,
-      // No stdin, pipe stdout/stderr. New session (detached) so /dev/tty
-      // is unavailable — prevents sudo/ssh from prompting on the terminal.
-      stdio: ["ignore", "pipe", "pipe"],
+      // File FDs instead of pipes — background children inherit file descriptors
+      // that stay valid even after we close our copies. No SIGPIPE.
+      // detached creates a new session so /dev/tty is unavailable.
+      stdio: ["ignore", outFd, errFd],
       detached: true,
       env: { ...process.env, ...NON_INTERACTIVE_ENV },
     });
 
-    let stdout = "";
-    let stderr = "";
+    // Close our FD copies — the child has its own
+    closeSync(outFd);
+    closeSync(errFd);
+
+    // Let Node's event loop ignore this child (background processes won't block exit)
+    proc.unref();
+
     let killed = false;
-
-    proc.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
 
     const timer = setTimeout(() => {
       killed = true;
-      // Kill the entire process group (negative pid)
       try { process.kill(-proc.pid!, "SIGKILL"); } catch {}
     }, timeout);
 
-    proc.on("close", (code) => {
+    const cleanup = (code: number | null) => {
       clearTimeout(timer);
-      resolve({
-        stdout: stdout.trim(),
-        stderr: killed ? `${stderr.trim()}\n[killed: timeout after ${timeout}ms]`.trim() : stderr.trim(),
-        exitCode: code ?? 1,
-        timedOut: killed,
-      });
-    });
+      // Brief delay for file writes to flush
+      setTimeout(() => {
+        let stdout = "", stderr = "";
+        try { stdout = readFileSync(outPath, "utf-8").trim(); } catch {}
+        try { stderr = readFileSync(errPath, "utf-8").trim(); } catch {}
+        try { unlinkSync(outPath); } catch {}
+        try { unlinkSync(errPath); } catch {}
+        resolve({
+          stdout,
+          stderr: killed ? `${stderr}\n[killed: timeout after ${timeout}ms]`.trim() : stderr,
+          exitCode: code ?? 1,
+          timedOut: killed,
+        });
+      }, 200);
+    };
+
+    // Use 'exit' not 'close' — with file-based stdio there are no pipe streams
+    // to drain, and 'exit' fires as soon as the foreground bash exits.
+    // This clears the timeout immediately, so background processes in the same
+    // process group aren't killed by the 120s timer.
+    proc.on("exit", (code) => cleanup(code));
 
     proc.on("error", (err) => {
       clearTimeout(timer);
-      resolve({
-        stdout: "",
-        stderr: err.message,
-        exitCode: 1,
-      });
+      try { unlinkSync(outPath); } catch {}
+      try { unlinkSync(errPath); } catch {}
+      resolve({ stdout: "", stderr: err.message, exitCode: 1 });
     });
   });
 }

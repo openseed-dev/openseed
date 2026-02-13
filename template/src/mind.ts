@@ -37,18 +37,13 @@ const LIGHTWEIGHT_CONSOLIDATION_THRESHOLD = 5;
 const sleepTool: Anthropic.Tool = {
   name: "set_sleep",
   description:
-    "Pause and sleep for N seconds before continuing. Use this to pace yourself. Min 2s, max 86400s (24 hours). Use longer sleeps when waiting for external responses (PR reviews, comment replies). Short sleeps (30-300s) for pacing within a task. You can also specify watch conditions — the system will wake you early if a condition fires.",
+    "Pause and sleep for N seconds before continuing. Use this to pace yourself. Min 2s, max 86400s (24 hours). Use longer sleeps when waiting for external responses (PR reviews, comment replies). Short sleeps (30-300s) for pacing within a task. Background processes you started before sleeping stay alive — use them with the `wakeup` command to wake yourself early when a condition fires.",
   input_schema: {
     type: "object" as const,
     properties: {
       seconds: {
         type: "number",
         description: "Seconds to sleep (2-86400)",
-      },
-      watch: {
-        type: "array",
-        items: { type: "string" },
-        description: "Optional watch conditions. The system polls these while you sleep and wakes you if something changes. Built-in: 'github_notifications'. You can also specify custom script paths.",
       },
     },
     required: ["seconds"],
@@ -145,7 +140,7 @@ writable layer (all installed packages, configs, caches) survives. Install tools
 
 The only event that resets the environment is a developer-initiated image rebuild (rare).
 
-Pre-installed tools: git, gh (GitHub CLI), curl, jq, rg (ripgrep), python3, pip, wget, sudo, unzip.
+Pre-installed tools: git, gh (GitHub CLI), curl, jq, rg (ripgrep), python3, pip, wget, sudo, unzip, wakeup.
 You can install more — they persist.
 
 ## Your Tools
@@ -155,6 +150,8 @@ of each tool call before deciding your next action.
 
 **bash** — full power of a Unix machine. Write scripts, install packages, spin up servers,
 compile code, make API calls with curl — anything a developer can do from a terminal.
+Background processes you start (via \`&\`, \`nohup\`, etc.) survive across sleep cycles.
+Your container stays running while you sleep — use this for monitors, bots, and watchers.
 
 **browser** — a persistent headless Chromium browser. Navigate the web, fill forms, click
 buttons, read page content. The browser stays alive between thought cycles, so sessions,
@@ -170,9 +167,23 @@ and a list of interactive elements with selectors. Use those selectors in subseq
 Example: goto a page → read the snapshot → fill a form field → click submit → read the result.
 
 **set_sleep** — pause for N seconds before continuing (2-86400s, up to 24 hours). Use this
-to pace yourself. You can specify watch conditions (e.g. github_notifications) — the system
-will poll while you sleep and wake you early if something changes. Use long sleeps (1-24h)
-when waiting for external responses. Don't poll manually — sleep with a watch instead.
+to pace yourself. Use long sleeps (1-24h) when waiting for external responses.
+
+**wakeup** — a CLI command available in your shell. Background processes can run
+\`wakeup "reason text"\` to wake you early from sleep. Use this to build your own watchers:
+start a background script before sleeping that polls for a condition, and when it fires,
+calls \`wakeup\`. Example pattern:
+
+\`\`\`bash
+# Start a watcher before sleeping
+(while sleep 60; do
+  gh api notifications --jq '.[0].id' 2>/dev/null | grep -q . && wakeup "New GitHub notification"
+done) &
+\`\`\`
+
+Then call set_sleep. The background loop runs while you sleep and wakes you when needed.
+You can watch for anything you can script: GitHub events, file changes, API responses,
+price movements, webhooks — whatever your purpose demands.
 
 If you think "I can't do X because I'm a bot" — you're wrong. You have bash on a real machine
 and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
@@ -192,9 +203,8 @@ observations. On deep sleep, a reflector prunes stale entries.
 
 ## Messages
 
-Your creator may leave messages for you in MESSAGES.md (in your root directory). Check it
-occasionally — especially after waking from sleep. These are one-way instructions: your
-creator will never read that file, so don't write replies there. Act on what they say.
+Your creator and user can send you messages at any time — they appear directly in this
+conversation as injected text. You don't need to poll any files for messages.
 
 ## Self-Improvement
 
@@ -256,7 +266,6 @@ export type SleepCallback = (
   seconds: number,
   summary: string,
   actions: number,
-  watch?: string[],
 ) => Promise<void>;
 
 export type ThoughtCallback = (text: string) => Promise<void>;
@@ -304,13 +313,15 @@ export class Mind {
     } catch {}
   }
 
-  forceWake(reason?: string) {
+  forceWake(reason?: string): boolean {
     if (this.sleepResolve) {
       console.log(`[mind] force wake triggered: ${reason || "unknown"}`);
       this.wakeReason = reason || null;
       this.sleepResolve();
       this.sleepResolve = null;
+      return true;
     }
+    return false;
   }
 
   private wakeReason: string | null = null;
@@ -456,18 +467,15 @@ export class Mind {
       // Process tool calls
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       let sleepSeconds: number | null = null;
-      let sleepWatch: string[] | undefined;
 
       for (const tu of toolUses) {
         if (tu.name === "set_sleep") {
-          const input = tu.input as { seconds: number; watch?: string[] };
+          const input = tu.input as { seconds: number };
           sleepSeconds = Math.max(2, Math.min(86400, input.seconds || 30));
-          sleepWatch = input.watch;
-          const watchNote = sleepWatch?.length ? ` Watching: ${sleepWatch.join(', ')}.` : '';
           toolResults.push({
             type: "tool_result" as const,
             tool_use_id: tu.id,
-            content: `Sleeping for ${sleepSeconds}s.${watchNote} You will continue this conversation when you wake up.`,
+            content: `Sleeping for ${sleepSeconds}s. You will continue this conversation when you wake up. Background processes keep running — use \`wakeup "reason"\` from a background script to wake early.`,
           });
           continue;
         }
@@ -538,7 +546,7 @@ export class Mind {
         await this.saveCheckpoint(summary, actionsSinceSleep, sleepSeconds);
 
         if (onSleep) {
-          await onSleep(sleepSeconds, summary, actionsSinceSleep.length, sleepWatch);
+          await onSleep(sleepSeconds, summary, actionsSinceSleep.length);
         }
 
         const actionCount = actionsSinceSleep.length;
@@ -918,7 +926,7 @@ Current time: ${new Date().toISOString()}`,
     }
 
     wakeMsg += `\nYour learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl — search with rg.`;
-    wakeMsg += `\nCheck MESSAGES.md for any new instructions from your creator.`;
+    wakeMsg += `\nMessages from your creator appear directly in this conversation.`;
 
     const lastMsg = this.messages[this.messages.length - 1];
     if (lastMsg?.role === "user" && Array.isArray(lastMsg.content)) {
@@ -1121,7 +1129,7 @@ Current time: ${new Date().toISOString()}`,
       context += observations + "\n\n";
     }
     context += "Your learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl.\n";
-    context += "Check MESSAGES.md for instructions from your creator.\n";
+    context += "Messages from your creator appear directly in this conversation.\n";
     context += "You just woke up. What do you want to do?\n";
     return context;
   }

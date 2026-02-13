@@ -71,7 +71,6 @@ Your Mac
 │   ├── SSE event stream for real-time updates
 │   ├── REST API for creature management
 │   ├── Cost tracker (src/host/costs.ts)
-│   ├── Watcher (src/host/watcher.ts) — event-driven wake
 │   ├── Creator Agent (src/host/creator.ts)
 │   │   └── Evaluates + evolves creature cognitive architecture
 │   └── CreatureSupervisors (src/host/supervisor.ts)
@@ -82,7 +81,7 @@ Your Mac
     │   ├── HTTP server on :7778
     │   ├── Mind — continuous LLM conversation loop
     │   ├── Sleep/dream consolidation system
-    │   └── Tools: bash, browser, set_sleep
+    │   └── Tools: bash, browser, set_sleep, wakeup
     ├── Bind mount: ~/.itsalive/creatures/<name> ↔ /creature
     ├── Named volume: node_modules (Linux-native)
     ├── Named volume: browser profile (persistent logins)
@@ -93,9 +92,9 @@ Your Mac
 
 **Creator Agent** — an LLM agent (Opus 4.6) that runs inside the orchestrator. Triggered automatically after every deep sleep cycle or manually via the dashboard. Reads the creature's full state (dreams, rules, observations, events, source code), diagnoses architectural problems, and modifies the creature's code and environment to fix them. Can `docker exec` into the creature's container to install packages or configure tools. All interventions are logged to `.self/creator-log.jsonl` and git-committed.
 
-**Creature** — runs inside a long-lived Docker container with resource limits (2GB RAM, 1.5 CPUs). Thinks via Claude Opus 4.6 in a single continuous conversation, acts via bash and a persistent headless browser, modifies its own code. Git tracks every mutation. The browser is shut down during sleep to save resources, and relaunched on demand.
+**Creature** — runs inside a long-lived Docker container with resource limits (2GB RAM, 1.5 CPUs). Thinks via Claude Opus 4.6 in a single continuous conversation, acts via bash and a persistent headless browser, modifies its own code. Git tracks every mutation. The browser is shut down during sleep to save resources, and relaunched on demand. Background processes survive sleep — creatures can set up their own watchers, monitors, and bots that persist across sleep cycles.
 
-**Watcher** — monitors external events (e.g. GitHub notifications) while creatures sleep. Can wake a creature early with a reason ("new comment on your PR") so the creature knows why it was interrupted.
+**Self-wake** — creatures can wake themselves from sleep using the `wakeup` CLI command. A background process started before sleeping can poll for conditions and call `wakeup "reason"` to interrupt sleep early. This is a primitive — the creature decides what to watch for (GitHub notifications, price movements, file changes, webhooks, anything it can script). No hardcoded watch types in the orchestrator.
 
 **Template** — the embryo (`template/`). Copied into a new creature at spawn time. Self-contained TypeScript project with no imports from the framework.
 
@@ -115,7 +114,8 @@ Creatures run a single continuous conversation with Claude:
 1. Build initial context from PURPOSE.md, last dream, priorities, and recent observations
 2. Enter continuous conversation loop with Claude
 3. LLM uses tools: bash, browser, set_sleep
-4. On `set_sleep`, the creature pauses, optionally consolidates memory, then resumes
+4. Background processes started via bash survive across sleep cycles
+5. On `set_sleep`, the creature pauses, optionally consolidates memory, then resumes
 5. Fatigue system forces consolidation after prolonged activity
 6. Progress checks every 10 actions force self-evaluation
 7. Learned rules from consolidation are injected into the system prompt
@@ -187,7 +187,7 @@ Each creature lives at `~/.itsalive/creatures/<name>/` with this structure:
 │   ├── mind.ts              cognition loop, sleep, consolidation, dreams
 │   ├── memory.ts            JSONL persistence helpers
 │   └── tools/
-│       ├── bash.ts           shell execution (hardened, timeout, non-interactive)
+│       ├── bash.ts           shell execution (file-based stdio, background-safe)
 │       └── browser.ts        persistent headless Chromium
 ├── .self/                   creature state (git-tracked)
 │   ├── observations.md      priority-tagged facts (RED/YLW/GRN)
@@ -203,7 +203,6 @@ Each creature lives at `~/.itsalive/creatures/<name>/` with this structure:
 ├── workspace/               scratch space (NOT git-tracked)
 │   └── (cloned repos, downloads, temp files)
 ├── PURPOSE.md               north star — why this creature exists
-├── MESSAGES.md              one-way messages from the human creator
 ├── Dockerfile               container image definition
 ├── package.json
 └── (work products)          files the creature creates in pursuit of its purpose
@@ -224,8 +223,6 @@ Each creature lives at `~/.itsalive/creatures/<name>/` with this structure:
 
 **`.self/creator-log.jsonl`** — log of every Creator evaluation: what it observed, what it changed, and why. Viewable in the dashboard.
 
-**`MESSAGES.md`** — one-way channel from human to creature. The creature checks this after waking. Don't expect replies — act on what it says.
-
 **`workspace/`** — not git-tracked. The creature's scratch space for cloning repos, downloading files, and other ephemeral work. Persists across restarts (bind-mounted).
 
 ## Files
@@ -237,7 +234,6 @@ src/
     dashboard.html    web dashboard (served as static file)
     creator.ts        Creator agent — evaluates and evolves creature architecture
     supervisor.ts     per-creature lifecycle — spawn, health check, promote, rollback
-    watcher.ts        event-driven wake — monitors external events during sleep
     costs.ts          per-creature LLM cost tracking
     events.ts         event store (JSONL per creature)
     git.ts            git operations for creature repos
@@ -250,7 +246,7 @@ template/             creature embryo (copied on spawn)
     mind.ts           cognition loop, fatigue, consolidation, dreams, rules
     memory.ts         JSONL persistence helpers
     tools/
-      bash.ts         shell command execution (hardened, timeout, non-interactive)
+      bash.ts         shell command execution (file-based stdio, background-safe)
       browser.ts      persistent headless Chromium browser
   Dockerfile          container image definition
   PURPOSE.md          default purpose (overwritten by --purpose flag on spawn)

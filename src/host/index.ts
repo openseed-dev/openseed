@@ -16,7 +16,7 @@ import {
   CreatureSupervisor,
   SupervisorConfig,
 } from './supervisor.js';
-import { Watcher } from './watcher.js';
+
 
 const ITSALIVE_HOME = path.join(os.homedir(), '.itsalive');
 const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
@@ -49,7 +49,6 @@ export class Orchestrator {
   private creator: Creator;
   private creatorRunning: Set<string> = new Set();
   private costs = new CostTracker();
-  private watcher: Watcher;
   private dashboardHtml: string;
 
   constructor(port: number) {
@@ -57,21 +56,6 @@ export class Orchestrator {
     this.creator = new Creator(this.costs);
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
     this.dashboardHtml = readFileSync(path.join(thisDir, 'dashboard.html'), 'utf-8');
-    this.watcher = new Watcher(async (creature, reason) => {
-      console.log(`[watcher] waking ${creature}: ${reason}`);
-      const supervisor = this.supervisors.get(creature);
-      if (!supervisor) return;
-      try {
-        await fetch(`http://127.0.0.1:${supervisor.port}/wake`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason }),
-        });
-        await this.emitEvent(creature, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'watcher' });
-      } catch (err) {
-        console.error(`[watcher] failed to wake ${creature}:`, err);
-      }
-    });
   }
 
   async start() {
@@ -298,15 +282,6 @@ export class Orchestrator {
       this.triggerCreator(name, 'deep_sleep').catch((err) => {
         console.error(`[creator] auto-trigger failed for ${name}:`, err);
       });
-    }
-
-    // Handle creature sleep with watch conditions
-    if (event.type === 'creature.sleep' && (event as any).watch?.length) {
-      const supervisor = this.supervisors.get(name);
-      if (supervisor) {
-        const containerName = `creature-${name}`;
-        this.watcher.addWatch(name, containerName, (event as any).watch);
-      }
     }
 
     // Handle creature autonomy: request_restart
@@ -616,6 +591,24 @@ export class Orchestrator {
             const body = await readBody(req);
             const { text } = JSON.parse(body);
             await this.sendMessage(name, text);
+            // Always attempt to wake — forceWake() is a no-op if not sleeping,
+            // and supervisor may lose sleeping status on orchestrator restart
+            const sup = this.supervisors.get(name);
+            if (sup?.port) {
+              const reason = `Message from user: ${text.slice(0, 100)}`;
+              try {
+                const wakeRes = await fetch(`http://127.0.0.1:${sup.port}/wake`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reason }),
+                });
+                const wakeBody = await wakeRes.text();
+                // "woken" = new protocol, "ok" = legacy (always returned)
+                if (wakeBody === 'woken') {
+                  await this.emitEvent(name, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'manual' });
+                }
+              } catch {}
+            }
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;

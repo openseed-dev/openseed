@@ -12,6 +12,9 @@ RUN (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | 
 
 RUN corepack enable
 
+# Self-wake primitive — background processes can call this to wake the creature from sleep
+RUN printf '#!/bin/sh\ncurl -s -X POST http://localhost:7778/wake -H "Content-Type: application/json" -d "{\\\"reason\\\": \\\"$*\\\"}" 2>/dev/null\n' > /usr/local/bin/wakeup && chmod +x /usr/local/bin/wakeup
+
 WORKDIR /creature
 
 # Install deps first for layer caching
