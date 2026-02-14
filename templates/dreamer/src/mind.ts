@@ -303,6 +303,7 @@ export class Mind {
   private fatigueWarned = false;
   private actionsSinceProgressCheck = 0;
   private progressCheckCount = 0;
+  private pendingInjections: string[] = [];
   private sleepResolve: (() => void) | null = null;
   private onSpecialTool: SpecialToolCallback | null = null;
   private currentActionCount = 0;
@@ -348,18 +349,9 @@ export class Mind {
   }
 
   inject(text: string) {
-    const wrapped = `[MESSAGE FROM YOUR CREATOR — this is a direct interrupt. Your creator cannot hear you or read your responses. Process this message and continue autonomously.]\n\n${text}`;
-    const last = this.messages[this.messages.length - 1];
-    if (last?.role === "user") {
-      if (typeof last.content === "string") {
-        last.content += "\n\n" + wrapped;
-      } else if (Array.isArray(last.content)) {
-        last.content.push({ type: "text", text: wrapped });
-      }
-    } else {
-      this.pushMessage({ role: "user", content: wrapped });
-    }
-    console.log(`[mind] injected creator message: ${text.slice(0, 80)}`);
+    // Buffer injections — drained at a safe point before the next LLM call
+    this.pendingInjections.push(text);
+    console.log(`[mind] buffered creator message: ${text.slice(0, 80)}`);
 
     // Persist substantive creator messages as RED observations so they survive restarts
     if (text.length > 20) {
@@ -371,6 +363,24 @@ export class Mind {
       } catch {
         // File might not exist yet; will be created on next consolidation
       }
+    }
+  }
+
+  private drainInjections() {
+    if (this.pendingInjections.length === 0) return;
+    const combined = this.pendingInjections
+      .map(t => `[MESSAGE FROM YOUR CREATOR — this is a direct interrupt. Your creator cannot hear you or read your responses. Process this message and continue autonomously.]\n\n${t}`)
+      .join("\n\n---\n\n");
+    this.pendingInjections = [];
+    const last = this.messages[this.messages.length - 1];
+    if (last?.role === "user") {
+      if (typeof last.content === "string") {
+        last.content += "\n\n" + combined;
+      } else if (Array.isArray(last.content)) {
+        last.content.push({ type: "text", text: combined });
+      }
+    } else {
+      this.pushMessage({ role: "user", content: combined });
     }
   }
 
@@ -442,6 +452,8 @@ export class Mind {
 
       // Rebuild system prompt so learned rules are always current
       this.systemPrompt = await buildSystemPrompt(this.purpose);
+
+      this.drainInjections();
 
       let response: Anthropic.Message;
       try {
