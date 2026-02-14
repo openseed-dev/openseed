@@ -1,4 +1,7 @@
-import { exec, execSync } from 'node:child_process';
+import {
+  exec,
+  execSync,
+} from 'node:child_process';
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -9,8 +12,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-const execAsync = promisify(exec);
-
 import { Event } from '../shared/types.js';
 import { CostTracker } from './costs.js';
 import { Creator } from './creator.js';
@@ -19,6 +20,8 @@ import {
   CreatureSupervisor,
   SupervisorConfig,
 } from './supervisor.js';
+
+const execAsync = promisify(exec);
 
 const ITSALIVE_HOME = path.join(os.homedir(), '.itsalive');
 const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
@@ -324,9 +327,10 @@ export class Orchestrator {
     if (event.type === 'creature.sleep') {
       const dir = path.join(CREATURES_DIR, name);
       try {
+        // Check for uncommitted changes in src/
         const { stdout: diff } = await execAsync('git diff --name-only src/', { cwd: dir });
         if (diff.trim()) {
-          console.log(`[${name}] code changes detected on sleep, validating...`);
+          console.log(`[${name}] uncommitted code changes on sleep, validating...`);
           try {
             await execAsync('npx tsx --check src/mind.ts src/index.ts', {
               cwd: dir, timeout: 30_000,
@@ -335,11 +339,6 @@ export class Orchestrator {
               'git add -A && git commit -m "creature: self-modification on sleep"',
               { cwd: dir },
             );
-            const supervisor = this.supervisors.get(name);
-            if (supervisor) {
-              console.log(`[${name}] restarting to apply code changes`);
-              await supervisor.restart();
-            }
           } catch (err: any) {
             const errMsg = err.stderr || err.stdout || err.message || 'unknown';
             console.error(`[${name}] code validation failed on sleep: ${errMsg}`);
@@ -351,6 +350,17 @@ export class Orchestrator {
                 'system',
               );
             } catch {}
+          }
+        }
+
+        // Restart if HEAD has moved since the creature last started
+        const supervisor = this.supervisors.get(name);
+        if (supervisor) {
+          const { stdout: headSHA } = await execAsync('git rev-parse HEAD', { cwd: dir });
+          const info = supervisor.getInfo();
+          if (headSHA.trim() !== info.sha) {
+            console.log(`[${name}] code updated (${info.sha?.slice(0, 7)} → ${headSHA.trim().slice(0, 7)}), restarting to apply`);
+            await supervisor.restart();
           }
         }
       } catch {}
