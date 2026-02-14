@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -7,6 +7,9 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const execAsync = promisify(exec);
 
 import { Event } from '../shared/types.js';
 import { CostTracker } from './costs.js';
@@ -212,10 +215,10 @@ export class Orchestrator {
     await supervisor.restart();
   }
 
-  async spawnCreature(name: string, dir: string, purpose?: string): Promise<void> {
+  async spawnCreature(name: string, dir: string, purpose?: string, template = 'dreamer'): Promise<void> {
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    const tpl = path.resolve(thisDir, '..', '..', 'template');
-    try { await fs.access(tpl); } catch { throw new Error('template directory not found'); }
+    const tpl = path.resolve(thisDir, '..', '..', 'templates', template);
+    try { await fs.access(tpl); } catch { throw new Error(`template "${template}" not found at ${tpl}`); }
 
     await fs.mkdir(CREATURES_DIR, { recursive: true });
     await copyDir(tpl, dir);
@@ -224,6 +227,7 @@ export class Orchestrator {
       id: crypto.randomUUID(),
       name,
       born: new Date().toISOString(),
+      template: template,
       template_version: '0.0.0',
       parent: null,
     };
@@ -234,15 +238,15 @@ export class Orchestrator {
     }
 
     console.log(`[orchestrator] spawning "${name}" — installing deps...`);
-    execSync('pnpm install --silent', { cwd: dir, stdio: 'pipe' });
+    await execAsync('pnpm install --silent', { cwd: dir });
 
-    execSync('git init', { cwd: dir, stdio: 'pipe' });
-    execSync('git add -A', { cwd: dir, stdio: 'pipe' });
-    execSync('git commit -m "genesis"', { cwd: dir, stdio: 'pipe' });
+    await execAsync('git init', { cwd: dir });
+    await execAsync('git add -A', { cwd: dir });
+    await execAsync('git commit -m "genesis"', { cwd: dir });
 
     if (!this.isDockerAvailable()) throw new Error('docker is required but not available');
     console.log(`[orchestrator] spawning "${name}" — building docker image...`);
-    execSync(`docker build -t creature-${name} .`, { cwd: dir, stdio: 'pipe' });
+    await execAsync(`docker build -t creature-${name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
     console.log(`[orchestrator] creature "${name}" spawned`);
   }
 
@@ -256,9 +260,9 @@ export class Orchestrator {
       await this.stopCreature(name);
     }
     // Docker cleanup — remove container and image but keep files
-    try { execSync(`docker kill creature-${name}`, { stdio: 'ignore' }); } catch {}
-    try { execSync(`docker rm -f creature-${name}`, { stdio: 'ignore' }); } catch {}
-    try { execSync(`docker rmi creature-${name}`, { stdio: 'ignore' }); } catch {}
+    try { await execAsync(`docker kill creature-${name}`); } catch {}
+    try { await execAsync(`docker rm -f creature-${name}`); } catch {}
+    try { await execAsync(`docker rmi creature-${name}`); } catch {}
 
     await fs.mkdir(ARCHIVE_DIR, { recursive: true });
     const dest = path.join(ARCHIVE_DIR, name);
@@ -297,12 +301,11 @@ export class Orchestrator {
       const dir = path.join(CREATURES_DIR, name);
       if (supervisor) {
         try {
-          execSync('npx tsx --check src/mind.ts src/index.ts', {
-            cwd: dir, encoding: 'utf-8', timeout: 30_000,
-            stdio: ['pipe', 'pipe', 'pipe'],
+          await execAsync('npx tsx --check src/mind.ts src/index.ts', {
+            cwd: dir, timeout: 30_000,
           });
-          execSync(`git add -A && git commit -m "creature: self-modification — ${reason.slice(0, 60)}" --allow-empty`, {
-            cwd: dir, stdio: 'ignore',
+          await execAsync(`git add -A && git commit -m "creature: self-modification — ${reason.slice(0, 60)}" --allow-empty`, {
+            cwd: dir,
           });
           // docker restart — process restarts, container environment preserved
           await supervisor.restart();
@@ -315,6 +318,42 @@ export class Orchestrator {
           } catch {}
         }
       }
+    }
+
+    // Auto-apply code changes on sleep
+    if (event.type === 'creature.sleep') {
+      const dir = path.join(CREATURES_DIR, name);
+      try {
+        const { stdout: diff } = await execAsync('git diff --name-only src/', { cwd: dir });
+        if (diff.trim()) {
+          console.log(`[${name}] code changes detected on sleep, validating...`);
+          try {
+            await execAsync('npx tsx --check src/mind.ts src/index.ts', {
+              cwd: dir, timeout: 30_000,
+            });
+            await execAsync(
+              'git add -A && git commit -m "creature: self-modification on sleep"',
+              { cwd: dir },
+            );
+            const supervisor = this.supervisors.get(name);
+            if (supervisor) {
+              console.log(`[${name}] restarting to apply code changes`);
+              await supervisor.restart();
+            }
+          } catch (err: any) {
+            const errMsg = err.stderr || err.stdout || err.message || 'unknown';
+            console.error(`[${name}] code validation failed on sleep: ${errMsg}`);
+            await execAsync('git checkout -- src/', { cwd: dir }).catch(() => {});
+            try {
+              await this.sendMessage(
+                name,
+                `[SYSTEM] Your code changes failed validation and were reverted:\n${errMsg.slice(0, 500)}`,
+                'system',
+              );
+            } catch {}
+          }
+        }
+      } catch {}
     }
 
     // Handle creature autonomy: request_evolution
@@ -468,12 +507,23 @@ export class Orchestrator {
           const body = JSON.parse(await readBody(req));
           const name = (body.name || '').trim();
           const purpose = (body.purpose || '').trim();
+          const template = (body.template || 'dreamer').trim();
           if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
           const dir = path.join(CREATURES_DIR, name);
           try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e: any) { if (e.message.includes('already exists')) throw e; }
-          await this.spawnCreature(name, dir, purpose);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, name }));
+
+          // Return 202 immediately — spawn runs in background
+          res.writeHead(202, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, name, status: 'spawning' }));
+
+          await this.emitEvent(name, { type: 'creature.spawning', t: new Date().toISOString() } as any);
+          this.spawnCreature(name, dir, purpose, template).then(async () => {
+            console.log(`[orchestrator] creature "${name}" ready`);
+            await this.emitEvent(name, { type: 'creature.spawned', t: new Date().toISOString() } as any);
+          }).catch(async (err) => {
+            console.error(`[orchestrator] spawn failed for "${name}":`, err);
+            await this.emitEvent(name, { type: 'creature.spawn_failed', t: new Date().toISOString(), error: err.message } as any);
+          });
         } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }
@@ -553,8 +603,8 @@ export class Orchestrator {
             if (!supervisor) throw new Error(`creature "${name}" is not running`);
             const dir = path.join(CREATURES_DIR, name);
             console.log(`[${name}] developer-initiated rebuild`);
-            execSync(`docker build -t creature-${name} .`, {
-              cwd: dir, stdio: 'ignore', timeout: 120_000,
+            await execAsync(`docker build -t creature-${name} .`, {
+              cwd: dir, timeout: 120_000, maxBuffer: 10 * 1024 * 1024,
             });
             await supervisor.rebuild();
             res.writeHead(200); res.end('ok');

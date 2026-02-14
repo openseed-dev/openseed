@@ -13,6 +13,7 @@ import { readVersion } from './version.js';
 interface SpawnOptions {
   name: string;
   purpose?: string;
+  template?: string;
 }
 
 const SKIP_DIRS = new Set(["node_modules", ".git", ".self"]);
@@ -47,7 +48,7 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
     // Good — doesn't exist yet
   }
 
-  const tpl = templateDir();
+  const tpl = templateDir(opts.template || 'dreamer');
 
   // Verify template exists
   try {
@@ -70,7 +71,8 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
     id: crypto.randomUUID(),
     name: opts.name,
     born: new Date().toISOString(),
-    template_version: readVersion(),
+      template: opts.template || 'dreamer',
+      template_version: readVersion(),
     parent: null,
   };
   await fs.writeFile(path.join(dir, "BIRTH.json"), JSON.stringify(birth, null, 2) + "\n", "utf-8");

@@ -77,11 +77,10 @@ Your Mac
 │       ├── Health checks, promote, rollback
 │       └── manages ↓
 └── Docker containers "creature-<name>" (long-lived)
-    ├── Creature process (template/src/index.ts)
+    ├── Creature process (templates/*/src/index.ts)
     │   ├── HTTP server on :7778
     │   ├── Mind — continuous LLM conversation loop
-    │   ├── Sleep/dream consolidation system
-    │   └── Tools: bash, browser, set_sleep, wakeup
+    │   └── Tools: bash, set_sleep, wakeup (dreamer adds browser, dreams, rules)
     ├── Bind mount: ~/.itsalive/creatures/<name> ↔ /creature
     ├── Named volume: node_modules (Linux-native)
     ├── Named volume: browser profile (persistent logins)
@@ -96,7 +95,7 @@ Your Mac
 
 **Self-wake** — creatures can wake themselves from sleep using the `wakeup` CLI command. A background process started before sleeping can poll for conditions and call `wakeup "reason"` to interrupt sleep early. This is a primitive — the creature decides what to watch for (GitHub notifications, price movements, file changes, webhooks, anything it can script). No hardcoded watch types in the orchestrator.
 
-**Template** — the embryo (`template/`). Copied into a new creature at spawn time. Self-contained TypeScript project with no imports from the framework.
+**Templates** — the embryos (`templates/`). Copied into a new creature at spawn time. Self-contained TypeScript projects with no imports from the framework. Two templates ship by default: `dreamer` (full cognitive architecture with dreams, rules, observations) and `minimal` (bare-bones loop with just bash and sleep — the creature discovers everything else).
 
 ## Two Agents, Two Timescales
 
@@ -240,17 +239,24 @@ src/
   cli/                CLI commands
   shared/types.ts     event type definitions
 
-template/             creature embryo (copied on spawn)
-  src/
-    index.ts          entry point + HTTP server
-    mind.ts           cognition loop, fatigue, consolidation, dreams, rules
-    memory.ts         JSONL persistence helpers
-    tools/
-      bash.ts         shell command execution (file-based stdio, background-safe)
-      browser.ts      persistent headless Chromium browser
-  Dockerfile          container image definition
-  PURPOSE.md          default purpose (overwritten by --purpose flag on spawn)
-  self/diary.md       creature's journal
+templates/
+  dreamer/            full cognitive template (dreams, rules, observations, browser)
+    src/
+      index.ts        entry point + HTTP server
+      mind.ts         cognition loop, fatigue, consolidation, dreams, rules
+      memory.ts       JSONL persistence helpers
+      tools/
+        bash.ts       shell command execution (file-based stdio, background-safe)
+        browser.ts    persistent headless Chromium browser
+    Dockerfile
+    PURPOSE.md
+  minimal/            bare-bones template (bash + sleep, creature discovers the rest)
+    src/
+      index.ts        entry point + HTTP server
+      mind.ts         simple agentic loop — no memory scaffolding
+      tools/
+        bash.ts       shell command execution
+    Dockerfile
 
 docs/
   dreaming.md         sleep/dreams/memory architecture design

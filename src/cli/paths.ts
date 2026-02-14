@@ -8,7 +8,6 @@ export function creatureDir(name: string): string {
   return path.join(CREATURES_DIR, name);
 }
 
-export function templateDir(): string {
-  // Resolve relative to this file: src/cli/paths.ts -> ../../template
-  return path.resolve(import.meta.dirname, "..", "..", "template");
+export function templateDir(template = "dreamer"): string {
+  return path.resolve(import.meta.dirname, "..", "..", "templates", template);
 }

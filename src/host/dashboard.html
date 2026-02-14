@@ -31,11 +31,11 @@
       display: none; padding: 12px; border-bottom: 1px solid #222; background: #111;
     }
     .spawn-form.visible { display: flex; flex-direction: column; gap: 8px; }
-    .spawn-form input, .spawn-form textarea {
+    .spawn-form input, .spawn-form textarea, .spawn-form select {
       background: #0a0a0a; border: 1px solid #333; color: #eee;
       padding: 6px 8px; border-radius: 3px; font-family: inherit; font-size: 12px;
     }
-    .spawn-form input:focus, .spawn-form textarea:focus { outline: none; border-color: #58f; }
+    .spawn-form input:focus, .spawn-form textarea:focus, .spawn-form select:focus { outline: none; border-color: #58f; }
     .spawn-form textarea { resize: vertical; min-height: 48px; }
     .spawn-form button {
       background: #1a2a1a; border: 1px solid #0f0; color: #0f0;
@@ -195,6 +195,10 @@
     </div>
     <div class="spawn-form" id="spawnForm">
       <input id="spawnName" placeholder="name (lowercase)" maxlength="32" />
+      <select id="spawnTemplate">
+        <option value="dreamer">dreamer</option>
+        <option value="minimal">minimal</option>
+      </select>
       <textarea id="spawnPurpose" placeholder="purpose (optional)" rows="3"></textarea>
       <button id="spawnBtn" onclick="spawnC()">spawn</button>
       <div class="spawn-error" id="spawnError"></div>
@@ -503,6 +507,7 @@
 
     async function spawnC() {
       const nameEl = document.getElementById('spawnName');
+      const templateEl = document.getElementById('spawnTemplate');
       const purposeEl = document.getElementById('spawnPurpose');
       const errEl = document.getElementById('spawnError');
       const btn = document.getElementById('spawnBtn');
@@ -515,10 +520,11 @@
         const res = await fetch('/api/creatures', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, purpose: purposeEl.value.trim() }),
+          body: JSON.stringify({ name, purpose: purposeEl.value.trim(), template: templateEl.value }),
         });
         if (!res.ok) { errEl.textContent = await res.text(); return; }
         nameEl.value = '';
+        templateEl.selectedIndex = 0;
         purposeEl.value = '';
         document.getElementById('spawnForm').classList.remove('visible');
         await refresh();
