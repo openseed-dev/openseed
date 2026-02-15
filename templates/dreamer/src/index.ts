@@ -242,6 +242,11 @@ class Creature {
           await this.emit({ type: "creature.wake", reason, source });
           console.log(`[creature] wake (${source}): ${reason}`);
         },
+
+        // onError — emit LLM error events so the dashboard can surface them
+        async (error, retryIn, retries) => {
+          await this.emit({ type: "creature.error", error, retryIn, retries } as any);
+        },
       );
     } catch (err) {
       console.error("[creature] cognition crashed:", err);

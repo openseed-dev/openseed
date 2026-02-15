@@ -1,4 +1,3 @@
-import { mkdirSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 
@@ -136,6 +135,9 @@ class Creature {
         async (reason, source) => {
           await this.emit({ type: "creature.wake", reason, source });
           console.log(`[creature] wake (${source}): ${reason}`);
+        },
+        async (error, retryIn, retries) => {
+          await this.emit({ type: "creature.error", error, retryIn, retries } as any);
         },
       );
     } catch (err) {

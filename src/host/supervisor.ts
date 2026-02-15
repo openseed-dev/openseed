@@ -21,7 +21,7 @@ const MAX_LOG_LINES = 50;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const MAX_FAILURE_BACKOFF_MS = 30_000;
 
-export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping';
+export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping' | 'error';
 
 export interface SupervisorConfig {
   name: string;
@@ -122,7 +122,10 @@ export class CreatureSupervisor {
   updateFromEvent(event: Event) {
     if (this.status === 'stopped') return;
     if (event.type === 'creature.sleep') this.status = 'sleeping';
-    else if (event.type === 'creature.tool_call' && this.status === 'sleeping') this.status = 'running';
+    else if (event.type === 'creature.error') this.status = 'error';
+    else if (event.type === 'creature.tool_call' || event.type === 'creature.thought') {
+      if (this.status === 'sleeping' || this.status === 'error') this.status = 'running';
+    }
   }
 
   getInfo() {

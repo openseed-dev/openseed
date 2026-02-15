@@ -300,6 +300,8 @@ export type ProgressCheckCallback = (actions: number) => Promise<void>;
 
 export type SpecialToolCallback = (tool: string, reason: string) => Promise<void>;
 
+export type ErrorCallback = (error: string, retryIn?: number, retries?: number, fatal?: boolean) => Promise<void>;
+
 export type WakeCallback = (reason: string, source: "manual" | "watcher" | "timer") => Promise<void>;
 
 export class Mind {
@@ -399,6 +401,7 @@ export class Mind {
     onProgressCheck?: ProgressCheckCallback,
     onSpecialTool?: SpecialToolCallback,
     onWake?: WakeCallback,
+    onError?: ErrorCallback,
   ): Promise<never> {
     this.onSpecialTool = onSpecialTool || null;
     this.purpose = await this.loadPurpose();
@@ -411,6 +414,7 @@ export class Mind {
     let actionsSinceSleep: ActionRecord[] = [];
     let monologueSinceSleep = "";
     let retryDelay = 1000;
+    let retryCount = 0;
     this.currentActionCount = 0;
 
     while (true) {
@@ -467,10 +471,15 @@ export class Mind {
           messages: this.messages,
         });
         retryDelay = 1000;
+        retryCount = 0;
         console.log(`[mind] LLM: finish=${result.finishReason} toolCalls=${result.toolCalls.map(tc => tc.toolName).join(',') || 'none'}`);
       } catch (err: any) {
+        retryCount++;
+        const errMsg = err?.message || String(err);
+
         if (err?.status === 400 && this.messages.length > 2) {
           console.error(`[mind] 400 bad request — dropping last 2 messages to recover`);
+          if (onError) await onError(`400 bad request: ${errMsg.slice(0, 200)}`, undefined, retryCount);
           this.messages.pop();
           this.messages.pop();
           if (this.messages[this.messages.length - 1]?.role !== "user") {
@@ -479,6 +488,7 @@ export class Mind {
           continue;
         }
         console.error(`[mind] LLM call failed, retrying in ${retryDelay}ms:`, err);
+        if (onError) await onError(errMsg.slice(0, 300), retryDelay, retryCount);
         await new Promise((r) => setTimeout(r, retryDelay));
         retryDelay = Math.min(retryDelay * 2, 60_000);
         continue;

@@ -120,6 +120,7 @@ You can install more — they persist across restarts.`;
     _onProgressCheck?: any,
     _onSpecialTool?: any,
     onWake?: WakeCallback,
+    onError?: (error: string, retryIn?: number, retries?: number, fatal?: boolean) => Promise<void>,
   ) {
     const purpose = await this.loadPurpose();
     const systemPrompt = this.buildSystemPrompt(purpose);
@@ -128,6 +129,7 @@ You can install more — they persist across restarts.`;
       this.messages = [{ role: "user", content: "You just woke up." }];
       this.actionCount = 0;
       let retryDelay = 1000;
+      let retryCount = 0;
 
       while (true) {
         this.drainInjections();
@@ -142,15 +144,15 @@ You can install more — they persist across restarts.`;
             messages: this.messages,
           });
           retryDelay = 1000;
+          retryCount = 0;
         } catch (err: any) {
-          console.error(`[mind] LLM error: ${err.message}`);
-          if (err.status === 429 || err.status === 529) {
-            console.log(`[mind] rate limited, retrying in ${retryDelay}ms`);
-            await new Promise(r => setTimeout(r, retryDelay));
-            retryDelay = Math.min(retryDelay * 2, 60000);
-            continue;
-          }
-          throw err;
+          retryCount++;
+          const errMsg = err?.message || String(err);
+          console.error(`[mind] LLM error: ${errMsg}`);
+          if (onError) await onError(errMsg.slice(0, 300), retryDelay, retryCount);
+          await new Promise(r => setTimeout(r, retryDelay));
+          retryDelay = Math.min(retryDelay * 2, 60000);
+          continue;
         }
 
         // Emit thoughts

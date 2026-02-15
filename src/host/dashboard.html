@@ -57,6 +57,8 @@
     .dot.starting { background: #fa0; }
     .dot.running { background: #0f0; }
     .dot.sleeping { background: #f80; }
+    .dot.error { background: #f33; animation: pulse-error 1s ease-in-out infinite; }
+    @keyframes pulse-error { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .creature-cost { color: #f80; font-size: 10px; margin-left: 4px; flex-shrink: 0; }
     .btn {
@@ -119,6 +121,8 @@
     .event.creature-dream { border-left-color: #a6e; background: #0f0a15; }
     .event.creature-dream.deep { border-left-color: #c8f; background: #120a1a; }
     .event.creature-progress-check { border-left-color: #f80; background: #1a1208; }
+    .event.creature-error { border-left-color: #f33; background: #1a0808; }
+    .event.creature-error .retry-badge { color: #f55; font-size: 11px; margin-left: 6px; }
     .event.creator-evaluation { border-left-color: #0d4; background: #081a0a; }
 
     .event .type.host { color: #666; }
@@ -316,6 +320,12 @@
       } else if (t === 'creature.progress_check') {
         body = cl + '<span class="type progress-check">progress check</span>'
           + '<span class="tool-ms">' + (ev.actions || 0) + ' actions</span>';
+      } else if (t === 'creature.error') {
+        const retryLabel = ev.retryIn ? 'retry in ' + (ev.retryIn/1000) + 's' : 'recovering';
+        body = cl + '<span class="type rollback">error</span>'
+          + (ev.retries ? '<span class="retry-badge">attempt #' + ev.retries + '</span>' : '')
+          + '<span class="tool-ms">' + retryLabel + '</span>'
+          + '<span class="intent-text"> \u2014 ' + esc(ev.error || 'unknown') + '</span>';
       } else if (t === 'creator.evaluation') {
         const oid = uid();
         const changes = (ev.changes || []);
