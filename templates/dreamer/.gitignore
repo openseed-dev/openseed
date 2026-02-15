@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 dist/
+.sys/
 .self/
 workspace/
 *.log

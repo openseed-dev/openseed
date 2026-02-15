@@ -16,7 +16,7 @@ interface SpawnOptions {
   template?: string;
 }
 
-const SKIP_DIRS = new Set(["node_modules", ".git", ".self"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", ".self", ".sys"]);
 
 async function copyDir(src: string, dest: string): Promise<void> {
   await fs.mkdir(dest, { recursive: true });

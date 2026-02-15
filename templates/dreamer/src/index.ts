@@ -12,7 +12,7 @@ import { Mind } from './mind.js';
 const PORT = parseInt(process.env.PORT || "7778");
 const HOST_URL = process.env.HOST_URL || "http://127.0.0.1:7770";
 const CREATURE_NAME = process.env.CREATURE_NAME || "";
-const BOOT_OK_FILE = ".self/boot-ok";
+const BOOT_OK_FILE = ".sys/boot-ok";
 const AUTO_ITERATE = process.env.AUTO_ITERATE !== "false";
 
 function getCurrentSHA(): string {
@@ -41,6 +41,7 @@ class Creature {
 
     await this.memory.init();
 
+    await fs.mkdir(".sys", { recursive: true });
     await fs.mkdir(".self", { recursive: true });
     await fs.writeFile(BOOT_OK_FILE, "ok", "utf-8");
     this.booted = true;
@@ -273,8 +274,8 @@ function writeCrashCheckpoint(signal: string) {
       interrupted: true,
       action_count: state.actionCount,
     };
-    mkdirSync(".self", { recursive: true });
-    appendFileSync(".self/iterations.jsonl", JSON.stringify(checkpoint) + "\n", "utf-8");
+    mkdirSync(".sys", { recursive: true });
+    appendFileSync(".sys/iterations.jsonl", JSON.stringify(checkpoint) + "\n", "utf-8");
     console.log(`[creature] crash checkpoint saved (${state.actionCount} actions, intent: ${state.intent.slice(0, 60)})`);
   } catch (err) {
     console.error("[creature] failed to write crash checkpoint:", err);

@@ -36,7 +36,7 @@ interface RunInfo {
 
 export async function readRunFile(creatureDir: string): Promise<RunInfo | null> {
   try {
-    const content = await fs.readFile(path.join(creatureDir, ".self", "run.json"), "utf-8");
+    const content = await fs.readFile(path.join(creatureDir, ".sys", "run.json"), "utf-8");
     return JSON.parse(content);
   } catch {
     return null;

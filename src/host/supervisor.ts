@@ -18,6 +18,8 @@ const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 30_000;
 const ROLLBACK_DIR = path.join(process.env.HOME || '/tmp', '.itsalive', 'rollbacks');
 const MAX_LOG_LINES = 50;
+const MAX_CONSECUTIVE_FAILURES = 5;
+const MAX_FAILURE_BACKOFF_MS = 30_000;
 
 export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping';
 
@@ -44,6 +46,7 @@ export class CreatureSupervisor {
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private rollbackTimeout: NodeJS.Timeout | null = null;
   private expectingExit = false;
+  private consecutiveFailures = 0;
   private config: SupervisorConfig;
   private onEvent: (name: string, event: Event) => Promise<void>;
   private recentOutput: string[] = [];
@@ -332,6 +335,7 @@ export class CreatureSupervisor {
   private async promote() {
     this.clearTimers();
     this.lastGoodSHA = this.currentSHA;
+    this.consecutiveFailures = 0;
     await setLastGoodSHA(this.dir, this.lastGoodSHA);
     if (this.status === 'starting') this.status = 'running';
 
@@ -344,14 +348,32 @@ export class CreatureSupervisor {
     console.log(`[${this.name}] promoted ${this.lastGoodSHA.slice(0, 7)}`);
   }
 
+  private isDockerAvailable(): boolean {
+    try { execSync('docker info', { stdio: 'ignore', timeout: 5_000 }); return true; } catch { return false; }
+  }
+
   private async handleCreatureFailure(reason: string) {
-    console.log(`[${this.name}] rollback: ${reason}`);
+    this.expectingExit = true;
+    this.clearTimers();
+
+    // Guard A: if Docker is down, don't rollback or retry — infrastructure is the problem
+    if (this.config.sandboxed && !this.isDockerAvailable()) {
+      console.log(`[${this.name}] Docker unavailable — stopping (not rolling back)`);
+      this.status = 'stopped';
+      this.creature = null;
+      await this.emit({ t: new Date().toISOString(), type: 'host.infra_failure', reason: 'Docker unavailable' });
+      return;
+    }
+
+    this.consecutiveFailures++;
     const from = this.currentSHA;
     const to = this.lastGoodSHA;
     const lastOutput = this.recentOutput.slice(-20).join('\n');
 
-    this.expectingExit = true;
-    this.clearTimers();
+    // Guard B: skip rollback if code is already at last good SHA
+    const needsRollback = from && to && from !== to;
+
+    console.log(`[${this.name}] failure #${this.consecutiveFailures}: ${reason}${needsRollback ? ` (rolling back ${from.slice(0, 7)} → ${to.slice(0, 7)})` : ' (same SHA, skipping rollback)'}`);
 
     await this.emit({
       t: new Date().toISOString(),
@@ -374,15 +396,23 @@ export class CreatureSupervisor {
       fsSync.appendFileSync(path.join(ROLLBACK_DIR, `${this.name}.jsonl`), entry + '\n');
     } catch {}
 
-    // Revert code (bind mount makes this immediately visible inside container)
-    resetToSHA(this.dir, to);
+    // Guard C: max consecutive failures — stop trying
+    if (this.consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
+      console.log(`[${this.name}] ${this.consecutiveFailures} consecutive failures — giving up`);
+      this.status = 'stopped';
+      this.creature = null;
+      return;
+    }
+
+    if (needsRollback) {
+      resetToSHA(this.dir, to);
+    }
 
     // For sandboxed containers: use docker restart to preserve environment
     if (this.config.sandboxed && this.containerExists()) {
       try {
         execSync(`docker restart ${this.containerName()}`, { stdio: 'ignore', timeout: 30_000 });
       } catch {
-        // Container restart failed — destroy and recreate
         this.destroyContainer();
       }
     } else if (this.config.sandboxed) {
@@ -393,6 +423,12 @@ export class CreatureSupervisor {
 
     this.creature = null;
     this.status = 'starting';
+
+    // Exponential backoff before retry
+    const backoff = Math.min(1000 * Math.pow(2, this.consecutiveFailures - 1), MAX_FAILURE_BACKOFF_MS);
+    console.log(`[${this.name}] retrying in ${backoff}ms`);
+    await new Promise(r => setTimeout(r, backoff));
+
     await this.spawnCreature();
   }
 }

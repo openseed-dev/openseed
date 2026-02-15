@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN mkdir -p .self workspace
+RUN mkdir -p .sys workspace
 
 EXPOSE 7778
 

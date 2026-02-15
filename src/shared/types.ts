@@ -3,6 +3,7 @@ export type Event =
   | { t: string; type: "host.spawn"; pid: number; sha: string }
   | { t: string; type: "host.promote"; sha: string }
   | { t: string; type: "host.rollback"; from: string; to: string; reason: string }
+  | { t: string; type: "host.infra_failure"; reason: string }
   | { t: string; type: "creature.boot"; sha: string }
   | { t: string; type: "creature.thought"; text: string }
   | { t: string; type: "creature.sleep"; text: string; seconds: number; actions: number; watch?: string[] }

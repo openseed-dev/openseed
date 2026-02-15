@@ -7,7 +7,7 @@ import { Mind } from './mind.js';
 const PORT = parseInt(process.env.PORT || "7778");
 const HOST_URL = process.env.HOST_URL || "http://127.0.0.1:7770";
 const CREATURE_NAME = process.env.CREATURE_NAME || "";
-const BOOT_OK_FILE = ".self/boot-ok";
+const BOOT_OK_FILE = ".sys/boot-ok";
 const AUTO_ITERATE = process.env.AUTO_ITERATE !== "false";
 
 interface CreatureEvent {
@@ -23,7 +23,7 @@ class Creature {
 
   async start() {
     this.createServer();
-    await fs.mkdir(".self", { recursive: true });
+    await fs.mkdir(".sys", { recursive: true });
     await fs.writeFile(BOOT_OK_FILE, "ok", "utf-8");
     this.booted = true;
 

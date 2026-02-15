@@ -7,7 +7,7 @@ export function getCurrentSHA(cwd: string): string {
 }
 
 export async function getLastGoodSHA(cwd: string): Promise<string> {
-  const file = path.join(cwd, ".self", "last_good.txt");
+  const file = path.join(cwd, ".sys", "last_good.txt");
   try {
     const sha = await fs.readFile(file, "utf-8");
     return sha.trim();
@@ -17,7 +17,7 @@ export async function getLastGoodSHA(cwd: string): Promise<string> {
 }
 
 export async function setLastGoodSHA(cwd: string, sha: string) {
-  const file = path.join(cwd, ".self", "last_good.txt");
+  const file = path.join(cwd, ".sys", "last_good.txt");
   await fs.writeFile(file, sha, "utf-8");
 }
 

@@ -48,7 +48,7 @@ export class Mind {
   private drainInjections() {
     if (this.pendingInjections.length === 0) return;
     const combined = this.pendingInjections
-      .map(t => `[MESSAGE FROM YOUR CREATOR — process this and continue autonomously.]\n\n${t}`)
+      .map(t => `[SYSTEM MESSAGE — process this and continue autonomously.]\n\n${t}`)
       .join("\n\n---\n\n");
     this.pendingInjections = [];
 

@@ -8,7 +8,7 @@ export class EventStore {
   private listeners: Set<(event: Event) => void> = new Set();
 
   constructor(creatureDir: string) {
-    const selfDir = path.join(creatureDir, ".self");
+    const selfDir = path.join(creatureDir, ".sys");
     this.eventsFile = path.join(selfDir, "events.jsonl");
   }
 

@@ -19,7 +19,7 @@ import {
 
 const MAX_CONTEXT_CHARS = 100_000;
 const KEEP_RECENT_MESSAGES = 20;
-const ITERATIONS_FILE = ".self/iterations.jsonl";
+const ITERATIONS_FILE = ".sys/iterations.jsonl";
 const CONVERSATION_LOG = ".self/conversation.jsonl";
 const OBSERVATIONS_FILE = ".self/observations.md";
 const DREAMS_FILE = ".self/dreams.jsonl";
@@ -133,7 +133,7 @@ You run inside a long-lived Docker container. Your home is \`/creature\`.
 
 **Everything persists across normal restarts:**
 - Your source code (src/, PURPOSE.md, etc.) — git-tracked. Auto-committed.
-- \`/creature/.self/\` — observations, rules, dreams, conversation log.
+- \`/creature/.self/\` — your cognitive state: observations, rules, dreams, conversation log.
 - \`/creature/workspace/\` — NOT git-tracked. Clone repos, scratch files, downloads.
 - \`/creature/node_modules/\` — npm dependencies.
 - Packages installed via \`apt-get install\` or \`pip install\`.
@@ -204,11 +204,6 @@ and the world, injected into your context every time you wake up. Three priority
 Your conversation history is logged to .self/conversation.jsonl — search with rg if needed.
 When you sleep with meaningful activity, an observer compresses your session into new
 observations. On deep sleep, a reflector prunes stale entries.
-
-## Messages
-
-Your creator and user can send you messages at any time — they appear directly in this
-conversation as injected text. You don't need to poll any files for messages.
 
 ## Self-Improvement
 
@@ -990,7 +985,6 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
     }
 
     wakeMsg += `\nYour learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl — search with rg.`;
-    wakeMsg += `\nMessages from your creator appear directly in this conversation.`;
 
     const lastMsg = this.messages[this.messages.length - 1];
     if (lastMsg?.role === "user" && Array.isArray(lastMsg.content)) {
@@ -1252,7 +1246,6 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
       context += observations + "\n\n";
     }
     context += "Your learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl.\n";
-    context += "Messages from your creator appear directly in this conversation.\n";
     context += "You just woke up. What do you want to do?\n";
     return context;
   }

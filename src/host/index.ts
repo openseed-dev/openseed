@@ -35,7 +35,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-const COPY_SKIP = new Set(['node_modules', '.git', '.self']);
+const COPY_SKIP = new Set(['node_modules', '.git', '.self', '.sys']);
 async function copyDir(src: string, dest: string): Promise<void> {
   await fs.mkdir(dest, { recursive: true });
   for (const entry of await fs.readdir(src, { withFileTypes: true })) {
@@ -175,9 +175,10 @@ export class Orchestrator {
 
     const sandboxed = this.isDockerAvailable() && this.hasDockerImage(name);
     const autoIterate = !(opts?.manual);
-    const port = await this.allocatePort();
+    const existingPort = sandboxed ? this.getContainerPort(name) : null;
+    const port = existingPort || await this.allocatePort();
 
-    console.log(`[orchestrator] starting ${name} (${sandboxed ? 'docker' : 'no image — building required'}) on port ${port}`);
+    console.log(`[orchestrator] starting ${name} (${sandboxed ? 'docker' : 'no image — building required'}) on port ${port}${existingPort ? ' (existing container)' : ''}`); 
     await this.startCreatureInternal(name, dir, port, { sandboxed, autoIterate });
   }
 
@@ -202,6 +203,22 @@ export class Orchestrator {
 
     this.supervisors.set(name, supervisor);
     await supervisor.start();
+
+    // Recover creature status from event history (fixes stale "running" after orchestrator restart)
+    try {
+      const recent = await store.readRecent(50);
+      for (let i = recent.length - 1; i >= 0; i--) {
+        const t = recent[i].type;
+        if (t === 'creature.sleep') {
+          supervisor.status = 'sleeping';
+          console.log(`[${name}] recovered status: sleeping (from event history)`);
+          break;
+        }
+        if (t === 'creature.tool_call' || t === 'creature.wake' || t === 'creature.boot') {
+          break; // creature is active, "running" is correct
+        }
+      }
+    } catch {}
   }
 
   async stopCreature(name: string): Promise<void> {

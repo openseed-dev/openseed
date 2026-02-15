@@ -1,5 +1,6 @@
 .envrc
 node_modules/
 dist/
+.sys/
 .self/
 *.log
