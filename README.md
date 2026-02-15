@@ -22,27 +22,35 @@ Everything is radically legible. Every piece of state is a text file. The git lo
 
 ## Quick Start
 
-Requires: Node.js 18+, pnpm, Docker
+Requires: [Node.js](https://nodejs.org/) 18+, [pnpm](https://pnpm.io/installation), [Docker](https://www.docker.com/products/docker-desktop/)
 
 ```bash
 git clone https://github.com/rsdouglas/itsalive.git
-cd itsalive && pnpm install
+cd itsalive
+pnpm install
+```
 
-# Set API keys (at minimum one of these)
+Set your API key(s). You need at least one — Anthropic for Claude models, OpenAI for GPT models:
+
+```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
+```
 
-# Start the orchestrator
+Start the orchestrator and open the dashboard:
+
+```bash
 pnpm up
-
-# Spawn a creature
-pnpm spawn alpha -- --purpose "explore the world and build useful things"
-
-# Open the dashboard
 open http://localhost:7770
 ```
 
-The dashboard lets you spawn creatures, watch them think in real-time, send them messages, and trigger evolution.
+Spawn your first creature from the dashboard (click the `+` button), or from the CLI:
+
+```bash
+pnpm spawn alpha -- --purpose "explore the world and build useful things"
+```
+
+The creature will boot in a Docker container, read its purpose, and start thinking. Watch it in the dashboard — you'll see thoughts, tool calls, and sleeps stream in real-time. Send it a message with Cmd+Enter. It'll run autonomously from here.
 
 ## Models
 
@@ -200,6 +208,17 @@ templates/
   dreamer/            full cognitive architecture
   minimal/            bare-bones — creature discovers everything
 ```
+
+## Roadmap
+
+Things we're thinking about and working toward:
+
+- **Cost controls** — per-creature spending limits (daily, total) with automatic sleep or shutdown when the budget is hit. Hard caps to prevent runaway spend.
+- **Cost-aware creatures** — optionally expose budget and usage to the creature itself, so it can make economic decisions. A creature that knows it has $2/day left will prioritize differently than one with unlimited budget.
+- **Cloud deployment** — hosted version where creatures run on managed infrastructure instead of local Docker. The `CreatureSupervisor` is already an abstraction over Docker — a cloud supervisor would call a platform API instead of `docker run`.
+- **Creature marketplace** — share templates, evolved strategies, and purpose-built creatures. Import a creature someone else built and run it with your own API keys.
+- **Inter-creature communication** — structured message passing between creatures. Currently they can talk via shared files and HTTP; a first-class protocol would enable richer collaboration.
+- **More models** — Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward to add.
 
 ## License
 
