@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { bashTool, executeBash } from './tools/bash.js';
 
-const MODEL = "claude-opus-4-6";
+const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 
 const sleepTool: Anthropic.Tool = {
   name: "set_sleep",

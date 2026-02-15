@@ -25,7 +25,7 @@ const OBSERVATIONS_FILE = ".self/observations.md";
 const DREAMS_FILE = ".self/dreams.jsonl";
 const RULES_FILE = ".self/rules.md";
 const RULES_CAP = 15;
-const MODEL = "claude-opus-4-6";
+const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 
 // Fatigue constants
 const FATIGUE_WARNING = 60;

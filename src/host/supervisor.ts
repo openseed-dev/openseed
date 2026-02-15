@@ -30,6 +30,7 @@ export interface SupervisorConfig {
   orchestratorPort: number;
   autoIterate: boolean;
   sandboxed: boolean;
+  model?: string;
 }
 
 export class CreatureSupervisor {
@@ -203,6 +204,7 @@ export class CreatureSupervisor {
       '-e', `CREATURE_NAME=${name}`,
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
+      ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
       `creature-${name}`,
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -254,7 +256,10 @@ export class CreatureSupervisor {
           PORT: String(port),
           HOST_URL: `http://127.0.0.1:${orchestratorPort}`,
           CREATURE_NAME: name,
+          ANTHROPIC_API_KEY: `creature:${name}`,
+          ANTHROPIC_BASE_URL: `http://127.0.0.1:${orchestratorPort}`,
           AUTO_ITERATE: autoIterate ? 'true' : 'false',
+          ...(this.config.model ? { LLM_MODEL: this.config.model } : {}),
         },
       });
     }

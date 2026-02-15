@@ -10,10 +10,16 @@ import {
 } from './paths.js';
 import { readVersion } from './version.js';
 
+const KNOWN_MODELS = [
+  'claude-opus-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5',
+  'gpt-5.2', 'gpt-5-mini', 'o4-mini',
+];
+
 interface SpawnOptions {
   name: string;
   purpose?: string;
   template?: string;
+  model?: string;
 }
 
 const SKIP_DIRS = new Set(["node_modules", ".git", ".self", ".sys"]);
@@ -58,7 +64,12 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`spawning creature "${opts.name}"...`);
+  if (opts.model && !KNOWN_MODELS.includes(opts.model)) {
+    console.error(`unknown model "${opts.model}". known models: ${KNOWN_MODELS.join(', ')}`);
+    process.exit(1);
+  }
+
+  console.log(`spawning creature "${opts.name}"${opts.model ? ` with model ${opts.model}` : ''}...`);
 
   // Ensure parent dirs exist
   await fs.mkdir(CREATURES_DIR, { recursive: true });
@@ -67,14 +78,15 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
   await copyDir(tpl, dir);
 
   // Write birth certificate
-  const birth = {
+  const birth: Record<string, unknown> = {
     id: crypto.randomUUID(),
     name: opts.name,
     born: new Date().toISOString(),
-      template: opts.template || 'dreamer',
-      template_version: readVersion(),
+    template: opts.template || 'dreamer',
+    template_version: readVersion(),
     parent: null,
   };
+  if (opts.model) birth.model = opts.model;
   await fs.writeFile(path.join(dir, "BIRTH.json"), JSON.stringify(birth, null, 2) + "\n", "utf-8");
 
   // Override PURPOSE.md if custom purpose provided

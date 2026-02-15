@@ -5,9 +5,15 @@ import os from 'node:os';
 
 const USAGE_FILE = path.join(os.homedir(), '.itsalive', 'usage.json');
 
-// Opus 4.6 pricing
-const INPUT_COST_PER_TOKEN = 5 / 1_000_000;   // $5 per 1M input tokens
-const OUTPUT_COST_PER_TOKEN = 25 / 1_000_000;  // $25 per 1M output tokens
+const PRICING: Record<string, { input: number; output: number }> = {
+  'claude-opus-4-6':   { input: 5 / 1e6,    output: 25 / 1e6 },
+  'claude-sonnet-4-5': { input: 3 / 1e6,    output: 15 / 1e6 },
+  'claude-haiku-4-5':  { input: 1 / 1e6,    output: 5 / 1e6 },
+  'gpt-5.2':           { input: 1.75 / 1e6, output: 14 / 1e6 },
+  'gpt-5-mini':        { input: 0.25 / 1e6, output: 2 / 1e6 },
+  'o4-mini':           { input: 1.1 / 1e6,  output: 4.4 / 1e6 },
+};
+const DEFAULT_PRICING = PRICING['claude-opus-4-6'];
 
 export interface UsageEntry {
   input_tokens: number;
@@ -29,11 +35,12 @@ export class CostTracker {
     process.on('SIGTERM', () => { this.saveSync(); process.exit(0); });
   }
 
-  record(name: string, inputTokens: number, outputTokens: number) {
+  record(name: string, inputTokens: number, outputTokens: number, model?: string) {
     const entry = this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0 };
+    const p = (model && PRICING[model]) || DEFAULT_PRICING;
     entry.input_tokens += inputTokens;
     entry.output_tokens += outputTokens;
-    entry.cost_usd += inputTokens * INPUT_COST_PER_TOKEN + outputTokens * OUTPUT_COST_PER_TOKEN;
+    entry.cost_usd += inputTokens * p.input + outputTokens * p.output;
     entry.calls += 1;
     this.usage.set(name, entry);
     this.dirty = true;

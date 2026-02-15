@@ -15,7 +15,7 @@ function usage(): never {
 
 commands:
   up [--port 7770]                start the orchestrator + dashboard
-  spawn <name> [--purpose "..."] [--template dreamer|minimal]  create a new creature
+  spawn <name> [--purpose "..."] [--template dreamer|minimal] [--model <model>]  create a new creature
   start <name> [--manual]          start a creature (requires orchestrator)
   stop <name>                      stop a running creature
   list                             list all creatures and their status
@@ -61,7 +61,8 @@ async function main() {
       }
       const purpose = parseFlag(args, "--purpose");
       const template = parseFlag(args, "--template");
-      await spawn({ name, purpose, template: template || undefined });
+      const model = parseFlag(args, "--model");
+      await spawn({ name, purpose, template: template || undefined, model: model || undefined });
       break;
     }
 

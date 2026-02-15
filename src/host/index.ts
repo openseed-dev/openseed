@@ -16,6 +16,7 @@ import { Event } from '../shared/types.js';
 import { CostTracker } from './costs.js';
 import { Creator } from './creator.js';
 import { EventStore } from './events.js';
+import { handleLLMProxy } from './proxy.js';
 import {
   CreatureSupervisor,
   SupervisorConfig,
@@ -190,11 +191,19 @@ export class Orchestrator {
     await store.init();
     this.stores.set(name, store);
 
+    // Read model from BIRTH.json if present
+    let model: string | undefined;
+    try {
+      const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
+      model = birth.model;
+    } catch {}
+
     const config: SupervisorConfig = {
       name, dir, port,
       orchestratorPort: this.port,
       autoIterate: opts.autoIterate,
       sandboxed: opts.sandboxed,
+      model,
     };
 
     const supervisor = new CreatureSupervisor(config, async (n, event) => {
@@ -235,7 +244,7 @@ export class Orchestrator {
     await supervisor.restart();
   }
 
-  async spawnCreature(name: string, dir: string, purpose?: string, template = 'dreamer'): Promise<void> {
+  async spawnCreature(name: string, dir: string, purpose?: string, template = 'dreamer', model?: string): Promise<void> {
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
     const tpl = path.resolve(thisDir, '..', '..', 'templates', template);
     try { await fs.access(tpl); } catch { throw new Error(`template "${template}" not found at ${tpl}`); }
@@ -243,7 +252,7 @@ export class Orchestrator {
     await fs.mkdir(CREATURES_DIR, { recursive: true });
     await copyDir(tpl, dir);
 
-    const birth = {
+    const birth: Record<string, unknown> = {
       id: crypto.randomUUID(),
       name,
       born: new Date().toISOString(),
@@ -251,6 +260,7 @@ export class Orchestrator {
       template_version: '0.0.0',
       parent: null,
     };
+    if (model) birth.model = model;
     await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
 
     if (purpose) {
@@ -476,42 +486,9 @@ export class Orchestrator {
       }
 
       // LLM proxy — creatures call this instead of api.anthropic.com
+      // Detects model from request body, routes to Anthropic or OpenAI (with translation)
       if (p === '/v1/messages' && req.method === 'POST') {
-        // Creature name encoded in the api key as "creature:<name>"
-        const apiKeyHeader = req.headers['x-api-key'] as string || '';
-        const creatureName = apiKeyHeader.startsWith('creature:') ? apiKeyHeader.slice(9) : (req.headers['x-creature-name'] as string || 'unknown');
-        const body = await readBody(req);
-        try {
-          const apiKey = process.env.ANTHROPIC_API_KEY;
-          if (!apiKey) { res.writeHead(500); res.end('no API key configured'); return; }
-          const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': req.headers['anthropic-version'] as string || '2023-06-01',
-            },
-            body,
-          });
-          const respBody = await upstream.text();
-          // Track tokens + log response metadata
-          try {
-            const parsed = JSON.parse(respBody);
-            if (parsed.usage) {
-              this.costs.record(creatureName, parsed.usage.input_tokens || 0, parsed.usage.output_tokens || 0);
-            }
-            if (parsed.stop_reason) {
-              console.log(`[proxy:${creatureName}] stop_reason=${parsed.stop_reason} content_blocks=${(parsed.content || []).length}`);
-            }
-          } catch {}
-          res.writeHead(upstream.status, {
-            'content-type': upstream.headers.get('content-type') || 'application/json',
-          });
-          res.end(respBody);
-        } catch (err: any) {
-          console.error(`[proxy] LLM proxy error for ${creatureName}:`, err.message);
-          res.writeHead(502); res.end('proxy error');
-        }
+        await handleLLMProxy(req, res, this.costs);
         return;
       }
 
@@ -535,6 +512,7 @@ export class Orchestrator {
           const name = (body.name || '').trim();
           const purpose = (body.purpose || '').trim();
           const template = (body.template || 'dreamer').trim();
+          const model = (body.model || '').trim() || undefined;
           if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
           const dir = path.join(CREATURES_DIR, name);
           try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e: any) { if (e.message.includes('already exists')) throw e; }
@@ -544,7 +522,7 @@ export class Orchestrator {
           res.end(JSON.stringify({ ok: true, name, status: 'spawning' }));
 
           await this.emitEvent(name, { type: 'creature.spawning', t: new Date().toISOString() } as any);
-          this.spawnCreature(name, dir, purpose, template).then(async () => {
+          this.spawnCreature(name, dir, purpose, template, model).then(async () => {
             console.log(`[orchestrator] creature "${name}" ready`);
             await this.emitEvent(name, { type: 'creature.spawned', t: new Date().toISOString() } as any);
           }).catch(async (err) => {
