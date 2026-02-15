@@ -4,15 +4,18 @@ import {
 } from 'node:fs';
 import fs from 'node:fs/promises';
 
-import Anthropic from '@anthropic-ai/sdk';
+import {
+  generateText,
+  type ModelMessage,
+  tool,
+} from 'ai';
+import { z } from 'zod';
+
+import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { Memory } from './memory.js';
+import { executeBash } from './tools/bash.js';
 import {
-  bashTool,
-  executeBash,
-} from './tools/bash.js';
-import {
-  browserTool,
   closeBrowser,
   executeBrowser,
 } from './tools/browser.js';
@@ -27,6 +30,12 @@ const RULES_FILE = ".self/rules.md";
 const RULES_CAP = 15;
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 
+const provider = createAnthropic({
+  baseURL: process.env.ANTHROPIC_BASE_URL
+    ? `${process.env.ANTHROPIC_BASE_URL}/v1`
+    : undefined,
+});
+
 // Fatigue constants
 const FATIGUE_WARNING = 60;
 const FATIGUE_LIMIT = 80;
@@ -38,52 +47,63 @@ const PROGRESS_CHECK_INTERVAL = 15;
 
 const LIGHTWEIGHT_CONSOLIDATION_THRESHOLD = 5;
 
-const sleepTool: Anthropic.Tool = {
-  name: "set_sleep",
-  description:
-    "Pause and sleep for N seconds before continuing. Use this to pace yourself. Min 2s, max 86400s (24 hours). Use longer sleeps when waiting for external responses (PR reviews, comment replies). Short sleeps (30-300s) for pacing within a task. Background processes you started before sleeping stay alive — use them with the `wakeup` command to wake yourself early when a condition fires.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      seconds: {
-        type: "number",
-        description: "Seconds to sleep (2-86400)",
-      },
-    },
-    required: ["seconds"],
-  },
-};
+const tools = {
+  bash: tool({
+    description: `Execute a bash command. Use this to interact with the system and the world.
+Commands time out after 120s by default. You have no terminal — interactive prompts will fail.`,
+    inputSchema: z.object({
+      command: z.string().describe("The bash command to execute"),
+      timeout: z.number().describe("Timeout in milliseconds (default: 120000)").optional(),
+    }),
+  }),
+  browser: tool({
+    description: `Control a headless Chromium browser with a persistent profile. Cookies, sessions, logins, and localStorage survive across restarts.
 
-const requestRestartTool: Anthropic.Tool = {
-  name: "request_restart",
-  description:
-    "Request a restart to apply code changes you've made to your own source files. The system validates your TypeScript before restarting. If it doesn't compile, you'll get the error back.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      reason: {
-        type: "string",
-        description: "Why you want to restart (what did you change?)",
-      },
-    },
-    required: ["reason"],
-  },
-};
+Actions:
+- goto { url } — navigate to URL
+- click { selector } — click an element
+- fill { selector, text } — clear a field and type text
+- type { selector, text } — type text without clearing (for search boxes etc.)
+- press { key } — press a keyboard key (Enter, Tab, Escape, etc.)
+- snapshot — get current page state without acting
+- evaluate { script } — run JavaScript on the page
+- wait { selector?, ms? } — wait for an element or a duration
+- tabs — list open tabs
+- switch_tab { index } — switch to a different tab
+- new_tab { url? } — open a new tab
+- info — get the raw CDP endpoint URL for direct access
+- close — shut down the browser (profile is preserved on disk)
 
-const requestEvolutionTool: Anthropic.Tool = {
-  name: "request_evolution",
-  description:
-    "Ask the Creator (your peer, an evolutionary architect) to evaluate and improve your cognitive architecture. Use this when you recognize a limitation you can't fix yourself, or when you want help with changes that require a rebuild.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      reason: {
-        type: "string",
-        description: "What limitation or improvement you need. Be specific.",
-      },
-    },
-    required: ["reason"],
-  },
+Every action returns a text snapshot of the page: URL, title, visible text, and interactive elements.`,
+    inputSchema: z.object({
+      action: z.enum(["goto", "click", "fill", "type", "press", "snapshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"]).describe("The browser action to perform"),
+      url: z.string().describe("URL for goto/new_tab").optional(),
+      selector: z.string().describe("CSS/text/role selector for click/fill/type/wait").optional(),
+      text: z.string().describe("Text for fill/type").optional(),
+      key: z.string().describe("Key name for press (Enter, Tab, Escape, etc.)").optional(),
+      script: z.string().describe("JavaScript for evaluate").optional(),
+      index: z.number().describe("Tab index for switch_tab").optional(),
+      ms: z.number().describe("Milliseconds for wait").optional(),
+    }),
+  }),
+  set_sleep: tool({
+    description: "Pause and sleep for N seconds before continuing. Use this to pace yourself. Min 2s, max 86400s (24 hours). Use longer sleeps when waiting for external responses (PR reviews, comment replies). Short sleeps (30-300s) for pacing within a task. Background processes you started before sleeping stay alive — use them with the `wakeup` command to wake yourself early when a condition fires.",
+    inputSchema: z.object({
+      seconds: z.number().describe("Seconds to sleep (2-86400)"),
+    }),
+  }),
+  request_restart: tool({
+    description: "Request a restart to apply code changes you've made to your own source files. The system validates your TypeScript before restarting. If it doesn't compile, you'll get the error back.",
+    inputSchema: z.object({
+      reason: z.string().describe("Why you want to restart (what did you change?)"),
+    }),
+  }),
+  request_evolution: tool({
+    description: "Ask the Creator (your peer, an evolutionary architect) to evaluate and improve your cognitive architecture. Use this when you recognize a limitation you can't fix yourself, or when you want help with changes that require a rebuild.",
+    inputSchema: z.object({
+      reason: z.string().describe("What limitation or improvement you need. Be specific."),
+    }),
+  }),
 };
 
 async function buildSystemPrompt(purpose: string): Promise<string> {
@@ -91,7 +111,7 @@ async function buildSystemPrompt(purpose: string): Promise<string> {
   try {
     rules = (await fs.readFile(RULES_FILE, "utf-8")).trim();
   } catch {
-    // No rules yet — creature hasn't learned any
+    // No rules yet
   }
 
   const rulesSection = rules
@@ -283,12 +303,10 @@ export type SpecialToolCallback = (tool: string, reason: string) => Promise<void
 export type WakeCallback = (reason: string, source: "manual" | "watcher" | "timer") => Promise<void>;
 
 export class Mind {
-  private client: Anthropic;
   private memory: Memory;
-  private messages: Anthropic.MessageParam[] = [];
+  private messages: ModelMessage[] = [];
   private systemPrompt = "";
   private purpose = "";
-  private tools: Anthropic.Tool[] = [];
 
   // Fatigue / dream state
   private actionsSinceDream = 0;
@@ -304,9 +322,7 @@ export class Mind {
   private currentActionCount = 0;
 
   constructor(memory: Memory) {
-    this.client = new Anthropic();
     this.memory = memory;
-    // Restore dream count from disk so deep sleep survives restarts
     try {
       const content = readFileSync(DREAMS_FILE, "utf-8");
       this.dreamCount = content.trim().split("\n").filter((l) => l).length;
@@ -344,20 +360,16 @@ export class Mind {
   }
 
   inject(text: string) {
-    // Buffer injections — drained at a safe point before the next LLM call
     this.pendingInjections.push(text);
     console.log(`[mind] buffered creator message: ${text.slice(0, 80)}`);
 
-    // Persist substantive creator messages as RED observations so they survive restarts
     if (text.length > 20) {
       const hhmm = new Date().toTimeString().slice(0, 5);
       const truncated = text.length > 150 ? text.slice(0, 147) + "..." : text;
       const obs = `RED ${hhmm} Creator directive: ${truncated}`;
       try {
         appendFileSync(OBSERVATIONS_FILE, obs + "\n", "utf-8");
-      } catch {
-        // File might not exist yet; will be created on next consolidation
-      }
+      } catch {}
     }
   }
 
@@ -391,7 +403,6 @@ export class Mind {
     this.onSpecialTool = onSpecialTool || null;
     this.purpose = await this.loadPurpose();
     this.systemPrompt = await buildSystemPrompt(this.purpose);
-    this.tools = [bashTool as Anthropic.Tool, browserTool as Anthropic.Tool, sleepTool, requestRestartTool, requestEvolutionTool];
 
     const initialContext = await this.buildInitialContext();
     this.messages = [];
@@ -406,7 +417,7 @@ export class Mind {
       // Check fatigue before each LLM call
       if (this.actionsSinceDream >= FATIGUE_LIMIT) {
         console.log(`[mind] fatigue limit hit (${this.actionsSinceDream} actions) — forcing consolidation`);
-        this.pushMessage({ role: "user", content: "[SYSTEM] You're exhausted. Sleeping now for memory consolidation." } as any);
+        this.pushMessage({ role: "user", content: "[SYSTEM] You're exhausted. Sleeping now for memory consolidation." });
 
         const summary = this.extractSummary(monologueSinceSleep);
         await this.saveCheckpoint(summary, actionsSinceSleep, DEEP_SLEEP_PAUSE);
@@ -432,7 +443,6 @@ export class Mind {
 
       if (this.actionsSinceDream >= FATIGUE_WARNING && !this.fatigueWarned) {
         this.fatigueWarned = true;
-        // Append warning to last user message or add new one
         const warnText = "[SYSTEM] You've been active for a while. Start wrapping up your current task — you'll need to rest soon for memory consolidation.";
         const last = this.messages[this.messages.length - 1];
         if (last?.role === "user" && Array.isArray(last.content)) {
@@ -440,27 +450,24 @@ export class Mind {
         } else if (last?.role === "user" && typeof last.content === "string") {
           last.content += "\n\n" + warnText;
         }
-        // If last message is assistant, we can't add a user message here without breaking alternation,
-        // so we'll let it be picked up on the next cycle
         console.log(`[mind] fatigue warning injected at ${this.actionsSinceDream} actions`);
       }
 
-      // Rebuild system prompt so learned rules are always current
       this.systemPrompt = await buildSystemPrompt(this.purpose);
 
       this.drainInjections();
 
-      let response: Anthropic.Message;
+      let result;
       try {
-        response = await this.client.messages.create({
-          model: MODEL,
-          max_tokens: 16384,
+        result = await generateText({
+          model: provider(MODEL),
+          maxOutputTokens: 16384,
           system: this.systemPrompt,
-          tools: this.tools,
+          tools,
           messages: this.messages,
         });
         retryDelay = 1000;
-        console.log(`[mind] LLM: stop_reason=${response.stop_reason} blocks=${response.content.map(b => b.type === 'tool_use' ? `tool_use(${(b as any).name},input_keys=${Object.keys((b as any).input || {})})` : b.type).join(',')}`);
+        console.log(`[mind] LLM: finish=${result.finishReason} toolCalls=${result.toolCalls.map(tc => tc.toolName).join(',') || 'none'}`);
       } catch (err: any) {
         if (err?.status === 400 && this.messages.length > 2) {
           console.error(`[mind] 400 bad request — dropping last 2 messages to recover`);
@@ -478,84 +485,82 @@ export class Mind {
       }
 
       // Collect text
-      const text = response.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
+      const text = result.text || "";
       if (text) {
         monologueSinceSleep += (monologueSinceSleep ? "\n\n" : "") + text;
         this.monologueSinceDream += (this.monologueSinceDream ? "\n\n" : "") + text;
         if (onThought) await onThought(text);
       }
 
-      // Extract tool uses
-      const toolUses = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
-      );
-
       // No tool calls — model just talked
-      if (toolUses.length === 0) {
-        this.pushMessage({ role: "assistant", content: response.content });
+      if (result.toolCalls.length === 0) {
+        this.messages.push(...result.response.messages);
         this.pushMessage({ role: "user", content: "Continue. Use your tools to take action." });
         await this.maybeArchiveOverflow();
         continue;
       }
 
       // Process tool calls
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      const toolResults: Array<{ type: 'tool-result'; toolCallId: string; toolName: string; input: unknown; output: { type: 'text'; value: string } }> = [];
       let sleepSeconds: number | null = null;
 
-      for (const tu of toolUses) {
-        if (tu.name === "set_sleep") {
-          const input = tu.input as { seconds: number };
+      for (const tc of result.toolCalls) {
+        const input = tc.input as Record<string, any>;
+
+        if (tc.toolName === "set_sleep") {
           sleepSeconds = Math.max(2, Math.min(86400, input.seconds || 30));
           toolResults.push({
-            type: "tool_result" as const,
-            tool_use_id: tu.id,
-            content: `Sleeping for ${sleepSeconds}s. You will continue this conversation when you wake up. Background processes keep running — use \`wakeup "reason"\` from a background script to wake early.`,
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input,
+            output: { type: 'text', value: `Sleeping for ${sleepSeconds}s. You will continue this conversation when you wake up. Background processes keep running — use \`wakeup "reason"\` from a background script to wake early.` },
           });
           continue;
         }
 
-        if (tu.name === "request_restart" || tu.name === "request_evolution") {
-          const input = tu.input as { reason: string };
+        if (tc.toolName === "request_restart" || tc.toolName === "request_evolution") {
           toolResults.push({
-            type: "tool_result" as const,
-            tool_use_id: tu.id,
-            content: `Request sent: ${tu.name} — "${input.reason}". The system will handle this.`,
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input,
+            output: { type: 'text', value: `Request sent: ${tc.toolName} — "${input.reason}". The system will handle this.` },
           });
           if (this.onSpecialTool) {
-            await this.onSpecialTool(tu.name, input.reason);
+            await this.onSpecialTool(tc.toolName, input.reason);
           }
           continue;
         }
 
         const start = Date.now();
-        const args = tu.input as Record<string, unknown>;
-        const result = await this.executeTool(tu.name, args);
+        const args = input as Record<string, unknown>;
+        const execResult = await this.executeTool(tc.toolName, args);
         const ms = Date.now() - start;
 
-        actionsSinceSleep.push({ tool: tu.name, args, result, ms });
+        actionsSinceSleep.push({ tool: tc.toolName, args, result: execResult, ms });
         this.actionsSinceDream++;
         this.actionsSinceProgressCheck++;
         this.currentActionCount = actionsSinceSleep.length;
 
         if (onToolResult) {
-          await onToolResult(tu.name, args, result, ms);
+          await onToolResult(tc.toolName, args, execResult, ms);
         }
 
-        const resultContent = result.ok
-          ? JSON.stringify(result.data).slice(0, 8000)
-          : `Error: ${result.error}`;
+        const resultContent = execResult.ok
+          ? JSON.stringify(execResult.data).slice(0, 8000)
+          : `Error: ${execResult.error}`;
 
         toolResults.push({
-          type: "tool_result" as const,
-          tool_use_id: tu.id,
-          content: resultContent,
+          type: "tool-result",
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          input,
+          output: { type: 'text', value: resultContent },
         });
       }
 
-      // Progress check: escalating self-evaluation every N actions
+      // Progress check
       if (this.actionsSinceProgressCheck >= PROGRESS_CHECK_INTERVAL) {
         this.progressCheckCount++;
         const totalActions = this.progressCheckCount * PROGRESS_CHECK_INTERVAL;
@@ -569,15 +574,21 @@ export class Mind {
         } else {
           checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nWhat have you accomplished? If genuinely stuck, try a different approach to the SAME goal — switching tasks entirely should be a last resort.`;
         }
-        (toolResults as any[]).push({ type: "text", text: checkMsg });
+        // Append progress check as additional text in tool results
+        toolResults.push({
+          type: "tool-result",
+          toolCallId: result.toolCalls[result.toolCalls.length - 1].toolCallId,
+          toolName: result.toolCalls[result.toolCalls.length - 1].toolName,
+          output: { type: 'text', value: checkMsg },
+        } as any);
         if (onProgressCheck) await onProgressCheck(this.actionsSinceProgressCheck);
         console.log(`[mind] progress check #${this.progressCheckCount} at ${this.actionsSinceProgressCheck} actions`);
         this.actionsSinceProgressCheck = 0;
       }
 
       // Append this exchange to conversation
-      this.pushMessage({ role: "assistant", content: response.content });
-      this.pushMessage({ role: "user", content: toolResults });
+      this.messages.push(...result.response.messages);
+      this.pushMessage({ role: "tool", content: toolResults });
 
       // Handle sleep
       if (sleepSeconds !== null) {
@@ -593,17 +604,13 @@ export class Mind {
         const eligibleForConsolidation = sleepSeconds >= QUICK_NAP_THRESHOLD
           && timeSinceLastDream >= MIN_DREAM_INTERVAL_MS;
 
-        // Smart consolidation: skip on 0 actions, lightweight on < 5, full on 5+
         let consolidated = false;
         if (actionCount === 0) {
-          // Nothing happened — just sleep, no LLM call
           console.log(`[mind] skipping consolidation — 0 actions`);
         } else if (actionCount < LIGHTWEIGHT_CONSOLIDATION_THRESHOLD && eligibleForConsolidation) {
-          // Lightweight: save the creature's own sleep summary as a minimal dream
           await this.lightweightConsolidate(summary, actionCount, onDream);
           consolidated = true;
         } else if (eligibleForConsolidation) {
-          // Full consolidation with observer LLM call
           await this.consolidate(onDream);
           consolidated = true;
         }
@@ -612,7 +619,6 @@ export class Mind {
           ? Math.max(sleepSeconds, DEEP_SLEEP_PAUSE)
           : sleepSeconds;
 
-        // Release Chromium processes during sleep to save CPU
         await closeBrowser();
 
         console.log(`[mind] sleeping for ${actualPause}s${consolidated ? " (with consolidation)" : ""}`);
@@ -633,15 +639,9 @@ export class Mind {
             : `[${now}] You slept for ${this.formatDuration(sleepSeconds)}. You're awake now. Continue where you left off.`;
           const lastMsg = this.messages[this.messages.length - 1];
           if (lastMsg.role === "user" && Array.isArray(lastMsg.content)) {
-            (lastMsg.content as any[]).push({
-              type: "text" as const,
-              text: wakeText,
-            });
+            (lastMsg.content as any[]).push({ type: "text" as const, text: wakeText });
           } else {
-            this.pushMessage({
-              role: "user",
-              content: wakeText,
-            });
+            this.pushMessage({ role: "user", content: wakeText });
           }
         }
 
@@ -652,19 +652,18 @@ export class Mind {
         this.progressCheckCount = 0;
       }
 
-      // Emergency overflow protection (shouldn't normally trigger — consolidation handles it)
       await this.maybeArchiveOverflow();
     }
   }
 
   // --- Conversation Log ---
 
-  private pushMessage(msg: Anthropic.MessageParam) {
+  private pushMessage(msg: ModelMessage) {
     this.messages.push(msg);
     this.appendToLog(msg);
   }
 
-  private async appendToLog(msg: Anthropic.MessageParam) {
+  private async appendToLog(msg: ModelMessage) {
     try {
       const content = typeof msg.content === "string"
         ? msg.content
@@ -672,12 +671,10 @@ export class Mind {
       const entry = JSON.stringify({
         t: new Date().toISOString(),
         role: msg.role,
-        content: content.slice(0, 10_000), // cap per-entry size
+        content: content.slice(0, 10_000),
       });
       await fs.appendFile(CONVERSATION_LOG, entry + "\n", "utf-8");
-    } catch {
-      // Never crash cognition over a log write failure
-    }
+    } catch {}
   }
 
   // --- Lightweight Consolidation (no LLM call) ---
@@ -729,9 +726,9 @@ export class Mind {
 
     let consolidation: string;
     try {
-      const resp = await this.client.messages.create({
-        model: MODEL,
-        max_tokens: 2048,
+      const resp = await generateText({
+        model: provider(MODEL),
+        maxOutputTokens: 2048,
         system: `You are the observer — the consolidating mind of an autonomous creature. Your purpose: ${this.purpose}
 
 You have three jobs:
@@ -780,16 +777,12 @@ RULES:
         }],
       });
 
-      consolidation = resp.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
+      consolidation = resp.text || "";
     } catch (err) {
       console.error("[mind] consolidation LLM call failed:", err);
       consolidation = `OBSERVATIONS:\nRED ${time} Consolidation failed\n\nREFLECTION:\nUnable to reflect.\n\nRULES:\nnone`;
     }
 
-    // Parse response
     const obsMatch = consolidation.match(/OBSERVATIONS:\s*\n([\s\S]*?)(?=\nREFLECTION:)/);
     const refMatch = consolidation.match(/REFLECTION:\s*\n([\s\S]*?)(?=\nRULES:)/);
     const rulesMatch = consolidation.match(/RULES:\s*\n([\s\S]*?)$/);
@@ -798,12 +791,10 @@ RULES:
     const reflection = refMatch?.[1]?.trim() || "No reflection.";
     const newRulesRaw = rulesMatch?.[1]?.trim() || "";
 
-    // Merge new rules
     if (newRulesRaw && newRulesRaw.toLowerCase() !== "none") {
       await this.mergeRules(newRulesRaw);
     }
 
-    // Append observations under today's date header
     if (observations) {
       await this.appendObservations(observations);
     }
@@ -850,14 +841,11 @@ RULES:
     try {
       const existing = await fs.readFile(OBSERVATIONS_FILE, "utf-8");
       if (existing.includes(`## ${today}`)) {
-        // Today's section exists — append to it
         await fs.appendFile(OBSERVATIONS_FILE, newObs + "\n", "utf-8");
       } else {
-        // New day — add header
         await fs.appendFile(OBSERVATIONS_FILE, header + newObs + "\n", "utf-8");
       }
     } catch {
-      // File doesn't exist — create with header
       await fs.writeFile(OBSERVATIONS_FILE, `# Observations\n${header}${newObs}\n`, "utf-8");
     }
   }
@@ -869,7 +857,6 @@ RULES:
   private trimMessages() {
     if (this.messages.length <= KEEP_RECENT_MESSAGES + 1) return;
 
-    // Find safe split point before an assistant message
     let splitAt = Math.max(1, this.messages.length - KEEP_RECENT_MESSAGES);
     while (splitAt < this.messages.length - 2) {
       if (this.messages[splitAt].role === "assistant") break;
@@ -888,13 +875,12 @@ RULES:
   // --- Deep Sleep (Reflector) ---
 
   private async deepSleep(): Promise<void> {
-    // 1. Prune observations with priority awareness
     try {
       const obsContent = await fs.readFile(OBSERVATIONS_FILE, "utf-8");
       if (obsContent.length > 3000) {
-        const resp = await this.client.messages.create({
-          model: MODEL,
-          max_tokens: 4096,
+        const resp = await generateText({
+          model: provider(MODEL),
+          maxOutputTokens: 4096,
           system: `You are the reflector — pruning an observations file for an autonomous creature.
 
 Rules for pruning:
@@ -908,28 +894,22 @@ Rules for pruning:
 Current time: ${new Date().toISOString()}`,
           messages: [{ role: "user", content: obsContent }],
         });
-        const pruned = resp.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
+        const pruned = resp.text || "";
         if (pruned.length > 50) {
           await fs.writeFile(OBSERVATIONS_FILE, pruned + "\n", "utf-8");
           console.log(`[mind] pruned observations: ${obsContent.length} → ${pruned.length} chars`);
         }
       }
-    } catch {
-      // No observations file yet
-    }
+    } catch {}
 
-    // 2. Review rules (no hard cap — let LLM decide)
     try {
       const rulesContent = await fs.readFile(RULES_FILE, "utf-8");
       const ruleLines = rulesContent.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
       if (ruleLines.length > 0) {
         const obs = await this.readObservations();
-        const resp = await this.client.messages.create({
-          model: MODEL,
-          max_tokens: 1024,
+        const resp = await generateText({
+          model: provider(MODEL),
+          maxOutputTokens: 1024,
           system: `You are reviewing an autonomous creature's learned rules. Given its recent observations, decide which rules are still relevant.
 
 Drop rules that:
@@ -942,29 +922,21 @@ Merge overlapping rules into general principles. Prefer broad behavioral wisdom 
 Aim for 5-15 rules total. Output only the final rules, one per line starting with "- ".`,
           messages: [{ role: "user", content: `Current rules:\n${ruleLines.join("\n")}\n\nRecent observations:\n${(obs || "").slice(-3000)}` }],
         });
-        const pruned = resp.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
+        const pruned = resp.text || "";
         const prunedLines = pruned.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
         if (prunedLines.length > 0) {
           await fs.writeFile(RULES_FILE, prunedLines.join("\n") + "\n", "utf-8");
           console.log(`[mind] pruned rules: ${ruleLines.length} → ${prunedLines.length}`);
         }
       }
-    } catch {
-      // No rules file yet
-    }
+    } catch {}
 
-    // 3. Write diary entry
     try {
       const dreams = await this.readRecentDreams(3);
       const entry = `\n## ${new Date().toISOString().slice(0, 16)} — Deep Sleep\n\n${dreams}\n`;
       await fs.appendFile("self/diary.md", entry, "utf-8");
       console.log(`[mind] wrote diary entry`);
-    } catch {
-      // diary dir might not exist
-    }
+    } catch {}
   }
 
   // --- Wake Up ---
@@ -1046,7 +1018,6 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
   }
 
   private async mergeRules(newRulesRaw: string): Promise<void> {
-    // Parse new rules — each line starting with - is a rule
     const newRules = newRulesRaw
       .split("\n")
       .map((l) => l.trim())
@@ -1054,19 +1025,14 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
 
     if (newRules.length === 0) return;
 
-    // Read existing
     let existing: string[] = [];
     try {
       const content = await fs.readFile(RULES_FILE, "utf-8");
       existing = content.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
-    } catch {
-      // No file yet
-    }
+    } catch {}
 
-    // Normalize new rules to "- " prefix
     const normalized = newRules.map((r) => r.startsWith("-") ? r : `- ${r}`);
 
-    // Simple dedup: skip if first 30 chars of a new rule match an existing one
     for (const rule of normalized) {
       const sig = rule.slice(0, 30).toLowerCase();
       const isDup = existing.some((e) => e.slice(0, 30).toLowerCase() === sig);
@@ -1075,20 +1041,16 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
       }
     }
 
-    // Hard cap: if rules exceed limit, trigger immediate LLM-assisted prune
     if (existing.length > RULES_CAP) {
       console.log(`[mind] rules exceed cap (${existing.length}/${RULES_CAP}), pruning…`);
       try {
-        const resp = await this.client.messages.create({
-          model: MODEL,
-          max_tokens: 1024,
+        const resp = await generateText({
+          model: provider(MODEL),
+          maxOutputTokens: 1024,
           system: `You are pruning an autonomous creature's rules list which has grown too long. Keep the most important general behavioral principles. Drop rules that reference specific one-time tasks, are too narrow, or overlap. Merge similar rules. Target ${RULES_CAP} rules max. Output only the final rules, one per line starting with "- ".`,
           messages: [{ role: "user", content: `Current rules (${existing.length}):\n${existing.join("\n")}` }],
         });
-        const pruned = resp.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
+        const pruned = resp.text || "";
         const prunedLines = pruned.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
         if (prunedLines.length > 0 && prunedLines.length <= RULES_CAP) {
           existing = prunedLines;
@@ -1103,7 +1065,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
     console.log(`[mind] rules updated — ${existing.length} total`);
   }
 
-  // --- Overflow Protection (safety net, rarely triggers) ---
+  // --- Overflow Protection ---
 
   private async maybeArchiveOverflow(): Promise<void> {
     const totalChars = this.messages.reduce(
@@ -1220,13 +1182,10 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
           + `Actions:\n${actionSummaries}\n`
           + `${sleepInfo}\n`;
       }
-    } catch {
-      // No history — fresh creature
-    }
+    } catch {}
 
     const observations = await this.readObservations();
 
-    // Extract WORKFLOW lines from observations — these are behavioral shifts that override old habits
     const workflows: string[] = [];
     if (observations) {
       for (const line of observations.split("\n")) {

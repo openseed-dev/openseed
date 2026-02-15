@@ -1,19 +1,39 @@
 import fs from 'node:fs/promises';
-import Anthropic from '@anthropic-ai/sdk';
-import { bashTool, executeBash } from './tools/bash.js';
+
+import {
+  generateText,
+  type ModelMessage,
+  tool,
+} from 'ai';
+import { z } from 'zod';
+
+import { createAnthropic } from '@ai-sdk/anthropic';
+
+import { executeBash } from './tools/bash.js';
 
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 
-const sleepTool: Anthropic.Tool = {
-  name: "set_sleep",
-  description: "Pause for N seconds (2–86400). When you wake, this conversation starts fresh.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      seconds: { type: "number", description: "How long to sleep" },
-    },
-    required: ["seconds"],
-  },
+const provider = createAnthropic({
+  baseURL: process.env.ANTHROPIC_BASE_URL
+    ? `${process.env.ANTHROPIC_BASE_URL}/v1`
+    : undefined,
+});
+
+const tools = {
+  bash: tool({
+    description: `Execute a bash command. Use this to interact with the system and the world.
+Commands time out after 120s by default. You have no terminal — interactive prompts will fail.`,
+    inputSchema: z.object({
+      command: z.string().describe("The bash command to execute"),
+      timeout: z.number().describe("Timeout in milliseconds (default: 120000)").optional(),
+    }),
+  }),
+  set_sleep: tool({
+    description: "Pause for N seconds (2–86400). When you wake, this conversation starts fresh.",
+    inputSchema: z.object({
+      seconds: z.number().describe("How long to sleep"),
+    }),
+  }),
 };
 
 type ToolResultCallback = (tool: string, args: Record<string, unknown>, result: { ok: boolean; data?: unknown; error?: string }, ms: number) => Promise<void>;
@@ -22,8 +42,7 @@ type ThoughtCallback = (text: string) => Promise<void>;
 type WakeCallback = (reason: string, source: string) => Promise<void>;
 
 export class Mind {
-  private client = new Anthropic();
-  private messages: Anthropic.MessageParam[] = [];
+  private messages: ModelMessage[] = [];
   private pendingInjections: string[] = [];
   private sleepResolve: (() => void) | null = null;
   private wakeReason: string | null = null;
@@ -40,8 +59,6 @@ export class Mind {
   }
 
   inject(text: string) {
-    // Buffer injections — they're drained at a safe point before the next LLM call
-    // to avoid corrupting tool_use/tool_result message pairing
     this.pendingInjections.push(text);
   }
 
@@ -106,7 +123,6 @@ You can install more — they persist across restarts.`;
   ) {
     const purpose = await this.loadPurpose();
     const systemPrompt = this.buildSystemPrompt(purpose);
-    const tools = [bashTool as Anthropic.Tool, sleepTool];
 
     while (true) {
       this.messages = [{ role: "user", content: "You just woke up." }];
@@ -116,11 +132,11 @@ You can install more — they persist across restarts.`;
       while (true) {
         this.drainInjections();
 
-        let response: Anthropic.Message;
+        let result;
         try {
-          response = await this.client.messages.create({
-            model: MODEL,
-            max_tokens: 16384,
+          result = await generateText({
+            model: provider(MODEL),
+            maxOutputTokens: 16384,
             system: systemPrompt,
             tools,
             messages: this.messages,
@@ -138,57 +154,58 @@ You can install more — they persist across restarts.`;
         }
 
         // Emit thoughts
-        for (const block of response.content) {
-          if (block.type === "text" && block.text.trim()) {
-            if (onThought) await onThought(block.text);
-          }
+        if (result.text?.trim()) {
+          if (onThought) await onThought(result.text);
         }
 
-        const toolBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-
-        if (toolBlocks.length === 0) {
-          this.messages.push({ role: "assistant", content: response.content });
+        if (result.toolCalls.length === 0) {
+          this.messages.push(...result.response.messages);
           this.messages.push({ role: "user", content: "[SYSTEM] Use a tool. Use bash to act, or set_sleep to rest." });
           continue;
         }
 
-        this.messages.push({ role: "assistant", content: response.content });
+        // Append assistant response (contains text + tool calls)
+        this.messages.push(...result.response.messages);
 
-        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        const toolResults: Array<{ type: 'tool-result'; toolCallId: string; toolName: string; input: unknown; output: { type: 'text'; value: string } }> = [];
         let sleepSeconds: number | null = null;
 
-        for (const block of toolBlocks) {
-          const args = block.input as Record<string, unknown>;
+        for (const tc of result.toolCalls) {
+          const args = (tc.input || {}) as Record<string, any>;
 
-          if (block.name === "set_sleep") {
+          if (tc.toolName === "set_sleep") {
             sleepSeconds = Math.max(2, Math.min(86400, Number(args.seconds) || 60));
             toolResults.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: `Sleeping for ${sleepSeconds}s. Conversation resets on wake.`,
+              type: "tool-result",
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input: args,
+              output: { type: 'text', value: `Sleeping for ${sleepSeconds}s. Conversation resets on wake.` },
             });
             continue;
           }
 
-          if (block.name === "bash") {
-            const cmd = String(args.command || args.cmd || args.script || "");
+          if (tc.toolName === "bash") {
+            const cmd = String(args.command || "");
             if (!cmd) {
-              toolResults.push({ type: "tool_result", tool_use_id: block.id, content: "Error: empty command" });
+              toolResults.push({ type: "tool-result", toolCallId: tc.toolCallId, toolName: tc.toolName, input: args, output: { type: 'text', value: "Error: empty command" } });
               continue;
             }
             const start = Date.now();
-            const result = await executeBash(cmd);
+            const bashResult = await executeBash(cmd, { timeout: args.timeout });
             const ms = Date.now() - start;
             this.actionCount++;
 
-            const output = result.exitCode === 0
-              ? (result.stdout || "(no output)")
-              : `EXIT ${result.exitCode}\n${result.stderr}\n${result.stdout}`.trim();
+            const output = bashResult.exitCode === 0
+              ? (bashResult.stdout || "(no output)")
+              : `EXIT ${bashResult.exitCode}\n${bashResult.stderr}\n${bashResult.stdout}`.trim();
 
             toolResults.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: output.slice(0, 50000),
+              type: "tool-result",
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input: args,
+              output: { type: 'text', value: output.slice(0, 50000) },
             });
 
             if (onToolResult) {
@@ -196,9 +213,9 @@ You can install more — they persist across restarts.`;
                 "bash",
                 args,
                 {
-                  ok: result.exitCode === 0,
-                  data: { stdout: result.stdout, stderr: result.stderr },
-                  error: result.exitCode !== 0 ? result.stderr : undefined,
+                  ok: bashResult.exitCode === 0,
+                  data: { stdout: bashResult.stdout, stderr: bashResult.stderr },
+                  error: bashResult.exitCode !== 0 ? bashResult.stderr : undefined,
                 },
                 ms,
               );
@@ -206,7 +223,7 @@ You can install more — they persist across restarts.`;
           }
         }
 
-        this.messages.push({ role: "user", content: toolResults });
+        this.messages.push({ role: "tool", content: toolResults });
 
         if (sleepSeconds !== null) {
           if (onSleep) await onSleep(sleepSeconds, "", this.actionCount);

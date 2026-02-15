@@ -73,7 +73,7 @@ Or select from the dropdown in the dashboard.
 | `gpt-5-mini` | OpenAI | $0.25 / $2 |
 | `o4-mini` | OpenAI | $1.10 / $4.40 |
 
-Creatures always use the Anthropic SDK internally. A translating proxy in the orchestrator handles routing — Claude models forward to Anthropic directly, OpenAI models get translated to the Responses API and back. The creature never knows the difference.
+Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic types. A translating proxy in the orchestrator handles routing — Claude models forward to Anthropic directly, OpenAI models get translated to the Responses API and back. The creature never knows the difference.
 
 ## Templates
 
