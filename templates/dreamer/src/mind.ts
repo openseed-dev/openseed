@@ -356,8 +356,23 @@ export class Mind {
 
   private interruptibleSleep(ms: number): Promise<void> {
     return new Promise<void>((resolve) => {
-      this.sleepResolve = () => { clearTimeout(timer); resolve(); };
-      const timer = setTimeout(() => { this.sleepResolve = null; resolve(); }, ms);
+      let resolved = false;
+      const deadline = Date.now() + ms;
+      const done = () => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timer);
+        clearInterval(watchdog);
+        this.sleepResolve = null;
+        resolve();
+      };
+      this.sleepResolve = done;
+      const timer = setTimeout(done, ms);
+      // Wall-clock watchdog: setTimeout uses monotonic time which freezes
+      // when the host machine sleeps. Check real time every 30s as a fallback.
+      const watchdog = setInterval(() => {
+        if (Date.now() >= deadline) done();
+      }, 30_000);
     });
   }
 

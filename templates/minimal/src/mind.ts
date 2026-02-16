@@ -247,11 +247,23 @@ You can install more — they persist across restarts.`;
 
   private interruptibleSleep(ms: number): Promise<void> {
     return new Promise(resolve => {
-      const timer = setTimeout(resolve, ms);
-      this.sleepResolve = () => {
+      let resolved = false;
+      const deadline = Date.now() + ms;
+      const done = () => {
+        if (resolved) return;
+        resolved = true;
         clearTimeout(timer);
+        clearInterval(watchdog);
+        this.sleepResolve = null;
         resolve();
       };
+      const timer = setTimeout(done, ms);
+      this.sleepResolve = done;
+      // Wall-clock watchdog: setTimeout uses monotonic time which freezes
+      // when the host machine sleeps. Check real time every 30s as a fallback.
+      const watchdog = setInterval(() => {
+        if (Date.now() >= deadline) done();
+      }, 30_000);
     });
   }
 }
