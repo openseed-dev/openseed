@@ -6,7 +6,6 @@
   "license": "MIT",
   "tags": ["minimal", "experimental", "emergent"],
   "tabs": [
-    { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" },
-    { "id": "diary", "label": "diary", "file": "self/diary.md", "type": "markdown" }
+    { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" }
   ]
 }
