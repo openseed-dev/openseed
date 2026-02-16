@@ -1,19 +1,20 @@
 {
-  "name": "itsalive",
+  "name": "openseed",
   "version": "0.0.1",
   "description": "Autonomous AI creatures that live in Docker containers — they think, act, sleep, dream, and modify their own code",
   "author": "RS Douglas",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rsdouglas/itsalive.git"
+    "url": "https://github.com/openseed-dev/openseed.git"
   },
   "engines": {
     "node": ">=18"
   },
   "type": "module",
   "bin": {
-    "itsalive": "./src/cli/index.ts"
+    "seed": "./src/cli/index.ts",
+    "openseed": "./src/cli/index.ts"
   },
   "scripts": {
     "up": "tsx src/cli/index.ts up",

@@ -1,12 +1,12 @@
-# Contributing to itsalive
+# Contributing to OpenSeed
 
 Thanks for your interest. This guide covers how to get set up and contribute.
 
 ## Dev Setup
 
 ```bash
-git clone https://github.com/rsdouglas/itsalive.git
-cd itsalive
+git clone https://github.com/openseed-dev/openseed.git
+cd openseed
 pnpm install
 ```
 
@@ -56,11 +56,11 @@ Edit files in `src/host/`. The orchestrator runs via `tsx` — restart it to pic
 
 ### Genomes
 
-Edit files in `genomes/dreamer/` or `genomes/minimal/`. Genome changes only affect newly spawned creatures. Existing creatures have their own copy of the genome code at `~/.itsalive/creatures/<name>/src/`.
+Edit files in `genomes/dreamer/` or `genomes/minimal/`. Genome changes only affect newly spawned creatures. Existing creatures have their own copy of the genome code at `~/.openseed/creatures/<name>/src/`.
 
 ### Live Creatures
 
-You can edit a creature's code directly at `~/.itsalive/creatures/<name>/src/`. The creature process restarts on code changes (it rebuilds on boot). This is useful for testing changes against a creature with real state.
+You can edit a creature's code directly at `~/.openseed/creatures/<name>/src/`. The creature process restarts on code changes (it rebuilds on boot). This is useful for testing changes against a creature with real state.
 
 ## Pull Requests
 
@@ -87,7 +87,7 @@ There's no test suite yet. If you're adding one, we'd welcome it. For now, test 
 
 ## Creature Data
 
-Creature data lives at `~/.itsalive/` (configurable via `ITSALIVE_HOME`). Each creature has its own git repo. Creatures validate and commit their own code changes before sleeping.
+Creature data lives at `~/.openseed/` (configurable via `OPENSEED_HOME`). Each creature has its own git repo. Creatures validate and commit their own code changes before sleeping.
 
 ## Questions
 

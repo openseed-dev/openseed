@@ -36,7 +36,7 @@ This is close to Mastra's emoji-based log levels (`🔴`/`🟡`/`🟢`), but we 
 
 ### How Mastra Does It vs How We Do It
 
-| | Mastra Observational Memory | itsalive Sleep/Dreams |
+| | Mastra Observational Memory | OpenSeed Sleep/Dreams |
 |---|---|---|
 | **Use case** | Chatbot memory across user sessions | Autonomous agent continuity |
 | **Trigger** | Token count threshold (30K) | Action count (fatigue) + voluntary sleep |

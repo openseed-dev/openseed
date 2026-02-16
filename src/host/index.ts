@@ -23,10 +23,10 @@ import {
 
 const execAsync = promisify(exec);
 
-const ITSALIVE_HOME = process.env.ITSALIVE_HOME || path.join(os.homedir(), '.itsalive');
-const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
-const ARCHIVE_DIR = path.join(ITSALIVE_HOME, 'archive');
-const IS_DOCKER = process.env.ITSALIVE_DOCKER === '1';
+const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.OPENSEED_HOME || path.join(os.homedir(), '.openseed');
+const CREATURES_DIR = path.join(OPENSEED_HOME, 'creatures');
+const ARCHIVE_DIR = path.join(OPENSEED_HOME, 'archive');
+const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
 
 function creatureUrl(name: string, port: number, urlPath: string): string {
   if (IS_DOCKER) return `http://creature-${name}:7778${urlPath}`;
@@ -79,9 +79,9 @@ export class Orchestrator {
   // --- Lifecycle ---
 
   private async writeRunFile() {
-    await fs.mkdir(ITSALIVE_HOME, { recursive: true });
+    await fs.mkdir(OPENSEED_HOME, { recursive: true });
     await fs.writeFile(
-      path.join(ITSALIVE_HOME, 'orchestrator.json'),
+      path.join(OPENSEED_HOME, 'orchestrator.json'),
       JSON.stringify({ port: this.port, pid: process.pid, started_at: new Date().toISOString() }, null, 2) + '\n',
       'utf-8',
     );
@@ -89,7 +89,7 @@ export class Orchestrator {
 
   private setupCleanup() {
     const cleanup = async () => {
-      try { await fs.unlink(path.join(ITSALIVE_HOME, 'orchestrator.json')); } catch {}
+      try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
     process.on('SIGINT', cleanup);

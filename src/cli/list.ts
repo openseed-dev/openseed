@@ -20,7 +20,7 @@ export async function list(): Promise<void> {
       const creatures = (await res.json()) as Array<{ name: string; status: string; sha: string | null; port: number | null }>;
 
       if (creatures.length === 0) {
-        console.log("no creatures yet. spawn one with: itsalive spawn <name>");
+        console.log("no creatures yet. spawn one with: seed spawn <name>");
         return;
       }
 
@@ -49,7 +49,7 @@ export async function list(): Promise<void> {
   try {
     entries = await fs.readdir(CREATURES_DIR);
   } catch {
-    console.log("no creatures yet. spawn one with: itsalive spawn <name>");
+    console.log("no creatures yet. spawn one with: seed spawn <name>");
     return;
   }
 
@@ -74,7 +74,7 @@ export async function list(): Promise<void> {
   }
 
   if (creatures.length === 0) {
-    console.log("no creatures yet. spawn one with: itsalive spawn <name>");
+    console.log("no creatures yet. spawn one with: seed spawn <name>");
     return;
   }
 
@@ -89,6 +89,6 @@ export async function list(): Promise<void> {
   }
 
   if (!info) {
-    console.log("\nstart the orchestrator with: itsalive up");
+    console.log("\nstart the orchestrator with: seed up");
   }
 }

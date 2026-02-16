@@ -115,7 +115,7 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
   console.log(`creature "${opts.name}" spawned at ${dir}`);
   console.log(`  id: ${birth.id}`);
   console.log(`  born: ${birth.born}`);
-  console.log(`\nstart it with: itsalive start ${opts.name}`);
+  console.log(`\nstart it with: seed start ${opts.name}`);
 }
 
 function isDockerAvailable(): boolean {

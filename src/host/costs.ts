@@ -6,7 +6,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-const USAGE_FILE = path.join(os.homedir(), '.itsalive', 'usage.json');
+const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(os.homedir(), '.openseed');
+const USAGE_FILE = path.join(OPENSEED_HOME, 'usage.json');
 
 const PRICING: Record<string, { input: number; output: number }> = {
   // Anthropic

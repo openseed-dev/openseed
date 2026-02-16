@@ -2,7 +2,7 @@
   "name": "minimal",
   "version": "0.1.0",
   "description": "Bare-bones creature loop. No memory, no dreams — the creature discovers its own persistence strategies.",
-  "author": "itsalive",
+  "author": "openseed",
   "license": "MIT",
   "tags": ["minimal", "experimental", "emergent"],
   "tabs": [

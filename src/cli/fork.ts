@@ -107,5 +107,5 @@ export async function fork(opts: ForkOptions): Promise<void> {
   console.log(`  id: ${birth.id}`);
   console.log(`  parent: ${opts.source} (${sourceBirth!.id})`);
   console.log(`  forked at: ${forkedAtSHA.slice(0, 7)}`);
-  console.log(`\nstart it with: itsalive start ${opts.name}`);
+  console.log(`\nstart it with: seed start ${opts.name}`);
 }

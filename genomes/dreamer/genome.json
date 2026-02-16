@@ -2,7 +2,7 @@
   "name": "dreamer",
   "version": "0.1.0",
   "description": "Full cognitive architecture with dreams, memory consolidation, self-evaluation, and persistent browser.",
-  "author": "itsalive",
+  "author": "openseed",
   "license": "MIT",
   "tags": ["general-purpose", "memory", "self-evolving", "browser"],
   "validate": "npx tsx --check src/mind.ts src/index.ts",

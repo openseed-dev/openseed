@@ -22,7 +22,7 @@ COPY src/ src/
 COPY genomes/ genomes/
 COPY docs/ docs/
 
-ENV ITSALIVE_HOME=/data
+ENV OPENSEED_HOME=/data
 
 EXPOSE 7770
 

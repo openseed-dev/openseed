@@ -1,17 +1,17 @@
 # Marketplace Site
 
-Design doc for the itsalive genome marketplace — a browse/search/submit site powered by a public registry repo and Cloudflare.
+Design doc for the openseed genome marketplace — a browse/search/submit site powered by a public registry repo and Cloudflare.
 
 ## Architecture
 
 Two components that work together:
 
-### 1. Registry Repo (`itsalive/marketplace`)
+### 1. Registry Repo (`openseed/marketplace`)
 
 A public GitHub repo that is the source of truth for listed genomes. Each genome is a tiny JSON file in `registry/`:
 
 ```
-itsalive/marketplace/
+openseed/marketplace/
 ├── registry/
 │   ├── dreamer.json
 │   ├── minimal.json
@@ -101,7 +101,7 @@ Full genome page. The landing page for a genome — this is what gets shared on 
 Instructions for submitting a genome:
 
 1. Create your genome repo with a valid `genome.json`
-2. Fork `itsalive/marketplace`
+2. Fork `openseed/marketplace`
 3. Add `registry/your-genome.json` with your repo URL
 4. Open a PR
 
@@ -137,21 +137,21 @@ The page includes a validator: paste your repo URL, it checks `genome.json` is v
 
 Every genome detail page needs to be a good landing page:
 
-- **Title**: `{name} — itsalive genome marketplace`
+- **Title**: `{name} — openseed genome marketplace`
 - **OG image**: Auto-generated card with genome name, description, tags, star count. Use Cloudflare Workers + @cloudflare/pages-plugin-sentry or a simple SVG→PNG pipeline.
 - **OG description**: The genome's description field
-- **Canonical URL**: `https://marketplace.itsalive.dev/genome/{name}`
+- **Canonical URL**: `https://marketplace.openseed.dev/genome/{name}`
 
 These pages should rank for queries like "autonomous trading agent", "AI research agent", "self-modifying AI".
 
 ## Growth Mechanics
 
-### "Built with itsalive" badges
+### "Built with openseed" badges
 
 Genome authors embed a badge in their repo README:
 
 ```markdown
-[![itsalive genome](https://marketplace.itsalive.dev/badge/{name}.svg)](https://marketplace.itsalive.dev/genome/{name})
+[![openseed genome](https://marketplace.openseed.dev/badge/{name}.svg)](https://marketplace.openseed.dev/genome/{name})
 ```
 
 The badge is served by a Worker — dynamic SVG showing the genome name and spawn count. Every genome repo becomes a funnel back to the marketplace.
@@ -161,11 +161,11 @@ The badge is served by a Worker — dynamic SVG showing the genome name and spaw
 When a creature is spawned, the orchestrator can optionally ping the marketplace:
 
 ```
-POST https://marketplace.itsalive.dev/api/spawn
+POST https://marketplace.openseed.dev/api/spawn
 { "genome": "researcher", "version": "2.1.0" }
 ```
 
-No PII, no creature details — just a counter. Opt-in via `itsalive` config. Powers the "X creatures spawned" stat on genome pages.
+No PII, no creature details — just a counter. Opt-in via `openseed` config. Powers the "X creatures spawned" stat on genome pages.
 
 The counter lives in Cloudflare KV or D1. Simple increment.
 
@@ -175,25 +175,25 @@ Genome detail pages have share buttons. But more importantly, the OG metadata me
 
 ## CLI Integration
 
-### `itsalive genome search`
+### `openseed genome search`
 
 ```bash
-$ itsalive genome search "trading"
+$ openseed genome search "trading"
   trader       ★ 142  Autonomous crypto trading with risk management
   degen        ★ 38   High-frequency memecoin scalper
   quant        ★  24   Quantitative analysis and backtesting
 
-$ itsalive genome search --tag browser
+$ openseed genome search --tag browser
   researcher   ★ 89   Deep research with web browsing
   monitor      ★ 56   Website monitoring and alerting
 ```
 
-Queries the marketplace API: `GET https://marketplace.itsalive.dev/api/genomes?q=trading`
+Queries the marketplace API: `GET https://marketplace.openseed.dev/api/genomes?q=trading`
 
-### `itsalive genome add`
+### `openseed genome add`
 
 ```bash
-$ itsalive genome add researcher
+$ openseed genome add researcher
 Fetching researcher from github:someone/genome-researcher...
 Installed researcher v2.1.0 to genomes/researcher/
 ```
@@ -232,7 +232,7 @@ For v1, KV is sufficient. D1 can come later if we add user accounts or richer an
 
 ### Domain
 
-`marketplace.itsalive.dev` or `genomes.itsalive.dev`. Cloudflare DNS.
+`marketplace.openseed.dev` or `genomes.openseed.dev`. Cloudflare DNS.
 
 ## Security
 
@@ -246,7 +246,7 @@ For v1, KV is sufficient. D1 can come later if we add user accounts or richer an
 
 ### Phase 1: Registry + Static Site
 
-- Create `itsalive/marketplace` repo
+- Create `openseed/marketplace` repo
 - Seed with dreamer and minimal
 - Validation GitHub Action
 - Static Cloudflare Pages site: browse and detail pages
@@ -265,7 +265,7 @@ For v1, KV is sufficient. D1 can come later if we add user accounts or richer an
 - OG image generation
 - Spawn count tracking
 - Share buttons and rich cards
-- "Built with itsalive" badge kit
+- "Built with openseed" badge kit
 - Featured genome rotation
 
 ### Phase 4: Community
@@ -277,7 +277,7 @@ For v1, KV is sufficient. D1 can come later if we add user accounts or richer an
 
 ## Open Questions
 
-- **Custom domains for the marketplace?** `itsalive.market`? `genomes.itsalive.dev`? Keep it under the main domain for SEO juice.
+- **Custom domains for the marketplace?** `openseed.market`? `genomes.openseed.dev`? Keep it under the main domain for SEO juice.
 - **User accounts?** Not for v1. But if we add ratings/reviews, we'll need GitHub OAuth. Cloudflare Access makes this trivial.
 - **Genome categories vs. tags?** Tags are more flexible. Start with tags, add categories later if the taxonomy stabilizes.
 - **Auto-update notifications?** Should the CLI or dashboard notify when an installed genome has a new version? Useful but not v1.

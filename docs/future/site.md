@@ -1,4 +1,4 @@
-# itsalive.dev
+# openseed.dev
 
 The main site: marketing, genome marketplace, docs, blog, and (future) cloud hosting entry point. One domain, one codebase, one deploy.
 
@@ -7,22 +7,22 @@ See [marketplace-site.md](marketplace-site.md) for the genome registry and marke
 ## Structure
 
 ```
-itsalive.dev/                      landing page
-itsalive.dev/genomes               marketplace browse
-itsalive.dev/genomes/:name         genome detail
-itsalive.dev/docs                  documentation
-itsalive.dev/docs/:slug            doc page
-itsalive.dev/blog                  blog index
-itsalive.dev/blog/:slug            blog post
-itsalive.dev/pricing               (future) cloud hosting tiers
-itsalive.dev/submit                genome submission guide + validator
+openseed.dev/                      landing page
+openseed.dev/genomes               marketplace browse
+openseed.dev/genomes/:name         genome detail
+openseed.dev/docs                  documentation
+openseed.dev/docs/:slug            doc page
+openseed.dev/blog                  blog index
+openseed.dev/blog/:slug            blog post
+openseed.dev/pricing               (future) cloud hosting tiers
+openseed.dev/submit                genome submission guide + validator
 
-app.itsalive.dev                   (future) cloud dashboard
+app.openseed.dev                   (future) cloud dashboard
 ```
 
 ## Landing Page (`/`)
 
-The landing page has one job: make someone who's never heard of itsalive understand what it is in 10 seconds and want to try it.
+The landing page has one job: make someone who's never heard of openseed understand what it is in 10 seconds and want to try it.
 
 ### Above the fold
 
@@ -57,14 +57,14 @@ Each card links to the relevant genome on `/genomes`.
 Simple 3-step visual:
 
 1. **Genome** — a cognitive blueprint (dreamer, minimal, or build your own)
-2. **Spawn** — `itsalive spawn my-creature --genome dreamer --purpose "..."`
+2. **Spawn** — `openseed spawn my-creature --genome dreamer --purpose "..."`
 3. **Evolve** — the creature runs autonomously, learns, modifies its own code
 
 ### Quick start
 
 ```bash
-git clone https://github.com/itsalive/itsalive
-cd itsalive && pnpm install
+git clone https://github.com/openseed/openseed
+cd openseed && pnpm install
 export ANTHROPIC_API_KEY=sk-...
 npx tsx src/cli/index.ts spawn my-creature --purpose "explore the world"
 npx tsx src/cli/index.ts up
@@ -191,13 +191,13 @@ Cloudflare Workers (Astro server endpoints or standalone):
 
 ### DNS and Domain
 
-`itsalive.dev` on Cloudflare DNS. The site deploys to Cloudflare Pages with a custom domain. `app.itsalive.dev` reserved for the future cloud dashboard.
+`openseed.dev` on Cloudflare DNS. The site deploys to Cloudflare Pages with a custom domain. `app.openseed.dev` reserved for the future cloud dashboard.
 
 ### Repo
 
-`itsalive/site` — separate repo from the main `itsalive/itsalive` repo. The registry lives here too (or in `itsalive/marketplace` if we want to keep submission PRs separate from site code PRs).
+`openseed/site` — separate repo from the main `openseed/openseed` repo. The registry lives here too (or in `openseed/marketplace` if we want to keep submission PRs separate from site code PRs).
 
-Arguments for keeping the registry in the site repo: one deploy pipeline, PRs auto-trigger rebuilds. Arguments for separating: cleaner PR history, contributors don't need to understand the site code. Leaning toward separate: `itsalive/marketplace` for registry PRs, `itsalive/site` for site code. The site reads from the marketplace repo at build time.
+Arguments for keeping the registry in the site repo: one deploy pipeline, PRs auto-trigger rebuilds. Arguments for separating: cleaner PR history, contributors don't need to understand the site code. Leaning toward separate: `openseed/marketplace` for registry PRs, `openseed/site` for site code. The site reads from the marketplace repo at build time.
 
 ## Design Direction
 
@@ -231,9 +231,9 @@ Push to `main` → Cloudflare Pages auto-deploys. Build command: `pnpm build`. O
 
 ### Content updates
 
-- **Docs**: Update markdown in the main itsalive repo's `docs/`. Site rebuilds on schedule or webhook, pulling latest.
+- **Docs**: Update markdown in the main openseed repo's `docs/`. Site rebuilds on schedule or webhook, pulling latest.
 - **Blog**: Add markdown to `site/src/content/blog/`. Push to main.
-- **Genomes**: Merge PR to `itsalive/marketplace`. Site rebuilds, new genome appears.
+- **Genomes**: Merge PR to `openseed/marketplace`. Site rebuilds, new genome appears.
 
 ## Phases
 
@@ -256,13 +256,13 @@ Push to `main` → Cloudflare Pages auto-deploys. Build command: `pnpm build`. O
 - Blog with Eve stories and technical posts
 - OG image generation for all pages
 - Social sharing optimization
-- "Built with itsalive" badge kit
+- "Built with openseed" badge kit
 - Spawn count tracking
 
 ### Phase 4: Cloud Hosting
 
-- Pricing page and waitlist on `itsalive.dev/pricing`
-- Cloud dashboard at `app.itsalive.dev` (separate repo, see below)
+- Pricing page and waitlist on `openseed.dev/pricing`
+- Cloud dashboard at `app.openseed.dev` (separate repo, see below)
 - Sign up flow with GitHub OAuth
 - Hosted creature management
 - Billing via Stripe
@@ -273,14 +273,14 @@ The full project spans four repos with clear boundaries:
 
 | Repo | Domain | Visibility | Purpose |
 |---|---|---|---|
-| `itsalive/itsalive` | — | public | Core: orchestrator, CLI, genomes |
-| `itsalive/site` | `itsalive.dev` | public | Marketing, docs, blog, marketplace browse |
-| `itsalive/marketplace` | — | public | Genome registry (PRs add genomes) |
-| `itsalive/cloud` | `app.itsalive.dev` | **private** | Cloud dashboard, billing, hosted creatures |
+| `openseed/openseed` | — | public | Core: orchestrator, CLI, genomes |
+| `openseed/site` | `openseed.dev` | public | Marketing, docs, blog, marketplace browse |
+| `openseed/marketplace` | — | public | Genome registry (PRs add genomes) |
+| `openseed/cloud` | `app.openseed.dev` | **private** | Cloud dashboard, billing, hosted creatures |
 
 ### Why cloud is a separate repo
 
-The cloud dashboard (`app.itsalive.dev`) is a different class of application:
+The cloud dashboard (`app.openseed.dev`) is a different class of application:
 
 - **Authenticated.** Every request goes through auth middleware — GitHub OAuth, session management, RBAC.
 - **Stateful.** Running creatures, persistent storage, billing state, user settings. Cloudflare D1/Durable Objects, not KV.
@@ -288,7 +288,7 @@ The cloud dashboard (`app.itsalive.dev`) is a different class of application:
 - **Different deploy cadence.** Marketing copy ships fast. Billing code ships carefully, with staging and tests.
 - **Different infrastructure.** Durable Objects (one per creature for real-time streaming), D1 for relational data, R2 for creature storage, Queues for async work. The marketing site needs none of that.
 
-The only connection between `itsalive.dev` and `app.itsalive.dev` is a hyperlink — the pricing page's "Sign up" button. No shared code, no shared deploy, no shared blast radius.
+The only connection between `openseed.dev` and `app.openseed.dev` is a hyperlink — the pricing page's "Sign up" button. No shared code, no shared deploy, no shared blast radius.
 
 ### Why marketplace is a separate repo
 
@@ -300,7 +300,7 @@ Genome submission PRs should be simple — a contributor adds one JSON file. The
 
 ## Open Questions
 
-- **Domain**: `itsalive.dev` is the assumed domain. Is it available? Alternatives: `itsalive.ai`, `itsalive.run`, `hatchery.dev`.
+- **Domain**: `openseed.dev` is the assumed domain. Is it available? Alternatives: `openseed.ai`, `openseed.run`, `hatchery.dev`.
 - **Analytics**: Cloudflare Web Analytics (privacy-friendly, no cookie banner) or Plausible? Leaning Cloudflare — it's free and already in the stack.
 - **Email**: For the waitlist and (future) notifications. Resend + Cloudflare Workers is a clean combo.
 - **Docs hosting**: Pull from main repo at build time vs. copy into site repo. Pulling is cleaner (single source of truth) but adds build complexity. Worth it.

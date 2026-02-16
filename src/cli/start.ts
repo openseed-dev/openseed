@@ -8,7 +8,7 @@ interface StartOptions {
 export async function start(opts: StartOptions): Promise<void> {
   const info = await readOrchestratorInfo();
   if (!info) {
-    console.error('orchestrator is not running. start it with: itsalive up');
+    console.error('orchestrator is not running. start it with: seed up');
     process.exit(1);
   }
 

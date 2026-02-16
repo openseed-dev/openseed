@@ -16,14 +16,14 @@ import {
 
 const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 30_000;
-const ITSALIVE_HOME = process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.itsalive');
-const ROLLBACK_DIR = path.join(ITSALIVE_HOME, 'rollbacks');
+const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.openseed');
+const ROLLBACK_DIR = path.join(OPENSEED_HOME, 'rollbacks');
 const MAX_LOG_LINES = 50;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const MAX_FAILURE_BACKOFF_MS = 30_000;
 
-const IS_DOCKER = process.env.ITSALIVE_DOCKER === '1';
-const HOST_PATH = process.env.ITSALIVE_HOST_PATH || ITSALIVE_HOME;
+const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
+const HOST_PATH = process.env.OPENSEED_HOST_PATH || process.env.ITSALIVE_HOST_PATH || OPENSEED_HOME;
 
 export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping' | 'error';
 
@@ -182,11 +182,11 @@ export class CreatureSupervisor {
     // When the orchestrator runs in Docker, creature bind mounts must use the
     // real host path (docker socket operates on the host, not inside our container).
     const hostDir = IS_DOCKER
-      ? dir.replace(process.env.ITSALIVE_HOME || '/data', HOST_PATH)
+      ? dir.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
       : dir;
 
     const orchestratorUrl = IS_DOCKER
-      ? `http://itsalive:${orchestratorPort}`
+      ? `http://openseed:${orchestratorPort}`
       : `http://host.docker.internal:${orchestratorPort}`;
 
     const args = [
@@ -204,7 +204,7 @@ export class CreatureSupervisor {
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
-      ...(IS_DOCKER ? ['--network', 'itsalive'] : []),
+      ...(IS_DOCKER ? ['--network', 'openseed'] : []),
       `creature-${name}`,
     ];
 

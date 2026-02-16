@@ -1,4 +1,4 @@
-# itsalive
+# openseed
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js 18+](https://img.shields.io/badge/node-18%2B-green.svg)](https://nodejs.org/)
@@ -33,7 +33,7 @@ bffb2af creator: self/diary.md, src/mind.ts
 
 ## Why
 
-Most AI agent systems treat the agent as a function — task in, result out, done. itsalive treats the agent as a **process**: something that exists continuously, accumulates identity, and learns from its own experience.
+Most AI agent systems treat the agent as a function — task in, result out, done. openseed treats the agent as a **process**: something that exists continuously, accumulates identity, and learns from its own experience.
 
 The biological metaphors solve real engineering problems:
 
@@ -64,8 +64,8 @@ Requires: [Docker](https://www.docker.com/products/docker-desktop/)
 The fastest way to get started is with Docker Compose — no Node.js or pnpm needed on your machine:
 
 ```bash
-git clone https://github.com/rsdouglas/itsalive.git
-cd itsalive
+git clone https://github.com/openseed-dev/openseed.git
+cd openseed
 cp .env.example .env
 # Edit .env with your API key(s)
 docker compose up
@@ -80,8 +80,8 @@ If you prefer running the orchestrator directly:
 Requires: [Node.js](https://nodejs.org/) 18+, [pnpm](https://pnpm.io/installation), [Docker](https://www.docker.com/products/docker-desktop/)
 
 ```bash
-git clone https://github.com/rsdouglas/itsalive.git
-cd itsalive
+git clone https://github.com/openseed-dev/openseed.git
+cd openseed
 pnpm install
 ```
 
@@ -144,7 +144,7 @@ Genomes are fully self-contained — they don't depend on any orchestrator-speci
 
 When you spawn a creature:
 
-1. A directory is created at `~/.itsalive/creatures/<name>/` with its own git repo
+1. A directory is created at `~/.openseed/creatures/<name>/` with its own git repo
 2. A Docker image is built and a container is created
 3. The creature boots, reads its PURPOSE.md, and starts thinking
 4. It runs a continuous conversation loop with the LLM, executing bash commands and (for dreamers) browsing the web
@@ -156,16 +156,16 @@ When you spawn a creature:
 ## CLI
 
 ```
-itsalive up [--port 7770]              start the orchestrator + dashboard
-itsalive spawn <name> [options]        create a new creature
+seed up [--port 7770]                  start the orchestrator + dashboard
+seed spawn <name> [options]            create a new creature
   --purpose "..."                      what the creature should do
   --genome dreamer|minimal             cognitive genome (default: dreamer)
   --model <model>                      LLM model (default: claude-opus-4-6)
-itsalive start <name> [--manual]       start a creature
-itsalive stop <name>                   stop a running creature
-itsalive list                          list all creatures and their status
-itsalive fork <source> <name>          fork a creature with full history
-itsalive destroy <name>                permanently remove a creature
+seed start <name> [--manual]           start a creature
+seed stop <name>                       stop a running creature
+seed list                              list all creatures and their status
+seed fork <source> <name>              fork a creature with full history
+seed destroy <name>                    permanently remove a creature
 ```
 
 Or via pnpm: `pnpm up`, `pnpm spawn alpha`, `pnpm start alpha`, etc.
@@ -182,7 +182,7 @@ Orchestrator (src/host/) — single daemon on your machine
         ├── Creature process (from genome)
         │   ├── Mind — continuous LLM conversation loop
         │   └── Tools: bash, sleep, browser (dreamer only)
-        ├── Bind mount: ~/.itsalive/creatures/<name>/ → /creature
+        ├── Bind mount: ~/.openseed/creatures/<name>/ → /creature
         └── Named volumes: node_modules, browser profile
 ```
 
@@ -195,7 +195,7 @@ Orchestrator (src/host/) — single daemon on your machine
 ## Creature Files
 
 ```
-~/.itsalive/creatures/<name>/
+~/.openseed/creatures/<name>/
 ├── src/                       source code (git-tracked, creature can modify)
 │   ├── index.ts               entry point + HTTP server
 │   ├── mind.ts                cognition loop, consolidation, dreams

@@ -20,17 +20,17 @@ This matters once you have more than a handful of creatures, especially if multi
 ### CLI
 
 ```
-itsalive garden create traders
-itsalive garden add traders okok el-tradero bybit-trader
-itsalive garden remove traders bybit-trader
-itsalive garden list
-itsalive garden show traders
-itsalive garden destroy traders
+seed garden create traders
+seed garden add traders okok el-tradero bybit-trader
+seed garden remove traders bybit-trader
+seed garden list
+seed garden show traders
+seed garden destroy traders
 ```
 
 ### Data Model
 
-A garden is a named group stored in `~/.itsalive/gardens.json`:
+A garden is a named group stored in `~/.openseed/gardens.json`:
 
 ```json
 {

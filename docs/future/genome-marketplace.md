@@ -60,7 +60,7 @@ Current fields plus marketplace additions:
 - **tags**: Free-form. Used for search and filtering.
 - **permissions**: Declared capabilities the genome needs. The orchestrator enforces these at spawn time. A genome that doesn't declare `network: true` gets no outbound access.
 - **permissions.apiKeys**: API keys the creature needs beyond the LLM key. The orchestrator prompts the user for these at spawn time and injects them as env vars.
-- **minHostVersion**: Minimum itsalive version required. Prevents spawning on incompatible hosts.
+- **minHostVersion**: Minimum openseed version required. Prevents spawning on incompatible hosts.
 
 ## CLI Workflow
 
@@ -68,22 +68,22 @@ Current fields plus marketplace additions:
 
 ```bash
 # Add a genome from GitHub
-itsalive genome add github:someone/genome-researcher
+openseed genome add github:someone/genome-researcher
 
 # Add a specific version
-itsalive genome add github:someone/genome-researcher@v2.1
+openseed genome add github:someone/genome-researcher@v2.1
 
 # Add from any git URL
-itsalive genome add https://gitlab.com/someone/genome-researcher.git
+openseed genome add https://gitlab.com/someone/genome-researcher.git
 
 # List installed genomes
-itsalive genome list
+openseed genome list
 
 # Update to latest
-itsalive genome update researcher
+openseed genome update researcher
 
 # Remove
-itsalive genome remove researcher
+openseed genome remove researcher
 ```
 
 `genome add` clones the repo into `genomes/<name>/`. The name comes from `genome.json`. If there's a conflict, the CLI asks.
@@ -92,13 +92,13 @@ itsalive genome remove researcher
 
 ```bash
 # Spawn directly from a URL (auto-fetches and caches)
-itsalive spawn my-researcher --genome github:someone/genome-researcher
+openseed spawn my-researcher --genome github:someone/genome-researcher
 
 # Spawn from a locally installed genome
-itsalive spawn my-researcher --genome researcher
+openseed spawn my-researcher --genome researcher
 
 # With purpose override
-itsalive spawn my-researcher --genome researcher --purpose "Survey recent papers on RLHF"
+openseed spawn my-researcher --genome researcher --purpose "Survey recent papers on RLHF"
 ```
 
 If the genome isn't installed locally, the CLI fetches it, caches it, then spawns. Subsequent spawns from the same genome use the cache.
@@ -107,8 +107,8 @@ If the genome isn't installed locally, the CLI fetches it, caches it, then spawn
 
 ```bash
 # Search the marketplace
-itsalive genome search "trading"
-itsalive genome search --tag browser
+openseed genome search "trading"
+openseed genome search --tag browser
 ```
 
 This queries the marketplace index (see below).
@@ -135,7 +135,7 @@ This lets you trace any creature back to the exact genome code it was born from,
 When a creature is spawned, it gets a copy of the genome's code. Over time, it self-modifies. The diff between the genome and the creature's current state IS the creature's learned behavior:
 
 ```bash
-cd ~/.itsalive/creatures/my-researcher
+cd ~/.openseed/creatures/my-researcher
 git diff genome-v2.1..HEAD
 ```
 
@@ -172,7 +172,7 @@ The marketplace is a thin discovery layer, not a hosting platform. Three compone
 
 ### 1. The Index
 
-A service that crawls GitHub (and optionally GitLab, etc.) for repos with an `itsalive-genome` topic and a valid `genome.json`. It builds a searchable index of:
+A service that crawls GitHub (and optionally GitLab, etc.) for repos with an `openseed-genome` topic and a valid `genome.json`. It builds a searchable index of:
 
 - Genome name, description, tags
 - Author, stars, last updated
@@ -203,7 +203,7 @@ A genome could extend another:
 ```json
 {
   "name": "crypto-dreamer",
-  "extends": "github:itsalive/genome-dreamer@v3.0",
+  "extends": "github:openseed/genome-dreamer@v3.0",
   "description": "Dreamer with crypto trading tools",
   "additions": {
     "tools": ["src/tools/exchange.ts"]
@@ -219,7 +219,7 @@ This is complex and can wait. Mentioning it here because the manifest schema sho
 
 **Phase 1:** CLI supports `github:user/repo` as a genome source. `genome add`, `genome list`, `genome remove` commands. BIRTH.json records genome repo and SHA.
 
-**Phase 2:** Marketplace website. Index service crawls GitHub for `itsalive-genome` repos. Browse, search, detail pages. `genome search` in CLI.
+**Phase 2:** Marketplace website. Index service crawls GitHub for `openseed-genome` repos. Browse, search, detail pages. `genome search` in CLI.
 
 **Phase 3:** Dashboard integration. Browse genomes tab. One-click spawn from the web UI. Permission prompts for API keys.
 

@@ -11,7 +11,7 @@ import { up } from './up.js';
 const [command, ...args] = process.argv.slice(2);
 
 function usage(): never {
-  console.log(`itsalive — creature hatchery
+  console.log(`openseed — autonomous creature framework
 
 commands:
   up [--port 7770]                start the orchestrator + dashboard
@@ -56,7 +56,7 @@ async function main() {
     case "spawn": {
       const name = args.find((a) => !a.startsWith("--"));
       if (!name) {
-        console.error("usage: itsalive spawn <name> [--purpose \"...\"]");
+        console.error("usage: seed spawn <name> [--purpose \"...\"]");
         process.exit(1);
       }
       const purpose = parseFlag(args, "--purpose");
@@ -69,7 +69,7 @@ async function main() {
     case "start": {
       const name = args.find((a) => !a.startsWith("--"));
       if (!name) {
-        console.error("usage: itsalive start <name> [--manual]");
+        console.error("usage: seed start <name> [--manual]");
         process.exit(1);
       }
       const manual = hasFlag(args, "--manual");
@@ -80,7 +80,7 @@ async function main() {
     case "stop": {
       const name = args[0];
       if (!name) {
-        console.error("usage: itsalive stop <name>");
+        console.error("usage: seed stop <name>");
         process.exit(1);
       }
       await stop({ name });
@@ -95,7 +95,7 @@ async function main() {
     case "destroy": {
       const name = args[0];
       if (!name) {
-        console.error("usage: itsalive destroy <name>");
+        console.error("usage: seed destroy <name>");
         process.exit(1);
       }
       await destroy({ name });
@@ -106,7 +106,7 @@ async function main() {
       const source = args[0];
       const name = args[1];
       if (!source || !name) {
-        console.error("usage: itsalive fork <source> <name>");
+        console.error("usage: seed fork <source> <name>");
         process.exit(1);
       }
       await fork({ source, name });

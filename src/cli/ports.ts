@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import {
   CREATURES_DIR,
-  ITSALIVE_HOME,
+  OPENSEED_HOME,
 } from './paths.js';
 
 const BASE_PORT = 7770;
@@ -17,7 +17,7 @@ interface OrchestratorInfo {
 
 export async function readOrchestratorInfo(): Promise<OrchestratorInfo | null> {
   try {
-    const content = await fs.readFile(path.join(ITSALIVE_HOME, "orchestrator.json"), "utf-8");
+    const content = await fs.readFile(path.join(OPENSEED_HOME, "orchestrator.json"), "utf-8");
     const info: OrchestratorInfo = JSON.parse(content);
     process.kill(info.pid, 0); // throws if not alive
     return info;
