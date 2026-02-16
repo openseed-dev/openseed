@@ -67,7 +67,7 @@ export async function fork(opts: ForkOptions): Promise<void> {
 
   await fs.mkdir(CREATURES_DIR, { recursive: true });
 
-  // Copy entire source including .git, but skip .self (fresh brain state)
+  // Skip host state (.sys), runtime state (.self), and deps (node_modules)
   await copyDir(sourceDir, destDir, new Set([".self", ".sys", "node_modules"]));
 
   // Get the current SHA of the source before we modify anything

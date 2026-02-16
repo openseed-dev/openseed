@@ -41,7 +41,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-const COPY_SKIP = new Set(['node_modules', '.git', '.self', '.sys']);
+const COPY_SKIP = new Set(['node_modules', '.git', '.sys']);
 async function copyDir(src: string, dest: string): Promise<void> {
   await fs.mkdir(dest, { recursive: true });
   for (const entry of await fs.readdir(src, { withFileTypes: true })) {
@@ -326,9 +326,14 @@ export class Orchestrator {
       const dir = path.join(CREATURES_DIR, name);
       if (supervisor) {
         try {
-          await execAsync('npx tsx --check src/mind.ts src/index.ts', {
-            cwd: dir, timeout: 30_000,
-          });
+          let validate: string | undefined;
+          try {
+            const genome = JSON.parse(await fs.readFile(path.join(dir, 'genome.json'), 'utf-8'));
+            validate = genome.validate;
+          } catch {}
+          if (validate) {
+            await execAsync(validate, { cwd: dir, timeout: 30_000 });
+          }
           await execAsync(`git add -A && git commit -m "creature: self-modification — ${reason.slice(0, 60)}" --allow-empty`, {
             cwd: dir,
           });

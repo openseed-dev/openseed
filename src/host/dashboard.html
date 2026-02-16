@@ -184,11 +184,10 @@
       font-size: 12px; color: #bbb; line-height: 1.5;
     }
     .mind-content.pre { white-space: pre-wrap; }
-    .mind-content .dream-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #1a1a1a; }
-    .mind-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .mind-content .dream-time { color: #666; font-size: 11px; }
-    .mind-content .dream-deep { color: #c8f; font-size: 10px; font-weight: bold; margin-left: 6px; }
-    .mind-content .dream-reflection { color: #ccc; margin-top: 4px; }
+    .mind-content .jsonl-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #1a1a1a; }
+    .mind-content .jsonl-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .mind-content .jsonl-time { color: #666; font-size: 11px; }
+    .mind-content .jsonl-summary { color: #ccc; margin-top: 4px; }
     .mind-content h1 { color: #fff; font-size: 15px; margin: 16px 0 8px; }
     .mind-content h2 { color: #eee; font-size: 14px; margin: 14px 0 6px; }
     .mind-content h3 { color: #ddd; font-size: 13px; margin: 12px 0 4px; }
@@ -362,7 +361,24 @@
       } else if (t === 'host.boot') {
         body = cl + '<span class="type host">host boot</span>';
       } else {
-        body = cl + '<span class="type host">' + esc(t) + '</span>';
+        const label = t.replace(/^creature\./, '').replace(/[._]/g, ' ');
+        const fields = Object.keys(ev).filter(k => k !== 't' && k !== 'type' && k !== 'creature');
+        if (fields.length) {
+          const oid = uid();
+          const preview = fields.map(k => {
+            const v = ev[k];
+            return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? esc(k + '=' + v) : '';
+          }).filter(Boolean).join(', ');
+          body = cl + '<span class="type host">' + esc(label) + '</span>'
+            + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> \u2014 ' + esc(summarize(preview, 120)) + '</span>'
+            + '<div class="thought-body" id="'+oid+'">' + fields.map(k => {
+              const v = ev[k];
+              const display = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
+              return '<strong>' + esc(k) + ':</strong> ' + esc(display);
+            }).join('\n') + '</div>';
+        } else {
+          body = cl + '<span class="type host">' + esc(label) + '</span>';
+        }
       }
 
       return '<div class="event ' + cls + '"><span class="time">' + ts(ev.t) + '</span>' + body + '</div>';
@@ -378,7 +394,7 @@
       const ev = JSON.parse(e.data);
       if (selectedTab !== 'log') return;
       if (selected === null) {
-        if (ev.type === 'creature.tool_call' || ev.type === 'creature.progress_check') return;
+        if (ev.type === 'creature.tool_call') return;
       } else if (ev.creature !== selected) return;
       const wasNear = isNearBottom();
       eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
@@ -419,9 +435,9 @@
         const display = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
         return '<strong>' + esc(k) + ':</strong> ' + esc(display);
       }).join('\n');
-      return '<div class="dream-entry">'
-        + '<span class="dream-time">' + time + '</span>'
-        + '<span class="dream-reflection thought-summary" onclick="toggle(\'' + id + '\')" style="cursor:pointer"> ' + esc(summary) + '</span>'
+      return '<div class="jsonl-entry">'
+        + '<span class="jsonl-time">' + time + '</span>'
+        + '<span class="jsonl-summary thought-summary" onclick="toggle(\'' + id + '\')" style="cursor:pointer"> ' + esc(summary) + '</span>'
         + '<div class="thought-body" id="' + id + '">' + detail + '</div>'
         + '</div>';
     }
@@ -499,9 +515,11 @@
 
     function fmtCost(usd) { return usd < 0.01 ? '<$0.01' : '$' + usd.toFixed(2); }
     function creatureCost(n) {
-      const c = usageData[n] || { cost_usd: 0 };
-      const cr = usageData['creator:' + n] || { cost_usd: 0 };
-      return c.cost_usd + cr.cost_usd;
+      let total = 0;
+      for (const [key, val] of Object.entries(usageData)) {
+        if (key === n || key.endsWith(':' + n)) total += (val.cost_usd || 0);
+      }
+      return total;
     }
 
     function renderSidebar() {

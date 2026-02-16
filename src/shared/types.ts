@@ -1,24 +1,27 @@
-export type Event =
+// Host events (orchestrator interprets these)
+export type HostEvent =
   | { t: string; type: "host.boot" }
   | { t: string; type: "host.spawn"; pid: number; sha: string }
   | { t: string; type: "host.promote"; sha: string }
   | { t: string; type: "host.rollback"; from: string; to: string; reason: string }
-  | { t: string; type: "host.infra_failure"; reason: string }
+  | { t: string; type: "host.infra_failure"; reason: string };
+
+// Universal creature lifecycle events (orchestrator interprets these)
+export type CreatureLifecycleEvent =
   | { t: string; type: "creature.boot"; sha: string }
   | { t: string; type: "creature.thought"; text: string }
   | { t: string; type: "creature.sleep"; text: string; seconds: number; actions: number; watch?: string[] }
   | { t: string; type: "creature.tool_call"; tool: string; input: string; ok: boolean; output: string; ms: number }
-  | { t: string; type: "creature.patch"; summary: string; files: string[] }
-  | { t: string; type: "creature.checks"; cmd: string; ok: boolean; ms: number; out_tail?: string }
-  | { t: string; type: "creature.request_restart"; reason: string }
-  | { t: string; type: "creature.request_evolution"; reason: string }
-  | { t: string; type: "creature.dream"; reflection: string; priority: string; observations: number; deep: boolean }
   | { t: string; type: "creature.wake"; reason: string; source: "manual" | "watcher" | "timer" }
   | { t: string; type: "creature.message"; text: string; source: "user" | "creator" | "system" }
-  | { t: string; type: "creature.progress_check"; actions: number }
   | { t: string; type: "creature.error"; error: string; retryIn?: number; retries?: number; fatal?: boolean }
-  | { t: string; type: "creature.self_evaluation"; reasoning: string; changed: boolean; trigger: string }
-  | { t: string; type: "creator.evaluation"; reasoning: string; changes: string[]; trigger: string };
+  | { t: string; type: "creature.request_restart"; reason: string };
+
+// Genome-specific events — the host relays these but doesn't interpret them.
+// Genomes can emit any event type with any fields.
+export type GenomeEvent = { t: string; type: string; [key: string]: unknown };
+
+export type Event = HostEvent | CreatureLifecycleEvent | GenomeEvent;
 
 export interface HostStatus {
   current_sha: string;

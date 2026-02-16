@@ -57,9 +57,11 @@ export class CostTracker {
   }
 
   getCreatureCost(name: string): number {
-    const creature = this.get(name);
-    const creator = this.get(`creator:${name}`);
-    return creature.cost_usd + creator.cost_usd;
+    let total = 0;
+    for (const [key, entry] of this.usage) {
+      if (key === name || key.endsWith(`:${name}`)) total += entry.cost_usd;
+    }
+    return total;
   }
 
   getTotal(): number {

@@ -5,6 +5,7 @@
   "author": "itsalive",
   "license": "MIT",
   "tags": ["general-purpose", "memory", "self-evolving", "browser"],
+  "validate": "npx tsx --check src/mind.ts src/index.ts",
   "tabs": [
     { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" },
     { "id": "diary", "label": "diary", "file": "self/diary.md", "type": "markdown" },
