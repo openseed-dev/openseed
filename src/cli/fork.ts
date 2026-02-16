@@ -1,9 +1,13 @@
-import crypto from "node:crypto";
-import { execSync } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { CREATURES_DIR, creatureDir } from "./paths.js";
-import { readRunFile } from "./ports.js";
+import { execSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+import {
+  creatureDir,
+  CREATURES_DIR,
+} from './paths.js';
+import { readRunFile } from './ports.js';
 
 interface ForkOptions {
   source: string;
