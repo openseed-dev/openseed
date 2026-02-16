@@ -1,13 +1,14 @@
-import os from 'node:os';
-import path from 'node:path';
-
-export const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(os.homedir(), ".openseed");
-export const CREATURES_DIR = path.join(OPENSEED_HOME, "creatures");
-
-export function creatureDir(name: string): string {
-  return path.join(CREATURES_DIR, name);
-}
-
-export function genomeDir(genome = "dreamer"): string {
-  return path.resolve(import.meta.dirname, "..", "..", "genomes", genome);
-}
+// Re-export from shared — single source of truth for all path constants
+export {
+  autoInstallGenome,
+  BUNDLED_GENOMES_DIR,
+  bundledGenomeDir,
+  creatureDir,
+  CREATURES_DIR,
+  GENOMES_DIR,
+  installedGenomeDir,
+  OPENSEED_HOME,
+  parseGenomeSource,
+  requireGenomeDir,
+  resolveGenomeDir,
+} from '../shared/paths.js';

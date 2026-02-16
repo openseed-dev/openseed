@@ -5,6 +5,7 @@
   "author": "openseed",
   "license": "MIT",
   "tags": ["minimal", "experimental", "emergent"],
+  "requires": { "openseed": ">=0.0.1" },
   "tabs": [
     { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" }
   ]

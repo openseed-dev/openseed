@@ -5,6 +5,7 @@
   "author": "openseed",
   "license": "MIT",
   "tags": ["general-purpose", "memory", "self-evolving", "browser"],
+  "requires": { "openseed": ">=0.0.1" },
   "validate": "npx tsx --check src/mind.ts src/index.ts",
   "tabs": [
     { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" },

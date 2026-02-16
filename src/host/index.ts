@@ -2,16 +2,21 @@ import {
   exec,
   execSync,
 } from 'node:child_process';
-import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import {
+  BUNDLED_GENOMES_DIR,
+  CREATURES_DIR,
+  GENOMES_DIR,
+  OPENSEED_HOME,
+} from '../shared/paths.js';
+import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
@@ -23,8 +28,6 @@ import {
 
 const execAsync = promisify(exec);
 
-const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.OPENSEED_HOME || path.join(os.homedir(), '.openseed');
-const CREATURES_DIR = path.join(OPENSEED_HOME, 'creatures');
 const ARCHIVE_DIR = path.join(OPENSEED_HOME, 'archive');
 const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
 
@@ -39,18 +42,6 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     req.on('data', (chunk: string) => (body += chunk));
     req.on('end', () => resolve(body));
   });
-}
-
-const COPY_SKIP = new Set(['node_modules', '.git', '.sys']);
-async function copyDir(src: string, dest: string): Promise<void> {
-  await fs.mkdir(dest, { recursive: true });
-  for (const entry of await fs.readdir(src, { withFileTypes: true })) {
-    if (COPY_SKIP.has(entry.name)) continue;
-    const s = path.join(src, entry.name);
-    const d = path.join(dest, entry.name);
-    if (entry.isDirectory()) await copyDir(s, d);
-    else await fs.copyFile(s, d);
-  }
 }
 
 export class Orchestrator {
@@ -251,40 +242,10 @@ export class Orchestrator {
     await supervisor.restart();
   }
 
-  async spawnCreature(name: string, dir: string, purpose?: string, genome = 'dreamer', model?: string): Promise<void> {
-    const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    const tpl = path.resolve(thisDir, '..', '..', 'genomes', genome);
-    try { await fs.access(tpl); } catch { throw new Error(`genome "${genome}" not found at ${tpl}`); }
-
-    await fs.mkdir(CREATURES_DIR, { recursive: true });
-    await copyDir(tpl, dir);
-
-    const birth: Record<string, unknown> = {
-      id: crypto.randomUUID(),
-      name,
-      born: new Date().toISOString(),
-      genome: genome,
-      genome_version: '0.0.0',
-      parent: null,
-    };
-    if (model) birth.model = model;
-    await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
-
-    if (purpose) {
-      await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${purpose}\n`);
-    }
-
-    console.log(`[orchestrator] spawning "${name}" — installing deps...`);
-    await execAsync('pnpm install --silent', { cwd: dir });
-
-    await execAsync('git init', { cwd: dir });
-    await execAsync('git add -A', { cwd: dir });
-    await execAsync('git commit -m "genesis"', { cwd: dir });
-
-    if (!this.isDockerAvailable()) throw new Error('docker is required but not available');
-    console.log(`[orchestrator] spawning "${name}" — building docker image...`);
-    await execAsync(`docker build -t creature-${name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
-    console.log(`[orchestrator] creature "${name}" spawned`);
+  async spawnCreature(name: string, _dir: string, purpose?: string, genome = 'dreamer', model?: string): Promise<void> {
+    console.log(`[orchestrator] spawning "${name}"...`);
+    const result = await spawnCreature({ name, purpose, genome, model });
+    console.log(`[orchestrator] creature "${result.name}" spawned (${result.genome} ${result.genome_version})`);
   }
 
   async archiveCreature(name: string): Promise<void> {
@@ -427,18 +388,26 @@ export class Orchestrator {
 
       if (p === '/api/genomes' && req.method === 'GET') {
         try {
-          const genomesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'genomes');
-          const entries = await fs.readdir(genomesDir, { withFileTypes: true });
-          const genomes: Array<{ name: string; description?: string }> = [];
-          for (const e of entries) {
-            if (!e.isDirectory()) continue;
-            let description: string | undefined;
+          const genomes: Array<{ name: string; description?: string; source: string }> = [];
+          const seen = new Set<string>();
+
+          const scanDir = async (dir: string, source: string) => {
             try {
-              const gj = JSON.parse(await fs.readFile(path.join(genomesDir, e.name, 'genome.json'), 'utf-8'));
-              description = gj.description;
+              const entries = await fs.readdir(dir, { withFileTypes: true });
+              for (const e of entries) {
+                if (!e.isDirectory() || seen.has(e.name)) continue;
+                try {
+                  const gj = JSON.parse(await fs.readFile(path.join(dir, e.name, 'genome.json'), 'utf-8'));
+                  seen.add(e.name);
+                  genomes.push({ name: e.name, description: gj.description, source });
+                } catch {}
+              }
             } catch {}
-            genomes.push({ name: e.name, description });
-          }
+          };
+
+          await scanDir(GENOMES_DIR, 'installed');
+          await scanDir(BUNDLED_GENOMES_DIR, 'bundled');
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(genomes));
         } catch (err: any) {
