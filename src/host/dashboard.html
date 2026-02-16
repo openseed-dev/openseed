@@ -212,10 +212,7 @@
     </div>
     <div class="spawn-form" id="spawnForm">
       <input id="spawnName" placeholder="name (lowercase)" maxlength="32" />
-      <select id="spawnGenome">
-        <option value="dreamer">dreamer</option>
-        <option value="minimal">minimal</option>
-      </select>
+      <select id="spawnGenome"></select>
       <select id="spawnModel">
         <option value="">model (default: opus)</option>
         <option value="claude-opus-4-6">claude-opus-4-6 ($5/$25)</option>
@@ -627,7 +624,17 @@
       } catch {}
     }
 
+    async function loadGenomes() {
+      try {
+        const res = await fetch('/api/genomes');
+        const genomes = await res.json();
+        const sel = document.getElementById('spawnGenome');
+        sel.innerHTML = genomes.map(g => '<option value="' + esc(g.name) + '">' + esc(g.name) + '</option>').join('');
+      } catch {}
+    }
+
     refresh();
+    loadGenomes();
     setInterval(refresh, 2000);
   </script>
 </body>

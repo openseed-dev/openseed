@@ -15,7 +15,7 @@ function usage(): never {
 
 commands:
   up [--port 7770]                start the orchestrator + dashboard
-  spawn <name> [--purpose "..."] [--genome dreamer|minimal] [--model <model>]  create a new creature
+  spawn <name> [--purpose "..."] [--genome <name>] [--model <model>]  create a new creature
   start <name> [--manual]          start a creature (requires orchestrator)
   stop <name>                      stop a running creature
   list                             list all creatures and their status

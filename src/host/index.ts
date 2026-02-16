@@ -366,7 +366,7 @@ export class Orchestrator {
     await this.emitEvent(name, event);
   }
 
-  async sendMessage(name: string, text: string, source: 'user' | 'creator' | 'system' = 'user'): Promise<void> {
+  async sendMessage(name: string, text: string, source: 'user' | 'system' = 'user'): Promise<void> {
     const supervisor = this.supervisors.get(name);
     if (!supervisor) throw new Error(`creature "${name}" is not running`);
 
@@ -417,6 +417,29 @@ export class Orchestrator {
       if (p === '/api/usage' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ usage: this.costs.getAll(), total: this.costs.getTotal() }));
+        return;
+      }
+
+      if (p === '/api/genomes' && req.method === 'GET') {
+        try {
+          const genomesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'genomes');
+          const entries = await fs.readdir(genomesDir, { withFileTypes: true });
+          const genomes: Array<{ name: string; description?: string }> = [];
+          for (const e of entries) {
+            if (!e.isDirectory()) continue;
+            let description: string | undefined;
+            try {
+              const gj = JSON.parse(await fs.readFile(path.join(genomesDir, e.name, 'genome.json'), 'utf-8'));
+              description = gj.description;
+            } catch {}
+            genomes.push({ name: e.name, description });
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(genomes));
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
         return;
       }
 

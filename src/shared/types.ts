@@ -13,7 +13,7 @@ export type CreatureLifecycleEvent =
   | { t: string; type: "creature.sleep"; text: string; seconds: number; actions: number; watch?: string[] }
   | { t: string; type: "creature.tool_call"; tool: string; input: string; ok: boolean; output: string; ms: number }
   | { t: string; type: "creature.wake"; reason: string; source: "manual" | "watcher" | "timer" }
-  | { t: string; type: "creature.message"; text: string; source: "user" | "creator" | "system" }
+  | { t: string; type: "creature.message"; text: string; source: "user" | "system" }
   | { t: string; type: "creature.error"; error: string; retryIn?: number; retries?: number; fatal?: boolean }
   | { t: string; type: "creature.request_restart"; reason: string };
 
