@@ -24,9 +24,15 @@ import {
 
 const execAsync = promisify(exec);
 
-const ITSALIVE_HOME = path.join(os.homedir(), '.itsalive');
+const ITSALIVE_HOME = process.env.ITSALIVE_HOME || path.join(os.homedir(), '.itsalive');
 const CREATURES_DIR = path.join(ITSALIVE_HOME, 'creatures');
 const ARCHIVE_DIR = path.join(ITSALIVE_HOME, 'archive');
+const IS_DOCKER = process.env.ITSALIVE_DOCKER === '1';
+
+function creatureUrl(name: string, port: number, urlPath: string): string {
+  if (IS_DOCKER) return `http://creature-${name}:7778${urlPath}`;
+  return `http://127.0.0.1:${port}${urlPath}`;
+}
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
@@ -449,7 +455,7 @@ export class Orchestrator {
     const supervisor = this.supervisors.get(name);
     if (!supervisor) throw new Error(`creature "${name}" is not running`);
 
-    const res = await fetch(`http://127.0.0.1:${supervisor.port}/message`, {
+    const res = await fetch(creatureUrl(name, supervisor.port, '/message'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
@@ -633,7 +639,7 @@ export class Orchestrator {
             if (!supervisor) throw new Error(`creature "${name}" is not running`);
             const body = await readBody(req);
             const reason = body ? (JSON.parse(body).reason || 'Your creator woke you manually') : 'Your creator woke you manually';
-            const res2 = await fetch(`http://127.0.0.1:${supervisor.port}/wake`, {
+            const res2 = await fetch(creatureUrl(name, supervisor.port, '/wake'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ reason }),
@@ -657,7 +663,7 @@ export class Orchestrator {
             if (sup?.port) {
               const reason = `Message from user: ${text.slice(0, 100)}`;
               try {
-                const wakeRes = await fetch(`http://127.0.0.1:${sup.port}/wake`, {
+                const wakeRes = await fetch(creatureUrl(name, sup.port, '/wake'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ reason }),

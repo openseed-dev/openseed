@@ -16,10 +16,14 @@ import {
 
 const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 30_000;
-const ROLLBACK_DIR = path.join(process.env.HOME || '/tmp', '.itsalive', 'rollbacks');
+const ITSALIVE_HOME = process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.itsalive');
+const ROLLBACK_DIR = path.join(ITSALIVE_HOME, 'rollbacks');
 const MAX_LOG_LINES = 50;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const MAX_FAILURE_BACKOFF_MS = 30_000;
+
+const IS_DOCKER = process.env.ITSALIVE_DOCKER === '1';
+const HOST_PATH = process.env.ITSALIVE_HOST_PATH || ITSALIVE_HOME;
 
 export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping' | 'error';
 
@@ -193,23 +197,37 @@ export class CreatureSupervisor {
     orchestratorPort: number, autoIterate: boolean, name: string,
   ): ChildProcess {
     console.log(`[${name}] creating new container`);
-    return spawn('docker', [
+
+    // When the orchestrator runs in Docker, creature bind mounts must use the
+    // real host path (docker socket operates on the host, not inside our container).
+    const hostDir = IS_DOCKER
+      ? dir.replace(process.env.ITSALIVE_HOME || '/data', HOST_PATH)
+      : dir;
+
+    const orchestratorUrl = IS_DOCKER
+      ? `http://itsalive:${orchestratorPort}`
+      : `http://host.docker.internal:${orchestratorPort}`;
+
+    const args = [
       'run', '--init',
       '--name', cname,
       '--memory', '2g',
       '--cpus', '1.5',
       '-p', `${port}:7778`,
-      '-v', `${dir}:/creature`,
+      '-v', `${hostDir}:/creature`,
       '-v', `${cname}-node-modules:/creature/node_modules`,
       '-e', `ANTHROPIC_API_KEY=creature:${name}`,
-      '-e', `ANTHROPIC_BASE_URL=http://host.docker.internal:${orchestratorPort}`,
-      '-e', `HOST_URL=http://host.docker.internal:${orchestratorPort}`,
+      '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
+      '-e', `HOST_URL=${orchestratorUrl}`,
       '-e', `CREATURE_NAME=${name}`,
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
+      ...(IS_DOCKER ? ['--network', 'itsalive'] : []),
       `creature-${name}`,
-    ], {
+    ];
+
+    return spawn('docker', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   }
@@ -333,7 +351,9 @@ export class CreatureSupervisor {
 
   private async checkHealth(): Promise<boolean> {
     try {
-      const res = await fetch(`http://127.0.0.1:${this.port}/healthz`);
+      const host = IS_DOCKER ? this.containerName() : '127.0.0.1';
+      const port = IS_DOCKER ? 7778 : this.port;
+      const res = await fetch(`http://${host}:${port}/healthz`);
       return res.ok;
     } catch {
       return false;
