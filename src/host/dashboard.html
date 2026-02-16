@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>itsalive</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -187,8 +188,19 @@
     .mind-content .dream-time { color: #666; font-size: 11px; }
     .mind-content .dream-deep { color: #c8f; font-size: 10px; font-weight: bold; margin-left: 6px; }
     .mind-content .dream-reflection { color: #ccc; margin-top: 4px; }
-    .mind-content .obs-important { color: #e8e8e8; }
-    .mind-content .obs-minor { color: #666; }
+    .mind-content h1 { color: #fff; font-size: 15px; margin: 16px 0 8px; }
+    .mind-content h2 { color: #eee; font-size: 14px; margin: 14px 0 6px; }
+    .mind-content h3 { color: #ddd; font-size: 13px; margin: 12px 0 4px; }
+    .mind-content p { margin: 6px 0; }
+    .mind-content a { color: #58f; }
+    .mind-content code { background: #1a1a2a; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+    .mind-content pre { background: #0d0d0d; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 8px 0; }
+    .mind-content pre code { background: none; padding: 0; }
+    .mind-content ul, .mind-content ol { padding-left: 20px; margin: 6px 0; }
+    .mind-content blockquote { border-left: 3px solid #333; padding-left: 12px; color: #999; margin: 8px 0; }
+    .mind-content table { border-collapse: collapse; margin: 8px 0; }
+    .mind-content th, .mind-content td { border: 1px solid #333; padding: 4px 8px; font-size: 12px; }
+    .mind-content th { background: #1a1a1a; color: #ddd; }
   </style>
 </head>
 <body>
@@ -380,10 +392,36 @@
     function renderTabs() {
       if (!selected) { tabBar.classList.remove('visible'); return; }
       tabBar.classList.add('visible');
-      const tabs = ['log','purpose','observations','dreams','rules','diary','creator'];
-      tabBar.innerHTML = tabs.map(t =>
-        '<div class="tab' + (selectedTab === t ? ' active' : '') + '" onclick="selectTab(\'' + t + '\')">' + t + '</div>'
-      ).join('') + '<div class="tab-refresh" onclick="loadMind().then(renderContent)">\u21bb</div>';
+      const genomeTabs = (mindData && mindData.tabs) || [];
+      const tabIds = ['log'].concat(genomeTabs.map(t => t.id));
+      const tabLabels = { log: 'log' };
+      genomeTabs.forEach(t => { tabLabels[t.id] = t.label || t.id; });
+      tabBar.innerHTML = tabIds.map(t =>
+        '<div class="tab' + (selectedTab === t ? ' active' : '') + '" onclick="selectTab(\'' + t + '\')">' + (tabLabels[t] || t) + '</div>'
+      ).join('') + '<div class="tab-refresh" onclick="loadMind().then(()=>{renderTabs();renderContent();})">\u21bb</div>';
+    }
+
+    function renderMarkdown(src) {
+      if (!src) return '';
+      try { return marked.parse(src); } catch { return esc(src); }
+    }
+
+    function renderJsonlEntry(entry) {
+      const id = uid();
+      const time = entry.t ? timeAgo(entry.t) : '';
+      const rest = Object.keys(entry).filter(k => k !== 't');
+      const summaryField = rest.find(k => typeof entry[k] === 'string' && entry[k].length > 10) || rest[0];
+      const summary = summaryField ? summarize(String(entry[summaryField]), 120) : '...';
+      const detail = rest.map(k => {
+        const v = entry[k];
+        const display = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
+        return '<strong>' + esc(k) + ':</strong> ' + esc(display);
+      }).join('\n');
+      return '<div class="dream-entry">'
+        + '<span class="dream-time">' + time + '</span>'
+        + '<span class="dream-reflection thought-summary" onclick="toggle(\'' + id + '\')" style="cursor:pointer"> ' + esc(summary) + '</span>'
+        + '<div class="thought-body" id="' + id + '">' + detail + '</div>'
+        + '</div>';
     }
 
     function renderContent() {
@@ -396,52 +434,27 @@
       }
       msgBar.classList.remove('visible');
       if (!mindData) {
-        loadMind().then(renderContent);
+        loadMind().then(() => { renderTabs(); renderContent(); });
         contentEl.innerHTML = '<div class="mind-content">Loading...</div>';
         return;
       }
+
+      const tab = (mindData.tabs || []).find(t => t.id === selectedTab);
+      const data = mindData.data && mindData.data[selectedTab];
       let html = '';
-      if (selectedTab === 'purpose') {
-        html = esc(mindData.purpose || 'No PURPOSE.md');
-      } else if (selectedTab === 'diary') {
-        html = esc(mindData.diary || 'No diary entries yet.');
-      } else if (selectedTab === 'rules') {
-        html = esc(mindData.rules || 'No rules yet.');
-      } else if (selectedTab === 'observations') {
-        const obs = mindData.observations || '';
-        html = obs ? obs.split('\n').map(l => {
-          if (l.startsWith('RED')) return '<span style="color:#f55">' + esc(l) + '</span>';
-          if (l.startsWith('YLW')) return '<span style="color:#fa0">' + esc(l) + '</span>';
-          if (l.startsWith('GRN')) return '<span style="color:#666">' + esc(l) + '</span>';
-          if (l.startsWith('[!]')) return '<span class="obs-important">' + esc(l) + '</span>';
-          if (l.startsWith('[.]')) return '<span class="obs-minor">' + esc(l) + '</span>';
-          return esc(l);
-        }).join('\n') : 'No observations yet.';
-      } else if (selectedTab === 'dreams') {
-        const dreams = mindData.dreams || [];
-        if (dreams.length === 0) { html = 'No dreams yet.'; }
-        else {
-          html = dreams.map(d =>
-            '<div class="dream-entry">'
-            + '<span class="dream-time">' + timeAgo(d.t) + ' \u2014 ' + (d.actions||0) + ' actions</span>'
-            + (d.deep ? '<span class="dream-deep">deep sleep</span>' : '')
-            + '\n<span class="dream-reflection">' + esc(d.reflection || '') + '</span>'
-            + '</div>'
-          ).reverse().join('');
-        }
-      } else if (selectedTab === 'creator') {
-        const logs = mindData.creatorLog || [];
-        if (logs.length === 0) { html = 'No creator evaluations yet.'; }
-        else {
-          html = logs.map(e =>
-            '<div class="dream-entry">'
-            + '<span class="dream-time">' + timeAgo(e.t) + ' \u2014 trigger: ' + esc(e.trigger || '') + (e.changed ? ' \u2014 <span style="color:#0d4">changed</span>' : ' \u2014 no changes') + '</span>\n'
-            + '<span class="dream-reflection">' + esc(e.reasoning || '') + '</span>'
-            + (e.changes && e.changes.length > 0 ? '\n<span style="color:#0d4">Files: ' + e.changes.map(c => esc(c.file || c)).join(', ') + '</span>' : '')
-            + '</div>'
-          ).reverse().join('');
-        }
+
+      if (!tab) {
+        html = 'Unknown tab.';
+      } else if (tab.type === 'jsonl') {
+        const entries = Array.isArray(data) ? data : [];
+        if (entries.length === 0) { html = 'No entries yet.'; }
+        else { html = entries.slice().reverse().map(renderJsonlEntry).join(''); }
+      } else if (tab.type === 'markdown') {
+        html = data ? renderMarkdown(data) : 'Empty.';
+      } else {
+        html = data ? esc(data) : 'Empty.';
       }
+
       contentEl.innerHTML = '<div class="mind-content">' + html + '</div>';
     }
 
@@ -464,6 +477,7 @@
           }
           window.scrollTo(0, document.body.scrollHeight);
         } catch {}
+        loadMind().then(() => { renderTabs(); });
       } else {
         headerEl.innerHTML = '<h2>all creatures</h2>';
       }

@@ -4,5 +4,9 @@
   "description": "Bare-bones creature loop. No memory, no dreams — the creature discovers its own persistence strategies.",
   "author": "itsalive",
   "license": "MIT",
-  "tags": ["minimal", "experimental", "emergent"]
+  "tags": ["minimal", "experimental", "emergent"],
+  "tabs": [
+    { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" },
+    { "id": "diary", "label": "diary", "file": "self/diary.md", "type": "markdown" }
+  ]
 }

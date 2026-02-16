@@ -600,16 +600,33 @@ export class Orchestrator {
               return lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
             } catch { return []; }
           };
-          const files = {
-            purpose: await read('PURPOSE.md'),
-            diary: await read('self/diary.md'),
-            observations: await read('.self/observations.md'),
-            rules: await read('.self/rules.md'),
-            dreams: await readJsonl('.self/dreams.jsonl', 10),
-            creatorLog: await readJsonl('.self/creator-log.jsonl', 10),
-          };
+
+          // Read tab config from creature's genome.json, fall back to hardcoded dreamer tabs
+          const defaultTabs = [
+            { id: 'purpose', label: 'purpose', file: 'PURPOSE.md', type: 'markdown' },
+            { id: 'diary', label: 'diary', file: 'self/diary.md', type: 'markdown' },
+            { id: 'observations', label: 'observations', file: '.self/observations.md', type: 'text' },
+            { id: 'rules', label: 'rules', file: '.self/rules.md', type: 'text' },
+            { id: 'dreams', label: 'dreams', file: '.self/dreams.jsonl', type: 'jsonl', limit: 10 },
+            { id: 'self-eval', label: 'self-eval', file: '.self/creator-log.jsonl', type: 'jsonl', limit: 10 },
+          ];
+          let tabs = defaultTabs;
+          try {
+            const genome = JSON.parse(await fs.readFile(path.join(dir, 'genome.json'), 'utf-8'));
+            if (Array.isArray(genome.tabs) && genome.tabs.length > 0) tabs = genome.tabs;
+          } catch {}
+
+          const data: Record<string, unknown> = {};
+          for (const tab of tabs) {
+            if (tab.type === 'jsonl') {
+              data[tab.id] = await readJsonl(tab.file, tab.limit || 10);
+            } else {
+              data[tab.id] = await read(tab.file);
+            }
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(files));
+          res.end(JSON.stringify({ tabs, data }));
           return;
         }
       }
