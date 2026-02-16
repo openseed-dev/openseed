@@ -362,11 +362,13 @@
     const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {
       const ev = JSON.parse(e.data);
-      if (selectedTab === 'log' && (selected === null || ev.creature === selected)) {
-        const wasNear = isNearBottom();
-        eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
-        if (wasNear) window.scrollTo(0, document.body.scrollHeight);
-      }
+      if (selectedTab !== 'log') return;
+      if (selected === null) {
+        if (ev.type === 'creature.tool_call' || ev.type === 'creature.progress_check') return;
+      } else if (ev.creature !== selected) return;
+      const wasNear = isNearBottom();
+      eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
+      if (wasNear) window.scrollTo(0, document.body.scrollHeight);
     };
 
     function selectTab(tab) {
