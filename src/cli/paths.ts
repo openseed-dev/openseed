@@ -8,6 +8,6 @@ export function creatureDir(name: string): string {
   return path.join(CREATURES_DIR, name);
 }
 
-export function templateDir(template = "dreamer"): string {
-  return path.resolve(import.meta.dirname, "..", "..", "templates", template);
+export function genomeDir(genome = "dreamer"): string {
+  return path.resolve(import.meta.dirname, "..", "..", "genomes", genome);
 }

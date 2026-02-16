@@ -41,9 +41,9 @@ src/host/          orchestrator — the single daemon that manages everything
 src/cli/           CLI commands (spawn, start, stop, list, fork, destroy)
 src/shared/        shared types (event definitions)
 
-templates/
-  dreamer/         full cognitive template — dreams, rules, observations, fatigue
-  minimal/         bare-bones template — creature discovers everything itself
+genomes/
+  dreamer/         full cognitive genome — dreams, rules, observations, fatigue
+  minimal/         bare-bones genome — creature discovers everything itself
 ```
 
 Creatures run in Docker containers. The orchestrator creates and manages the containers via `docker` CLI commands. Creatures communicate back to the orchestrator via HTTP POST (events) and GET (LLM proxy).
@@ -54,9 +54,9 @@ Creatures run in Docker containers. The orchestrator creates and manages the con
 
 Edit files in `src/host/`. The orchestrator runs via `tsx` — restart it to pick up changes.
 
-### Templates
+### Genomes
 
-Edit files in `templates/dreamer/` or `templates/minimal/`. Template changes only affect newly spawned creatures. Existing creatures have their own copy of the template code at `~/.itsalive/creatures/<name>/src/`.
+Edit files in `genomes/dreamer/` or `genomes/minimal/`. Genome changes only affect newly spawned creatures. Existing creatures have their own copy of the genome code at `~/.itsalive/creatures/<name>/src/`.
 
 ### Live Creatures
 
@@ -87,7 +87,7 @@ There's no test suite yet. If you're adding one, we'd welcome it. For now, test 
 
 ## Creature Data
 
-Creature data lives at `~/.itsalive/` (configurable via `ITSALIVE_HOME`). Each creature has its own git repo. The orchestrator auto-commits on sleep and Creator modifications.
+Creature data lives at `~/.itsalive/` (configurable via `ITSALIVE_HOME`). Each creature has its own git repo. Creatures validate and commit their own code changes before sleeping.
 
 ## Questions
 

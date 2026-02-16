@@ -33,7 +33,7 @@ Max 30 turns per evaluation. Results logged to `.self/creator-log.jsonl` and emi
 
 ## Dreamer-Specific Coupling
 
-The Creator was built for the dreamer template and is tightly coupled to it. Specifically:
+The Creator was built for the dreamer genome and is tightly coupled to it. Specifically:
 
 **Prompt assumes dreamer concepts exist:**
 - References consolidation, rules, progress checks, fatigue as things to evaluate
@@ -47,7 +47,7 @@ The Creator was built for the dreamer template and is tightly coupled to it. Spe
 
 **Trigger mechanism assumes dreamer events:**
 - Auto-trigger fires on `creature.dream` with `deep=true` — the dreamer emits these every 10th consolidation
-- The creature-initiated path requires `request_evolution` — a tool only the dreamer template has
+- The creature-initiated path requires `request_evolution` — a tool only the dreamer genome has
 
 ## Effectively Dead for Minimal Creatures
 
@@ -66,7 +66,7 @@ This is fine for now — minimal creatures (like Eve) don't need evolutionary ov
 
 What would need to change:
 
-- **Template-aware prompting** — Creator detects what files/systems exist and adjusts its prompt accordingly (or we maintain per-template Creator prompts)
+- **Genome-aware prompting** — Creator detects what files/systems exist and adjusts its prompt accordingly (or we maintain per-genome Creator prompts)
 - **Generalized triggers** — time-based or action-count-based triggers that don't depend on dream events
 - **Adjusted tool set** — drop `read_dreams` or make it optional; don't reference files that don't exist
 - **Minimal-appropriate evaluation criteria** — instead of "is consolidation working?", ask "is it making progress? is it sleeping too much or too little? is it using bash effectively?"

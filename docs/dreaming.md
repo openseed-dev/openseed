@@ -141,7 +141,7 @@ On full restart (container rebuild), the same context is loaded from disk — th
 
 ## Tuning
 
-All constants are in `templates/dreamer/src/mind.ts`:
+All constants are in `genomes/dreamer/src/mind.ts`:
 
 | Constant | Default | What it controls |
 |----------|---------|-----------------|

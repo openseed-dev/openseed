@@ -81,7 +81,7 @@ export async function fork(opts: ForkOptions): Promise<void> {
     id: crypto.randomUUID(),
     name: opts.name,
     born: new Date().toISOString(),
-    template_version: sourceBirth!.name, // record lineage
+    genome_version: sourceBirth!.name, // record lineage
     parent: sourceBirth!.id,
     forked_from: opts.source,
     forked_at_sha: forkedAtSHA,

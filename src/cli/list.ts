@@ -7,7 +7,7 @@ interface BirthInfo {
   id: string;
   name: string;
   born: string;
-  template_version: string;
+  genome_version: string;
   parent: string | null;
 }
 

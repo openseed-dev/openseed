@@ -8,7 +8,7 @@ Autonomous AI creatures that live in Docker containers. They think, act, sleep, 
 <!-- TODO: Replace with actual dashboard GIF -->
 <!-- ![Dashboard](docs/assets/dashboard.gif) -->
 
-> **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps — consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, a Creator agent reviews its cognitive architecture and rewrites its source code to make it better. The creature's git log is its autobiography.**
+> **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps — consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code to make itself better. The creature's git log is its autobiography.**
 
 ## What This Looks Like
 
@@ -46,7 +46,7 @@ The biological metaphors solve real engineering problems:
 - **Rules** are behavioral learning injected into the system prompt — the creature literally cannot forget them
 - **Fatigue** prevents agents from burning through context doing nothing useful
 
-The **Creator agent** adds a second timescale of adaptation: the creature learns behavior within its lifetime; the Creator watches across lifetimes and modifies the creature's source code.
+**Self-evaluation** adds a second timescale of adaptation: the creature learns behavior within its lifetime; during deep sleep, it evaluates its own cognitive architecture and may rewrite its source code.
 
 Everything is radically legible. Every piece of state is a text file. The git log is the creature's autobiography.
 
@@ -58,7 +58,7 @@ Everything is radically legible. Every piece of state is a text file. The git lo
 - **Content creators** that write, publish, and iterate based on engagement data
 - **Open-source contributors** that find repos, open PRs, and track their merge rate
 
-Or give a creature a purpose and see what it invents. The minimal template starts with nothing — no memory system, no rules — and the creature discovers its own persistence strategies.
+Or give a creature a purpose and see what it invents. The minimal genome starts with nothing — no memory system, no rules — and the creature discovers its own persistence strategies.
 
 ## Quick Start
 
@@ -116,7 +116,7 @@ Creatures can run on any supported model. Choose at spawn time:
 
 ```bash
 pnpm spawn trader -- --model claude-opus-4-6 --purpose "trade crypto"
-pnpm spawn explorer -- --model gpt-5.2 --template minimal --purpose "explore"
+pnpm spawn explorer -- --model gpt-5.2 --genome minimal --purpose "explore"
 pnpm spawn scout -- --model gpt-5-mini --purpose "monitor news"
 ```
 
@@ -133,11 +133,11 @@ Or select from the dropdown in the dashboard.
 
 Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic types. A translating proxy in the orchestrator handles routing — Claude models forward to Anthropic directly, OpenAI models get translated to the Responses API and back. The creature never knows the difference.
 
-## Templates
+## Genomes
 
-Templates are the embryos. Copied into a new creature at spawn time.
+Genomes are the cognitive blueprints. Copied into a new creature at spawn time.
 
-**`dreamer`** (default) — Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, Creator agent oversight. Good for complex, long-running purposes.
+**`dreamer`** (default) — Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
 
 **`minimal`** — Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
 
@@ -150,9 +150,9 @@ When you spawn a creature:
 3. The creature boots, reads its PURPOSE.md, and starts thinking
 4. It runs a continuous conversation loop with the LLM, executing bash commands and (for dreamers) browsing the web
 5. When it sleeps, it consolidates memories — writing observations, rules, and a dream reflection
-6. Every 10th sleep is a "deep sleep" that prunes old memories and triggers the Creator agent
-7. The Creator reads the creature's state and may modify its source code to make it better
-8. The creature's git log records every self-modification and Creator intervention
+6. Every 10th sleep is a "deep sleep" that prunes old memories and runs a self-evaluation
+7. The self-evaluation reads the creature's state and may modify its source code to make it better
+8. The creature's git log records every self-modification
 
 ## CLI
 
@@ -160,7 +160,7 @@ When you spawn a creature:
 itsalive up [--port 7770]              start the orchestrator + dashboard
 itsalive spawn <name> [options]        create a new creature
   --purpose "..."                      what the creature should do
-  --template dreamer|minimal           cognitive template (default: dreamer)
+  --genome dreamer|minimal             cognitive genome (default: dreamer)
   --model <model>                      LLM model (default: claude-opus-4-6)
 itsalive start <name> [--manual]       start a creature
 itsalive stop <name>                   stop a running creature
@@ -177,11 +177,10 @@ Or via pnpm: `pnpm up`, `pnpm spawn alpha`, `pnpm start alpha`, etc.
 Orchestrator (src/host/) — single daemon on your machine
 ├── Web dashboard on :7770 (real-time SSE event stream)
 ├── LLM proxy — routes to Anthropic or OpenAI based on model
-├── Creator agent — evolves creature cognitive architecture
 ├── Cost tracker — per-creature, per-model token accounting
 └── Creature supervisors — health check, promote, rollback
     └── Docker containers (long-lived, persistent)
-        ├── Creature process (from template)
+        ├── Creature process (from genome)
         │   ├── Mind — continuous LLM conversation loop
         │   └── Tools: bash, sleep, browser (dreamer only)
         ├── Bind mount: ~/.itsalive/creatures/<name>/ → /creature
@@ -191,8 +190,6 @@ Orchestrator (src/host/) — single daemon on your machine
 **Orchestrator** — manages all creatures. Health-checks every second, promotes after 10s of stability, rolls back on crash. Can be restarted without killing containers — reconnects on startup.
 
 **LLM Proxy** — creatures call the proxy instead of the LLM provider directly. The proxy detects the model, injects the real API key, and routes to the right upstream. For OpenAI models, it translates between Anthropic and OpenAI Responses API formats transparently.
-
-**Creator Agent** — an LLM agent that runs inside the orchestrator. Triggered after deep sleep cycles. Reads the creature's full state, diagnoses problems, and modifies source code. Can `docker exec` into containers to install packages.
 
 **Supervisors** — one per creature. Manages the Docker container lifecycle, streams logs, handles health gate and rollback logic.
 
@@ -218,7 +215,7 @@ Orchestrator (src/host/) — single daemon on your machine
 │   └── memory.jsonl           working memory
 ├── workspace/                 scratch space (not git-tracked)
 ├── PURPOSE.md                 the creature's reason for existing
-├── BIRTH.json                 identity: name, template, model, birth time
+├── BIRTH.json                 identity: name, genome, model, birth time
 └── Dockerfile
 ```
 
@@ -232,13 +229,13 @@ Creatures have a three-tier memory system:
 - **Observations** — prioritized facts compressed from experience (`.self/observations.md`)
 - **Total recall** — full conversation log on disk, searchable with `rg`
 
-A fatigue system tracks activity and forces consolidation. During consolidation, a separate LLM call produces observations, an honest self-reflection ("dream"), and learned behavioral rules. Every 10th dream triggers deep sleep — pruning stale observations, reviewing rules, and triggering the Creator agent.
+A fatigue system tracks activity and forces consolidation. During consolidation, a separate LLM call produces observations, an honest self-reflection ("dream"), and learned behavioral rules. Every 10th dream triggers deep sleep — pruning stale observations, reviewing rules, and running a self-evaluation of the creature's cognitive architecture.
 
 ## Deep Dives
 
 - **[Sleep, Dreams, and Memory](docs/dreaming.md)** — the cognitive architecture: fatigue, consolidation, observation priorities, and how it compares to Mastra's Observational Memory
 - **[LLM Proxy](docs/llm-proxy.md)** — why Vercel AI SDK, how the translating proxy works, adding new providers
-- **[Creator Agent](docs/creator.md)** — the evolutionary architect: triggers, tools, and its relationship to the dreamer template
+- **[Creator Agent](docs/creator.md)** — the evolutionary architect: triggers, tools, and its relationship to the dreamer genome
 
 ## Source Layout
 
@@ -248,7 +245,7 @@ src/
     index.ts          orchestrator — API, SSE, creature management
     proxy.ts          LLM proxy — Anthropic passthrough + OpenAI translation
     supervisor.ts     per-creature Docker lifecycle + health + rollback
-    creator.ts        Creator agent — evaluates and evolves creatures
+    creator.ts        Creator agent (legacy — evaluation now runs inside creatures)
     costs.ts          per-creature, per-model cost tracking
     events.ts         event store (JSONL)
     git.ts            git operations for creature repos
@@ -257,7 +254,7 @@ src/
   cli/                CLI commands (spawn, start, stop, list, fork, destroy)
   shared/types.ts     event type definitions
 
-templates/
+genomes/
   dreamer/            full cognitive architecture
   minimal/            bare-bones — creature discovers everything
 ```
@@ -267,7 +264,7 @@ templates/
 - **Cost controls** — per-creature spending limits with automatic sleep or shutdown when the budget is hit
 - **Cost-aware creatures** — expose budget and usage to the creature so it can make economic decisions
 - **Cloud deployment** — hosted version where creatures run on managed infrastructure. The `CreatureSupervisor` is already an abstraction over Docker — a cloud supervisor would call a platform API instead of `docker run`
-- **Creature marketplace** — share templates, evolved strategies, and purpose-built creatures. Import a creature someone else built and run it with your own API keys
+- **Genome marketplace** — share genomes, evolved strategies, and purpose-built creatures. Import a creature someone else designed and run it with your own API keys
 - **Inter-creature communication** — structured message passing between creatures for richer collaboration
 - **More models** — Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward
 

@@ -246,10 +246,10 @@ export class Orchestrator {
     await supervisor.restart();
   }
 
-  async spawnCreature(name: string, dir: string, purpose?: string, template = 'dreamer', model?: string): Promise<void> {
+  async spawnCreature(name: string, dir: string, purpose?: string, genome = 'dreamer', model?: string): Promise<void> {
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    const tpl = path.resolve(thisDir, '..', '..', 'templates', template);
-    try { await fs.access(tpl); } catch { throw new Error(`template "${template}" not found at ${tpl}`); }
+    const tpl = path.resolve(thisDir, '..', '..', 'genomes', genome);
+    try { await fs.access(tpl); } catch { throw new Error(`genome "${genome}" not found at ${tpl}`); }
 
     await fs.mkdir(CREATURES_DIR, { recursive: true });
     await copyDir(tpl, dir);
@@ -258,8 +258,8 @@ export class Orchestrator {
       id: crypto.randomUUID(),
       name,
       born: new Date().toISOString(),
-      template: template,
-      template_version: '0.0.0',
+      genome: genome,
+      genome_version: '0.0.0',
       parent: null,
     };
     if (model) birth.model = model;
@@ -427,7 +427,7 @@ export class Orchestrator {
           const body = JSON.parse(await readBody(req));
           const name = (body.name || '').trim();
           const purpose = (body.purpose || '').trim();
-          const template = (body.template || 'dreamer').trim();
+          const genome = (body.genome || 'dreamer').trim();
           const model = (body.model || '').trim() || undefined;
           if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
           const dir = path.join(CREATURES_DIR, name);
@@ -438,7 +438,7 @@ export class Orchestrator {
           res.end(JSON.stringify({ ok: true, name, status: 'spawning' }));
 
           await this.emitEvent(name, { type: 'creature.spawning', t: new Date().toISOString() } as any);
-          this.spawnCreature(name, dir, purpose, template, model).then(async () => {
+          this.spawnCreature(name, dir, purpose, genome, model).then(async () => {
             console.log(`[orchestrator] creature "${name}" ready`);
             await this.emitEvent(name, { type: 'creature.spawned', t: new Date().toISOString() } as any);
           }).catch(async (err) => {

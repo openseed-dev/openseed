@@ -6,7 +6,7 @@ import path from 'node:path';
 import {
   creatureDir,
   CREATURES_DIR,
-  templateDir,
+  genomeDir,
 } from './paths.js';
 import { readVersion } from './version.js';
 
@@ -18,7 +18,7 @@ const KNOWN_MODELS = [
 interface SpawnOptions {
   name: string;
   purpose?: string;
-  template?: string;
+  genome?: string;
   model?: string;
 }
 
@@ -54,13 +54,13 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
     // Good — doesn't exist yet
   }
 
-  const tpl = templateDir(opts.template || 'dreamer');
+  const tpl = genomeDir(opts.genome || 'dreamer');
 
-  // Verify template exists
+  // Verify genome exists
   try {
     await fs.access(tpl);
   } catch {
-    console.error(`template not found at ${tpl}`);
+    console.error(`genome not found at ${tpl}`);
     process.exit(1);
   }
 
@@ -74,7 +74,7 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
   // Ensure parent dirs exist
   await fs.mkdir(CREATURES_DIR, { recursive: true });
 
-  // Copy template into creature dir
+  // Copy genome into creature dir
   await copyDir(tpl, dir);
 
   // Write birth certificate
@@ -82,8 +82,8 @@ export async function spawn(opts: SpawnOptions): Promise<void> {
     id: crypto.randomUUID(),
     name: opts.name,
     born: new Date().toISOString(),
-    template: opts.template || 'dreamer',
-    template_version: readVersion(),
+    genome: opts.genome || 'dreamer',
+    genome_version: readVersion(),
     parent: null,
   };
   if (opts.model) birth.model = opts.model;

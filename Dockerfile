@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY tsconfig.json ./
 COPY src/ src/
-COPY templates/ templates/
+COPY genomes/ genomes/
 COPY docs/ docs/
 
 ENV ITSALIVE_HOME=/data
