@@ -33,7 +33,6 @@ export interface SupervisorConfig {
   port: number;
   orchestratorPort: number;
   autoIterate: boolean;
-  sandboxed: boolean;
   model?: string;
 }
 
@@ -41,7 +40,6 @@ export class CreatureSupervisor {
   readonly name: string;
   readonly dir: string;
   readonly port: number;
-  readonly sandboxed: boolean;
   status: CreatureStatus = 'stopped';
 
   private creature: ChildProcess | null = null;
@@ -63,7 +61,6 @@ export class CreatureSupervisor {
     this.name = config.name;
     this.dir = config.dir;
     this.port = config.port;
-    this.sandboxed = config.sandboxed;
     this.config = config;
     this.onEvent = onEvent;
   }
@@ -78,12 +75,7 @@ export class CreatureSupervisor {
   async stop(): Promise<void> {
     this.expectingExit = true;
     this.clearTimers();
-    if (this.config.sandboxed) {
-      // Graceful stop — container persists in exited state
-      try { execSync(`docker stop ${this.containerName()}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
-    } else if (this.creature) {
-      this.creature.kill();
-    }
+    try { execSync(`docker stop ${this.containerName()}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
     this.status = 'stopped';
     this.creature = null;
   }
@@ -94,16 +86,11 @@ export class CreatureSupervisor {
     this.healthyAt = null;
     this.currentSHA = getCurrentSHA(this.dir);
 
-    if (this.config.sandboxed) {
-      // docker restart: stops then starts the same container (writable layer preserved)
-      console.log(`[${this.name}] restarting container (environment preserved)`);
-      try {
-        execSync(`docker restart ${this.containerName()}`, { stdio: 'ignore', timeout: 30_000 });
-      } catch {
-        console.log(`[${this.name}] restart failed, spawning fresh`);
-      }
-    } else if (this.creature) {
-      this.creature.kill();
+    console.log(`[${this.name}] restarting container (environment preserved)`);
+    try {
+      execSync(`docker restart ${this.containerName()}`, { stdio: 'ignore', timeout: 30_000 });
+    } catch {
+      console.log(`[${this.name}] restart failed, spawning fresh`);
     }
 
     this.creature = null;
@@ -140,7 +127,6 @@ export class CreatureSupervisor {
       last_good_sha: this.lastGoodSHA || null,
       healthy: this.healthyAt !== null,
       port: this.port,
-      sandboxed: this.sandboxed,
     };
   }
 
@@ -181,15 +167,10 @@ export class CreatureSupervisor {
     return `creature-${this.name}`;
   }
 
-  // Destroy container entirely (kill + rm). Only for rebuild.
   private destroyContainer() {
-    if (this.config.sandboxed) {
-      try { execSync(`docker kill ${this.containerName()}`, { stdio: 'ignore' }); } catch {}
-      try { execSync(`docker wait ${this.containerName()}`, { stdio: 'ignore', timeout: 5000 }); } catch {}
-      try { execSync(`docker rm -f ${this.containerName()}`, { stdio: 'ignore' }); } catch {}
-    } else if (this.creature) {
-      this.creature.kill();
-    }
+    try { execSync(`docker kill ${this.containerName()}`, { stdio: 'ignore' }); } catch {}
+    try { execSync(`docker wait ${this.containerName()}`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+    try { execSync(`docker rm -f ${this.containerName()}`, { stdio: 'ignore' }); } catch {}
   }
 
   private createContainer(
@@ -233,56 +214,33 @@ export class CreatureSupervisor {
   }
 
   private async spawnCreature() {
-    const { dir, port, orchestratorPort, autoIterate, sandboxed, name } = this.config;
+    const { dir, port, orchestratorPort, autoIterate, name } = this.config;
     this.currentSHA = getCurrentSHA(dir);
 
     let reconnected = false;
+    const cname = this.containerName();
 
-    if (sandboxed) {
-      const cname = this.containerName();
-
-      if (this.isContainerRunning()) {
-        // Case 1: container is already running — reconnect
-        console.log(`[${name}] reconnecting to running container`);
+    if (this.isContainerRunning()) {
+      console.log(`[${name}] reconnecting to running container`);
+      this.creature = spawn('docker', ['logs', '-f', '--tail', '50', cname], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      reconnected = true;
+    } else if (this.containerExists()) {
+      console.log(`[${name}] starting existing container (environment preserved)`);
+      try {
+        execSync(`docker start ${cname}`, { stdio: 'ignore', timeout: 15_000 });
         this.creature = spawn('docker', ['logs', '-f', '--tail', '50', cname], {
           stdio: ['ignore', 'pipe', 'pipe'],
         });
         reconnected = true;
-      } else if (this.containerExists()) {
-        // Case 2: container exists but is stopped — try to start it (preserves writable layer)
-        console.log(`[${name}] starting existing container (environment preserved)`);
-        try {
-          execSync(`docker start ${cname}`, { stdio: 'ignore', timeout: 15_000 });
-          // Attach to running container
-          this.creature = spawn('docker', ['logs', '-f', '--tail', '50', cname], {
-            stdio: ['ignore', 'pipe', 'pipe'],
-          });
-          reconnected = true;
-        } catch {
-          // Start failed — remove and create fresh
-          console.log(`[${name}] start failed, creating fresh container`);
-          try { execSync(`docker rm -f ${cname}`, { stdio: 'ignore' }); } catch {}
-          this.creature = this.createContainer(cname, dir, port, orchestratorPort, autoIterate, name);
-        }
-      } else {
-        // Case 3: no container — create fresh
+      } catch {
+        console.log(`[${name}] start failed, creating fresh container`);
+        try { execSync(`docker rm -f ${cname}`, { stdio: 'ignore' }); } catch {}
         this.creature = this.createContainer(cname, dir, port, orchestratorPort, autoIterate, name);
       }
     } else {
-      this.creature = spawn('npx', ['tsx', 'src/index.ts'], {
-        cwd: dir,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PORT: String(port),
-          HOST_URL: `http://127.0.0.1:${orchestratorPort}`,
-          CREATURE_NAME: name,
-          ANTHROPIC_API_KEY: `creature:${name}`,
-          ANTHROPIC_BASE_URL: `http://127.0.0.1:${orchestratorPort}`,
-          AUTO_ITERATE: autoIterate ? 'true' : 'false',
-          ...(this.config.model ? { LLM_MODEL: this.config.model } : {}),
-        },
-      });
+      this.creature = this.createContainer(cname, dir, port, orchestratorPort, autoIterate, name);
     }
 
     this.recentOutput = [];
@@ -385,7 +343,7 @@ export class CreatureSupervisor {
     this.clearTimers();
 
     // Guard A: if Docker is down, don't rollback or retry — infrastructure is the problem
-    if (this.config.sandboxed && !this.isDockerAvailable()) {
+    if (!this.isDockerAvailable()) {
       console.log(`[${this.name}] Docker unavailable — stopping (not rolling back)`);
       this.status = 'stopped';
       this.creature = null;
@@ -441,17 +399,12 @@ export class CreatureSupervisor {
       resetToSHA(this.dir, to);
     }
 
-    // For sandboxed containers: use docker restart to preserve environment
-    if (this.config.sandboxed && this.containerExists()) {
+    if (this.containerExists()) {
       try {
         execSync(`docker restart ${this.containerName()}`, { stdio: 'ignore', timeout: 30_000 });
       } catch {
         this.destroyContainer();
       }
-    } else if (this.config.sandboxed) {
-      // No container — spawnCreature will create one
-    } else if (this.creature) {
-      this.creature.kill();
     }
 
     this.creature = null;

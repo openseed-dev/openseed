@@ -119,7 +119,7 @@ export class Orchestrator {
       const port = this.getContainerPort(name);
       if (port) {
         console.log(`[orchestrator] found running container for ${name} on port ${port}`);
-        await this.startCreatureInternal(name, dir, port, { sandboxed: true, autoIterate: true });
+        await this.startCreatureInternal(name, dir, port, { autoIterate: true });
       }
     }
   }
@@ -176,18 +176,24 @@ export class Orchestrator {
     try { await fs.access(path.join(dir, 'BIRTH.json')); }
     catch { throw new Error(`creature "${name}" not found`); }
 
-    const sandboxed = this.isDockerAvailable() && this.hasDockerImage(name);
+    if (!this.isDockerAvailable()) throw new Error('docker is required but not available');
+
+    if (!this.hasDockerImage(name)) {
+      console.log(`[orchestrator] no docker image for ${name}, building...`);
+      await execAsync(`docker build -t creature-${name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
+    }
+
     const autoIterate = !(opts?.manual);
-    const existingPort = sandboxed ? this.getContainerPort(name) : null;
+    const existingPort = this.getContainerPort(name);
     const port = existingPort || await this.allocatePort();
 
-    console.log(`[orchestrator] starting ${name} (${sandboxed ? 'docker' : 'no image — building required'}) on port ${port}${existingPort ? ' (existing container)' : ''}`); 
-    await this.startCreatureInternal(name, dir, port, { sandboxed, autoIterate });
+    console.log(`[orchestrator] starting ${name} on port ${port}${existingPort ? ' (existing container)' : ''}`);
+    await this.startCreatureInternal(name, dir, port, { autoIterate });
   }
 
   private async startCreatureInternal(
     name: string, dir: string, port: number,
-    opts: { sandboxed: boolean; autoIterate: boolean },
+    opts: { autoIterate: boolean },
   ) {
     const store = new EventStore(dir);
     await store.init();
@@ -204,7 +210,6 @@ export class Orchestrator {
       name, dir, port,
       orchestratorPort: this.port,
       autoIterate: opts.autoIterate,
-      sandboxed: opts.sandboxed,
       model,
     };
 
