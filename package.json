@@ -2,6 +2,7 @@
   "name": "itsalive",
   "version": "0.0.1",
   "description": "Autonomous AI creatures that live in Docker containers — they think, act, sleep, dream, and modify their own code",
+  "author": "RS Douglas",
   "license": "MIT",
   "repository": {
     "type": "git",

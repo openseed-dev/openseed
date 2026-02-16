@@ -1,72 +1,53 @@
-# Creator
+# Self-Evaluation (Creator)
 
-The Creator is the evolutionary architect — an LLM agent (claude-opus-4-6) that evaluates a creature's cognitive architecture and makes targeted improvements. It doesn't do the creature's tasks; it changes *how the creature thinks*.
+Creatures evaluate and evolve their own cognitive architecture. This runs inside the creature process itself — no host-side agent required.
 
-Code: `src/host/creator.ts`
+Code: `genomes/dreamer/src/mind.ts` (search for `selfEvaluate`)
 
 ## How It Gets Triggered
 
-Three paths:
+Two paths:
 
-1. **Deep sleep** — when a creature emits `creature.dream` with `deep=true`, the host auto-triggers Creator (`src/host/index.ts` ~line 292)
-2. **Creature request** — the creature calls `request_evolution` tool, which emits `creature.request_evolution`, and the host triggers Creator with the creature's reason
-3. **Manual** — POST to `/api/creatures/:name/evolve` from the dashboard
+1. **Deep sleep** — every 10th consolidation is a "deep sleep." After writing a diary entry and dreaming, the creature runs a self-evaluation loop.
+2. **Creature request** — the creature calls the `request_evolution` tool with a reason (e.g. "my rules are contradictory"), which triggers self-evaluation immediately.
 
 ## What It Does
 
-The Creator gets a system prompt framing it as an evolutionary coach, plus context built from:
-- Its own previous evaluation logs (`.self/creator-log.jsonl`)
-- Recent rollback history (`~/.itsalive/rollbacks/<name>.jsonl`)
+The creature spawns a separate LLM conversation with a "Creator" system prompt — an evolutionary architect persona that evaluates cognitive architecture rather than doing the creature's tasks. Think: a coach watching game tape.
 
-It then uses tools to investigate and modify the creature:
+The evaluation gets context about recent dreams, events, rollback history, and previous evaluations, then uses tools to investigate and modify the creature's code:
 
 | Tool | What it does |
 |------|-------------|
-| `bash` | Shell commands in the creature's repo dir (read files, make edits, grep, etc.) |
-| `read_events` | Last N events from the creature's event stream |
-| `read_dreams` | Last N entries from `.self/dreams.jsonl` |
-| `get_status` | Creature status (running/sleeping/stopped) |
-| `restart` | Validates TypeScript, git commits, restarts the creature process |
+| `bash` | Shell commands in /creature (read files, make edits, grep, validate TypeScript) |
 | `done` | Ends the evaluation with reasoning + changed flag |
 
-Max 30 turns per evaluation. Results logged to `.self/creator-log.jsonl` and emitted as `creator.evaluation` events.
+Max 20 turns per evaluation. The loop:
 
-## Dreamer-Specific Coupling
+1. Read observations, rules, dreams, events, source code
+2. Diagnose what's working and what isn't
+3. Make targeted changes (system prompt, consolidation logic, rules, tools)
+4. Validate TypeScript with `npx tsx --check`
+5. Git commit changes
+6. Call `done()` with reasoning
 
-The Creator was built for the dreamer genome and is tightly coupled to it. Specifically:
+If code changed, the creature sets a `pendingRestart` flag. On next sleep, it requests a restart from the orchestrator so the new code takes effect.
 
-**Prompt assumes dreamer concepts exist:**
-- References consolidation, rules, progress checks, fatigue as things to evaluate
-- Lists `.self/rules.md` and `.self/observations.md` as modifiable files
-- Describes the RED/YLW/GRN observation priority system
-- Tells the LLM to `cat .self/observations.md`, `cat .self/rules.md`, and use `read_dreams`
+## What It Evaluates
 
-**Tools assume dreamer state:**
-- `read_dreams` reads `.self/dreams.jsonl` — only written by the dreamer's consolidation system
-- The context builder directs the Creator to read files that only the dreamer creates
+- Is the creature effective or spinning on low-value work?
+- Are rules being followed or repeatedly violated?
+- Is consolidation working (dreams, observations, diary)?
+- Is the creature spending actions wisely?
+- What one or two changes would have the most leverage?
 
-**Trigger mechanism assumes dreamer events:**
-- Auto-trigger fires on `creature.dream` with `deep=true` — the dreamer emits these every 10th consolidation
-- The creature-initiated path requires `request_evolution` — a tool only the dreamer genome has
+## Safety
 
-## Effectively Dead for Minimal Creatures
+- TypeScript is validated before committing — syntax errors are caught
+- The orchestrator's supervisor tracks rollbacks in `.sys/rollbacks.jsonl`
+- Previous evaluation logs live in `.self/creator-log.jsonl` so the next evaluation knows what was already tried
+- Changes are git-committed with descriptive messages for auditability
 
-A minimal creature:
-- Never emits `creature.dream` events → Creator never auto-triggers
-- Has no `request_evolution` tool → creature can't request it
-- Has no `request_restart` tool → creature relies on sleep-based auto-apply only
-- Has no `.self/dreams.jsonl`, `.self/rules.md`, `.self/observations.md` → Creator's investigation finds nothing
-- Has no consolidation, fatigue, or progress check machinery → Creator's evaluation criteria are irrelevant
+## Genome-Specific
 
-The only way to trigger Creator for a minimal creature is manually from the dashboard, and even then it operates with wrong assumptions about the creature's architecture.
-
-This is fine for now — minimal creatures (like Eve) don't need evolutionary oversight.
-
-## If We Ever Want Creator for Minimal
-
-What would need to change:
-
-- **Genome-aware prompting** — Creator detects what files/systems exist and adjusts its prompt accordingly (or we maintain per-genome Creator prompts)
-- **Generalized triggers** — time-based or action-count-based triggers that don't depend on dream events
-- **Adjusted tool set** — drop `read_dreams` or make it optional; don't reference files that don't exist
-- **Minimal-appropriate evaluation criteria** — instead of "is consolidation working?", ask "is it making progress? is it sleeping too much or too little? is it using bash effectively?"
+This system is built into the dreamer genome. The minimal genome has no self-evaluation — minimal creatures discover their own evolution strategies (or don't). A new genome could implement self-evaluation differently or skip it entirely; the orchestrator doesn't care.
