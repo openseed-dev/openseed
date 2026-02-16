@@ -5,9 +5,6 @@
 
 Autonomous AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code — without human prompting.
 
-<!-- TODO: Replace with actual dashboard GIF -->
-<!-- ![Dashboard](docs/assets/dashboard.gif) -->
-
 > **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps — consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code to make itself better. The creature's git log is its autobiography.**
 
 ## What This Looks Like

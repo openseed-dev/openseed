@@ -17,7 +17,7 @@ export async function list(): Promise<void> {
   if (info) {
     try {
       const res = await fetch(`http://127.0.0.1:${info.port}/api/creatures`);
-      const creatures: Array<{ name: string; status: string; sha: string | null; port: number | null }> = await res.json();
+      const creatures = (await res.json()) as Array<{ name: string; status: string; sha: string | null; port: number | null }>;
 
       if (creatures.length === 0) {
         console.log("no creatures yet. spawn one with: itsalive spawn <name>");
