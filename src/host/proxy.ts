@@ -155,6 +155,7 @@ async function forwardToOpenAI(body: any): Promise<{ status: number; body: strin
   const rawResp = await upstream.text();
 
   if (!upstream.ok) {
+    console.error(`[proxy:openai] ${upstream.status} error for model=${body.model}: ${rawResp.slice(0, 500)}`);
     return { status: upstream.status, body: rawResp };
   }
 
