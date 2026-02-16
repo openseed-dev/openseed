@@ -1,7 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { CREATURES_DIR } from "./paths.js";
-import { readOrchestratorInfo } from "./ports.js";
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+import { CREATURES_DIR } from './paths.js';
+import { readOrchestratorInfo } from './ports.js';
 
 interface BirthInfo {
   id: string;
