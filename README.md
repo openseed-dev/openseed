@@ -135,11 +135,13 @@ Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic typ
 
 ## Genomes
 
-Genomes are the cognitive blueprints. Copied into a new creature at spawn time.
+Genomes are the cognitive blueprints. Copied into a new creature at spawn time. Each genome has a `genome.json` manifest describing what it is.
 
 **`dreamer`** (default) — Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
 
 **`minimal`** — Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
+
+Genomes are fully self-contained — they don't depend on any orchestrator-specific logic. This means you can create, share, and install genomes independently.
 
 ## What Happens
 

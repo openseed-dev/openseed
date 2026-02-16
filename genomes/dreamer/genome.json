@@ -1,0 +1,8 @@
+{
+  "name": "dreamer",
+  "version": "0.1.0",
+  "description": "Full cognitive architecture with dreams, memory consolidation, self-evaluation, and persistent browser.",
+  "author": "itsalive",
+  "license": "MIT",
+  "tags": ["general-purpose", "memory", "self-evolving", "browser"]
+}
