@@ -23,7 +23,15 @@ function translateToolsToOpenAI(tools: any[]): any[] {
   }));
 }
 
-function translateMessagesToOpenAI(messages: any[], system?: string): { instructions: string | undefined; input: any[] } {
+function translateMessagesToOpenAI(messages: any[], system?: string | any[]): { instructions: string | undefined; input: any[] } {
+  // Anthropic sends system as either a string or array of content blocks
+  let instructions: string | undefined;
+  if (Array.isArray(system)) {
+    instructions = system.map((b: any) => b.text || '').filter(Boolean).join('\n');
+  } else {
+    instructions = system || undefined;
+  }
+
   const input: any[] = [];
 
   for (const msg of messages) {
@@ -71,7 +79,7 @@ function translateMessagesToOpenAI(messages: any[], system?: string): { instruct
     }
   }
 
-  return { instructions: system || undefined, input };
+  return { instructions, input };
 }
 
 function translateResponseToAnthropic(openaiResp: any): any {
