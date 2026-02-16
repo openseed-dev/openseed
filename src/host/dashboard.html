@@ -326,17 +326,16 @@
           + (ev.retries ? '<span class="retry-badge">attempt #' + ev.retries + '</span>' : '')
           + '<span class="tool-ms">' + retryLabel + '</span>'
           + '<span class="intent-text"> \u2014 ' + esc(ev.error || 'unknown') + '</span>';
-      } else if (t === 'creator.evaluation') {
+      } else if (t === 'creator.evaluation' || t === 'creature.self_evaluation') {
         const oid = uid();
-        const changes = (ev.changes || []);
-        const label = changes.length > 0 ? 'creator evolved' : 'creator evaluated';
+        const changed = ev.changed || (ev.changes || []).length > 0;
+        const label = changed ? 'self-evolved' : 'self-evaluated';
         body = cl + '<span class="type creator">' + label + '</span>'
-          + (changes.length > 0 ? '<span class="tool-ms">' + changes.length + ' files changed</span>' : '')
+          + (changed ? '<span class="tool-ms">code modified</span>' : '')
           + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> \u2014 ' + esc(summarize(ev.reasoning || '', 120)) + '</span>'
           + '<div class="thought-body" id="'+oid+'">'
           + '<strong>Trigger:</strong> ' + esc(ev.trigger || '') + '\n\n'
           + '<strong>Reasoning:</strong>\n' + esc(ev.reasoning || '')
-          + (changes.length > 0 ? '\n\n<strong>Changed files:</strong>\n' + changes.map(f => '  - ' + esc(f)).join('\n') : '')
           + '</div>';
       } else if (t === 'host.promote') {
         body = cl + '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
@@ -454,7 +453,6 @@
           + '<button class="btn" onclick="wakeC(\'' + name + '\')">wake</button>'
           + '<button class="btn" onclick="restartC(\'' + name + '\')">restart</button>'
           + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\'' + name + '\')">rebuild</button>'
-          + '<button class="btn" style="color:#0d4;border-color:#0d4" onclick="evolveC(\'' + name + '\')">evolve</button>'
           + '<button class="btn" style="color:#f80;border-color:#f80" onclick="archiveC(\'' + name + '\')">archive</button>';
         try {
           const res = await fetch('/api/creatures/' + name + '/events');
@@ -517,8 +515,6 @@
     async function restartC(n) { await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
     async function rebuildC(n) { if(confirm('Rebuild destroys the container environment. Continue?')) { await fetch('/api/creatures/'+n+'/rebuild',{method:'POST'}); refresh(); } }
     async function wakeC(n) { await fetch('/api/creatures/'+n+'/wake',{method:'POST'}); }
-    async function evolveC(n) { await fetch('/api/creatures/'+n+'/evolve',{method:'POST'}); }
-
     function toggleSpawnForm() {
       document.getElementById('spawnForm').classList.toggle('visible');
       document.getElementById('spawnError').textContent = '';

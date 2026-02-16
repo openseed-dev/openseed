@@ -411,16 +411,21 @@ export class CreatureSupervisor {
       reason,
     });
 
-    // Write rollback log for Creator feedback
+    // Write rollback log to creature's .sys/ (accessible inside the container for self-evaluation)
+    const entry = JSON.stringify({
+      t: new Date().toISOString(),
+      reason,
+      from,
+      to,
+      lastOutput: lastOutput.slice(0, 1000),
+    });
+    try {
+      const creatureSysDir = path.join(this.dir, '.sys');
+      fsSync.mkdirSync(creatureSysDir, { recursive: true });
+      fsSync.appendFileSync(path.join(creatureSysDir, 'rollbacks.jsonl'), entry + '\n');
+    } catch {}
     try {
       fsSync.mkdirSync(ROLLBACK_DIR, { recursive: true });
-      const entry = JSON.stringify({
-        t: new Date().toISOString(),
-        reason,
-        from,
-        to,
-        lastOutput: lastOutput.slice(0, 1000),
-      });
       fsSync.appendFileSync(path.join(ROLLBACK_DIR, `${this.name}.jsonl`), entry + '\n');
     } catch {}
 

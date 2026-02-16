@@ -17,6 +17,7 @@ export type Event =
   | { t: string; type: "creature.message"; text: string; source: "user" | "creator" | "system" }
   | { t: string; type: "creature.progress_check"; actions: number }
   | { t: string; type: "creature.error"; error: string; retryIn?: number; retries?: number; fatal?: boolean }
+  | { t: string; type: "creature.self_evaluation"; reasoning: string; changed: boolean; trigger: string }
   | { t: string; type: "creator.evaluation"; reasoning: string; changes: string[]; trigger: string };
 
 export interface HostStatus {

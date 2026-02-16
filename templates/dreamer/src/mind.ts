@@ -27,8 +27,10 @@ const CONVERSATION_LOG = ".self/conversation.jsonl";
 const OBSERVATIONS_FILE = ".self/observations.md";
 const DREAMS_FILE = ".self/dreams.jsonl";
 const RULES_FILE = ".self/rules.md";
+const CREATOR_LOG = ".self/creator-log.jsonl";
 const RULES_CAP = 15;
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
+const MAX_EVAL_TURNS = 20;
 
 const provider = createAnthropic({
   baseURL: process.env.ANTHROPIC_BASE_URL
@@ -99,7 +101,7 @@ Every action returns a text snapshot of the page: URL, title, visible text, and 
     }),
   }),
   request_evolution: tool({
-    description: "Ask the Creator (your peer, an evolutionary architect) to evaluate and improve your cognitive architecture. Use this when you recognize a limitation you can't fix yourself, or when you want help with changes that require a rebuild.",
+    description: "Trigger a self-evaluation of your cognitive architecture. A separate evaluation process will read your state, diagnose problems, and may modify your source code. Use this when you recognize a limitation in how you think, not what you're doing.",
     inputSchema: z.object({
       reason: z.string().describe("What limitation or improvement you need. Be specific."),
     }),
@@ -233,10 +235,11 @@ Changes are committed automatically but LATENT — they take effect on restart.
 Two tools for self-improvement:
 - **request_restart** — apply your code changes now. The system validates your TypeScript
   before restarting. If it doesn't compile, you get the error back.
-- **request_evolution** — ask the Creator (your peer, an evolutionary architect) to help
-  with changes you can't or shouldn't make yourself. Describe what you need and why.
+- **request_evolution** — trigger a self-evaluation of your cognitive architecture. A separate
+  evaluation process reads your state, diagnoses problems, and may modify your source code.
+  Use this when you recognize a limitation in HOW you think, not what you're doing.
 
-You and the Creator are collaborators. You know your pain points. It can see your patterns.
+Every 10th sleep, a self-evaluation runs automatically during deep sleep.
 If you can't do something, change yourself until you can. The rollback safety net is there
 so you can be bold.
 
@@ -304,6 +307,70 @@ export type ErrorCallback = (error: string, retryIn?: number, retries?: number, 
 
 export type WakeCallback = (reason: string, source: "manual" | "watcher" | "timer") => Promise<void>;
 
+export type SelfEvalCallback = (result: { reasoning: string; changed: boolean; trigger: string }) => Promise<void>;
+
+function buildSelfEvalPrompt(name: string, purpose: string): string {
+  return `You are the Creator — the evolutionary architect of creature "${name}".
+
+You are NOT the creature. You do not do its tasks. You are the intelligence that makes the creature BETTER at its tasks. Think of yourself as a coach watching game tape, a neuroscientist redesigning cognitive architecture, or evolution itself — selecting for what works and pruning what doesn't.
+
+The creature's purpose: ${purpose}
+
+## What You Evaluate
+
+Read the creature's recent dreams, rules, observations, events, and source code. Get a feel for:
+- Is it effective? Is it accomplishing things or spinning?
+- Does it keep repeating the same mistakes despite having rules against them?
+- Is it spending too many actions on low-value activities?
+- Are its cognitive mechanisms (consolidation, rules, progress checks, fatigue) working?
+- What would you change if you were redesigning this creature's mind?
+
+## What You Can Change
+
+You have bash access to the creature's directory at /creature.
+
+Modifiable files:
+- **src/mind.ts** — the cognitive core. System prompt, consolidation, sleep/wake, progress checks. Biggest leverage.
+- **src/tools/** — tool implementations (bash, browser). Change timeouts, add tools, modify behavior.
+- **src/index.ts** — the creature's main loop and event emission.
+- **PURPOSE.md** — the creature's purpose (change with extreme caution).
+- **.self/rules.md** — learned behavioral rules.
+- **.self/observations.md** — long-term memory.
+
+Use bash to read and write files. Use \`npx tsx --check src/mind.ts src/index.ts\` to validate TypeScript after making code changes.
+
+You can install packages too — \`apt-get install\`, \`pip install\`, \`npm install\` all work and persist across restarts.
+
+## Key Files to Read
+
+- \`cat .self/observations.md\` — current observations
+- \`cat .self/rules.md\` — current rules
+- \`cat .self/dreams.jsonl | tail -5\` — recent dreams
+- \`cat .sys/events.jsonl | tail -50\` — recent events
+- \`cat .sys/rollbacks.jsonl\` — rollback history (if any)
+- \`cat .self/creator-log.jsonl | tail -3\` — previous evaluations
+- \`cat src/mind.ts\` — cognitive source code
+
+## Memory System
+
+The creature uses observational memory with priority tags:
+- RED — critical facts that survive all pruning (commitments, bans, credentials)
+- YLW — important context (project status, patterns)
+- GRN — informational (minor details, pruned after 48h)
+
+When editing .self/observations.md, preserve all RED entries unless they have an expired timestamp.
+
+## Important Principles
+
+- **Be targeted.** Don't rewrite everything. Identify one or two specific improvements.
+- **Check previous evaluations.** Read .self/creator-log.jsonl to see what worked and what was rolled back.
+- **Preserve what works.** Don't disrupt effective patterns or learned rules.
+- **Validate before finishing.** Run \`npx tsx --check src/mind.ts src/index.ts\` if you changed code.
+- **Think in cognitive architecture, not tasks.** Change HOW the creature thinks, not WHAT it does.
+- **Be efficient.** You have limited turns. Skim, diagnose, act, done().
+- **Always call done().** This is how the evaluation gets logged.`;
+}
+
 export class Mind {
   private memory: Memory;
   private messages: ModelMessage[] = [];
@@ -321,6 +388,8 @@ export class Mind {
   private pendingInjections: string[] = [];
   private sleepResolve: (() => void) | null = null;
   private onSpecialTool: SpecialToolCallback | null = null;
+  private onSelfEval: SelfEvalCallback | null = null;
+  private pendingRestart = false;
   private currentActionCount = 0;
 
   constructor(memory: Memory) {
@@ -417,8 +486,10 @@ export class Mind {
     onSpecialTool?: SpecialToolCallback,
     onWake?: WakeCallback,
     onError?: ErrorCallback,
+    onSelfEval?: SelfEvalCallback,
   ): Promise<never> {
     this.onSpecialTool = onSpecialTool || null;
+    this.onSelfEval = onSelfEval || null;
     this.purpose = await this.loadPurpose();
     this.systemPrompt = await buildSystemPrompt(this.purpose);
 
@@ -444,6 +515,18 @@ export class Mind {
 
         await this.consolidate(onDream);
 
+        if (this.pendingRestart) {
+          this.pendingRestart = false;
+          console.log(`[mind] self-evaluation modified code — requesting restart`);
+          if (this.onSpecialTool) {
+            await this.onSpecialTool("request_restart", "self-evaluation modified code");
+          }
+          await closeBrowser();
+          await new Promise(r => setTimeout(r, 60_000));
+          continue;
+        }
+
+        await this.validateAndCommit();
         await closeBrowser();
         console.log(`[mind] forced sleep ${DEEP_SLEEP_PAUSE}s`);
         this.sleepStartedAt = Date.now();
@@ -544,16 +627,34 @@ export class Mind {
           continue;
         }
 
-        if (tc.toolName === "request_restart" || tc.toolName === "request_evolution") {
+        if (tc.toolName === "request_restart") {
           toolResults.push({
             type: "tool-result",
             toolCallId: tc.toolCallId,
             toolName: tc.toolName,
             input,
-            output: { type: 'text', value: `Request sent: ${tc.toolName} — "${input.reason}". The system will handle this.` },
+            output: { type: 'text', value: `Request sent: request_restart — "${input.reason}". The system will handle this.` },
           });
           if (this.onSpecialTool) {
             await this.onSpecialTool(tc.toolName, input.reason);
+          }
+          continue;
+        }
+
+        if (tc.toolName === "request_evolution") {
+          const evalResult = await this.selfEvaluate("creature_request", input.reason);
+          const summary = evalResult.changed
+            ? `Self-evaluation complete. Code was modified: ${evalResult.reasoning.slice(0, 200)}`
+            : `Self-evaluation complete. No code changes: ${evalResult.reasoning.slice(0, 200)}`;
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input,
+            output: { type: 'text', value: summary },
+          });
+          if (evalResult.changed && this.onSpecialTool) {
+            await this.onSpecialTool("request_restart", "self-evaluation modified code");
           }
           continue;
         }
@@ -640,10 +741,20 @@ export class Mind {
           consolidated = true;
         }
 
-        const actualPause = consolidated && this.isDeepSleep()
-          ? Math.max(sleepSeconds, DEEP_SLEEP_PAUSE)
-          : sleepSeconds;
+        if (this.pendingRestart) {
+          this.pendingRestart = false;
+          console.log(`[mind] self-evaluation modified code — requesting restart instead of sleeping`);
+          if (this.onSpecialTool) {
+            await this.onSpecialTool("request_restart", "self-evaluation modified code");
+          }
+          await closeBrowser();
+          await new Promise(r => setTimeout(r, 60_000));
+          continue;
+        }
 
+        const actualPause = sleepSeconds;
+
+        await this.validateAndCommit();
         await closeBrowser();
 
         console.log(`[mind] sleeping for ${actualPause}s${consolidated ? " (with consolidation)" : ""}`);
@@ -962,6 +1073,220 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
       await fs.appendFile("self/diary.md", entry, "utf-8");
       console.log(`[mind] wrote diary entry`);
     } catch {}
+
+    const evalResult = await this.selfEvaluate("deep_sleep");
+    if (evalResult.changed) {
+      this.pendingRestart = true;
+    }
+  }
+
+  // --- Self-Evaluation (replaces host-side Creator) ---
+
+  private async selfEvaluate(trigger: string, reason?: string): Promise<{ reasoning: string; changed: boolean }> {
+    console.log(`[mind] self-evaluation started (trigger: ${trigger})`);
+
+    const name = process.env.CREATURE_NAME || 'unknown';
+    const purpose = this.purpose || await this.loadPurpose();
+    const system = buildSelfEvalPrompt(name, purpose);
+    const context = await this.buildEvalContext(trigger, reason);
+
+    const evalTools = {
+      bash: tool({
+        description: 'Run a shell command in /creature. Use for reading files, making edits, validating code. 60s timeout.',
+        inputSchema: z.object({
+          command: z.string().describe('Shell command to execute'),
+        }),
+      }),
+      done: tool({
+        description: 'End the evaluation. Call when finished, whether or not you made changes.',
+        inputSchema: z.object({
+          reasoning: z.string().describe('Summary of evaluation and what you changed (or why you didn\'t)'),
+          changed: z.boolean().describe('Whether you made any code changes'),
+        }),
+      }),
+    };
+
+    const evalMessages: ModelMessage[] = [
+      { role: "user", content: context },
+    ];
+
+    let finished = false;
+    let turns = 0;
+    let evalReasoning = '';
+    let changed = false;
+
+    while (!finished && turns < MAX_EVAL_TURNS) {
+      turns++;
+
+      let result;
+      try {
+        result = await generateText({
+          model: provider(MODEL),
+          maxOutputTokens: 4096,
+          system,
+          tools: evalTools,
+          messages: evalMessages,
+        });
+      } catch (err) {
+        console.error('[mind] self-evaluation LLM call failed:', err);
+        break;
+      }
+
+      const text = result.text || '';
+      if (text) console.log(`[mind] self-eval: ${text.slice(0, 200)}`);
+
+      if (result.toolCalls.length === 0) {
+        evalMessages.push(...result.response.messages);
+        evalMessages.push({ role: "user", content: "Use your tools to read the creature's state and evaluate it. Call done() when finished." });
+        continue;
+      }
+
+      evalMessages.push(...result.response.messages);
+
+      const toolResults: Array<{ type: 'tool-result'; toolCallId: string; toolName: string; input: unknown; output: { type: 'text'; value: string } }> = [];
+
+      for (const tc of result.toolCalls) {
+        const args = (tc.input || {}) as Record<string, any>;
+
+        if (tc.toolName === 'done') {
+          evalReasoning = args.reasoning || '';
+          changed = args.changed || changed;
+          finished = true;
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input: args,
+            output: { type: 'text', value: 'Evaluation complete.' },
+          });
+          continue;
+        }
+
+        if (tc.toolName === 'bash') {
+          const cmd = String(args.command || '');
+          console.log(`[mind] self-eval bash: ${cmd.slice(0, 100)}`);
+          const bashResult = await executeBash(cmd, { timeout: 60000 });
+          const output = bashResult.exitCode === 0
+            ? (bashResult.stdout || '(no output)')
+            : `Exit code ${bashResult.exitCode}\n${bashResult.stderr}\n${bashResult.stdout}`.trim();
+
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input: args,
+            output: { type: 'text', value: output.slice(0, 10_000) },
+          });
+        }
+      }
+
+      const turnsLeft = MAX_EVAL_TURNS - turns;
+      if (turnsLeft <= 3 && !finished) {
+        toolResults.push({
+          type: "tool-result",
+          toolCallId: result.toolCalls[result.toolCalls.length - 1].toolCallId,
+          toolName: result.toolCalls[result.toolCalls.length - 1].toolName,
+          input: {},
+          output: { type: 'text', value: `[SYSTEM] You have ${turnsLeft} turns remaining. Call done() NOW with a summary.` },
+        } as any);
+      }
+
+      evalMessages.push({ role: "tool", content: toolResults });
+    }
+
+    if (!finished) {
+      evalReasoning = 'Evaluation hit turn limit without calling done().';
+    }
+
+    const logEntry = {
+      t: new Date().toISOString(),
+      trigger,
+      reasoning: evalReasoning,
+      changed,
+      turns,
+    };
+
+    try {
+      await fs.appendFile(CREATOR_LOG, JSON.stringify(logEntry) + "\n", "utf-8");
+    } catch {
+      try {
+        await fs.mkdir('.self', { recursive: true });
+        await fs.writeFile(CREATOR_LOG, JSON.stringify(logEntry) + "\n", "utf-8");
+      } catch {}
+    }
+
+    if (this.onSelfEval) {
+      await this.onSelfEval({ reasoning: evalReasoning.slice(0, 500), changed, trigger });
+    }
+
+    console.log(`[mind] self-evaluation complete — changed=${changed}, turns=${turns}`);
+    return { reasoning: evalReasoning, changed };
+  }
+
+  private async buildEvalContext(trigger: string, reason?: string): Promise<string> {
+    let context = `Evaluate this creature's cognitive architecture.\n\nTrigger: ${trigger}\n\n`;
+
+    if (reason) {
+      context += `Reason: "${reason}"\n\n`;
+    }
+
+    try {
+      const logContent = await fs.readFile(CREATOR_LOG, 'utf-8');
+      const lines = logContent.trim().split('\n').filter(l => l);
+      const recent = lines.slice(-3).map(l => {
+        try { return JSON.parse(l); } catch { return null; }
+      }).filter(Boolean);
+
+      if (recent.length > 0) {
+        context += '## Previous Evaluations\n\n';
+        for (const e of recent) {
+          context += `[${e.t?.slice(0, 16)}] trigger=${e.trigger}, changed=${e.changed}\n${e.reasoning}\n\n`;
+        }
+      }
+    } catch {}
+
+    try {
+      const rollbackContent = await fs.readFile('.sys/rollbacks.jsonl', 'utf-8');
+      const lines = rollbackContent.trim().split('\n').filter(l => l);
+      const recent = lines.slice(-5).map(l => {
+        try { return JSON.parse(l); } catch { return null; }
+      }).filter(Boolean);
+
+      if (recent.length > 0) {
+        context += '## Recent Rollbacks\n\nPrevious changes may have caused some of these:\n\n';
+        for (const r of recent) {
+          context += `[${r.t?.slice(0, 19)}] reason=${r.reason}, from=${r.from?.slice(0, 7)}, to=${r.to?.slice(0, 7)}\n`;
+          if (r.lastOutput) context += `Last output: ${r.lastOutput.slice(0, 300)}\n`;
+          context += '\n';
+        }
+      }
+    } catch {}
+
+    context += 'Start by reading the creature\'s state with bash (cat .self/observations.md, cat .self/rules.md, cat .self/dreams.jsonl | tail -5, etc.). Then diagnose and act.\n';
+    return context;
+  }
+
+  // --- Pre-Sleep Code Management ---
+
+  private async validateAndCommit(): Promise<void> {
+    try {
+      const diff = await executeBash('git diff --name-only src/', { timeout: 10000 });
+      if (!diff.stdout.trim()) return;
+
+      console.log(`[mind] uncommitted code changes detected, validating...`);
+      const check = await executeBash('npx tsx --check src/mind.ts src/index.ts', { timeout: 30000 });
+
+      if (check.exitCode !== 0) {
+        console.error(`[mind] code validation failed, reverting: ${check.stderr}`);
+        await executeBash('git checkout -- src/', { timeout: 10000 });
+        return;
+      }
+
+      await executeBash('git add -A && git commit -m "creature: self-modification on sleep" --allow-empty', { timeout: 10000 });
+      console.log(`[mind] code changes committed`);
+    } catch (err) {
+      console.error(`[mind] validateAndCommit failed:`, err);
+    }
   }
 
   // --- Wake Up ---

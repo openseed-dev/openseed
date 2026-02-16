@@ -231,7 +231,7 @@ class Creature {
           console.log(`[creature] progress check at ${actions} actions`);
         },
 
-        // onSpecialTool — emit request_restart or request_evolution events
+        // onSpecialTool — emit request_restart events
         async (tool, reason) => {
           await this.emit({ type: `creature.${tool}`, reason });
           console.log(`[creature] ${tool}: ${reason.slice(0, 80)}`);
@@ -246,6 +246,12 @@ class Creature {
         // onError — emit LLM error events so the dashboard can surface them
         async (error, retryIn, retries) => {
           await this.emit({ type: "creature.error", error, retryIn, retries } as any);
+        },
+
+        // onSelfEval — emit self-evaluation results to dashboard
+        async (result) => {
+          await this.emit({ type: "creature.self_evaluation", reasoning: result.reasoning, changed: result.changed, trigger: result.trigger } as any);
+          console.log(`[creature] self-evaluation complete: changed=${result.changed}, trigger=${result.trigger}`);
         },
       );
     } catch (err) {

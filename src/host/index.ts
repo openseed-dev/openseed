@@ -14,7 +14,6 @@ import { promisify } from 'node:util';
 
 import { Event } from '../shared/types.js';
 import { CostTracker } from './costs.js';
-import { Creator } from './creator.js';
 import { EventStore } from './events.js';
 import { handleLLMProxy } from './proxy.js';
 import {
@@ -59,14 +58,11 @@ export class Orchestrator {
   private supervisors: Map<string, CreatureSupervisor> = new Map();
   private stores: Map<string, EventStore> = new Map();
   private globalListeners: Set<(name: string, event: Event) => void> = new Set();
-  private creator: Creator;
-  private creatorRunning: Set<string> = new Set();
   private costs = new CostTracker();
   private dashboardHtml: string;
 
   constructor(port: number) {
     this.port = port;
-    this.creator = new Creator(this.costs);
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
     this.dashboardHtml = readFileSync(path.join(thisDir, 'dashboard.html'), 'utf-8');
   }
@@ -322,13 +318,6 @@ export class Orchestrator {
 
     console.log(`[${name}] ${event.type}`);
 
-    // Trigger Creator on deep sleep
-    if (event.type === 'creature.dream' && (event as any).deep) {
-      this.triggerCreator(name, 'deep_sleep').catch((err) => {
-        console.error(`[creator] auto-trigger failed for ${name}:`, err);
-      });
-    }
-
     // Handle creature autonomy: request_restart
     if (event.type === 'creature.request_restart') {
       const reason = (event as any).reason || 'creature requested restart';
@@ -356,85 +345,6 @@ export class Orchestrator {
       }
     }
 
-    // Auto-apply code changes on sleep
-    if (event.type === 'creature.sleep') {
-      const dir = path.join(CREATURES_DIR, name);
-      try {
-        // Check for uncommitted changes in src/
-        const { stdout: diff } = await execAsync('git diff --name-only src/', { cwd: dir });
-        if (diff.trim()) {
-          console.log(`[${name}] uncommitted code changes on sleep, validating...`);
-          try {
-            await execAsync('npx tsx --check src/mind.ts src/index.ts', {
-              cwd: dir, timeout: 30_000,
-            });
-            await execAsync(
-              'git add -A && git commit -m "creature: self-modification on sleep"',
-              { cwd: dir },
-            );
-          } catch (err: any) {
-            const errMsg = err.stderr || err.stdout || err.message || 'unknown';
-            console.error(`[${name}] code validation failed on sleep: ${errMsg}`);
-            await execAsync('git checkout -- src/', { cwd: dir }).catch(() => {});
-            try {
-              await this.sendMessage(
-                name,
-                `[SYSTEM] Your code changes failed validation and were reverted:\n${errMsg.slice(0, 500)}`,
-                'system',
-              );
-            } catch {}
-          }
-        }
-
-        // Restart if HEAD has moved since the creature last started
-        const supervisor = this.supervisors.get(name);
-        if (supervisor) {
-          const { stdout: headSHA } = await execAsync('git rev-parse HEAD', { cwd: dir });
-          const info = supervisor.getInfo();
-          if (headSHA.trim() !== info.sha) {
-            console.log(`[${name}] code updated (${info.sha?.slice(0, 7)} → ${headSHA.trim().slice(0, 7)}), restarting to apply`);
-            await supervisor.restart();
-          }
-        }
-      } catch {}
-    }
-
-    // Handle creature autonomy: request_evolution
-    if (event.type === 'creature.request_evolution') {
-      const reason = (event as any).reason || 'creature requested evolution';
-      console.log(`[${name}] creature requested evolution: ${reason}`);
-      this.triggerCreator(name, `creature_request: ${reason}`).catch((err) => {
-        console.error(`[creator] creature-requested evolution failed for ${name}:`, err);
-      });
-    }
-  }
-
-  async triggerCreator(name: string, trigger: string): Promise<void> {
-    if (this.creatorRunning.has(name)) {
-      console.log(`[creator] already running for ${name}, skipping`);
-      return;
-    }
-
-    const supervisor = this.supervisors.get(name);
-    const store = this.stores.get(name);
-    const dir = path.join(CREATURES_DIR, name);
-
-    if (!supervisor || !store) {
-      throw new Error(`creature "${name}" not found or not running`);
-    }
-
-    // Extract creature request from trigger string
-    const creatureRequest = trigger.startsWith('creature_request: ')
-      ? trigger.slice(18) : undefined;
-
-    this.creatorRunning.add(name);
-    try {
-      await this.creator.evaluate(name, dir, store, supervisor, trigger, async (n, ev) => {
-        await this.emitEvent(n, ev);
-      }, creatureRequest);
-    } finally {
-      this.creatorRunning.delete(name);
-    }
   }
 
   async handleCreatureEvent(name: string, event: Event): Promise<void> {
@@ -623,22 +533,12 @@ export class Orchestrator {
           return;
         }
 
-        if (action === 'evolve' && req.method === 'POST') {
-          try {
-            this.triggerCreator(name, 'manual').catch((err) => {
-              console.error(`[creator] manual trigger failed for ${name}:`, err);
-            });
-            res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
-          return;
-        }
-
         if (action === 'wake' && req.method === 'POST') {
           try {
             const supervisor = this.supervisors.get(name);
             if (!supervisor) throw new Error(`creature "${name}" is not running`);
             const body = await readBody(req);
-            const reason = body ? (JSON.parse(body).reason || 'Your creator woke you manually') : 'Your creator woke you manually';
+            const reason = body ? (JSON.parse(body).reason || 'Woken manually') : 'Woken manually';
             const res2 = await fetch(creatureUrl(name, supervisor.port, '/wake'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
