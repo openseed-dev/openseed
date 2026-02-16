@@ -180,9 +180,10 @@
     .message-bar button:hover { background: #2a2a4a; }
 
     .mind-content {
-      white-space: pre-wrap; word-break: break-word;
+      word-break: break-word;
       font-size: 12px; color: #bbb; line-height: 1.5;
     }
+    .mind-content.pre { white-space: pre-wrap; }
     .mind-content .dream-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #1a1a1a; }
     .mind-content .dream-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
     .mind-content .dream-time { color: #666; font-size: 11px; }
@@ -191,7 +192,8 @@
     .mind-content h1 { color: #fff; font-size: 15px; margin: 16px 0 8px; }
     .mind-content h2 { color: #eee; font-size: 14px; margin: 14px 0 6px; }
     .mind-content h3 { color: #ddd; font-size: 13px; margin: 12px 0 4px; }
-    .mind-content p { margin: 6px 0; }
+    .mind-content p { margin: 4px 0; }
+    .mind-content li { margin: 2px 0; }
     .mind-content a { color: #58f; }
     .mind-content code { background: #1a1a2a; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
     .mind-content pre { background: #0d0d0d; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 8px 0; }
@@ -455,7 +457,8 @@
         html = data ? esc(data) : 'Empty.';
       }
 
-      contentEl.innerHTML = '<div class="mind-content">' + html + '</div>';
+      const preClass = tab && tab.type === 'text' ? ' pre' : '';
+      contentEl.innerHTML = '<div class="mind-content' + preClass + '">' + html + '</div>';
     }
 
     async function select(name) {

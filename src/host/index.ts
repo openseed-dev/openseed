@@ -601,19 +601,10 @@ export class Orchestrator {
             } catch { return []; }
           };
 
-          // Read tab config from creature's genome.json, fall back to hardcoded dreamer tabs
-          const defaultTabs = [
-            { id: 'purpose', label: 'purpose', file: 'PURPOSE.md', type: 'markdown' },
-            { id: 'diary', label: 'diary', file: 'self/diary.md', type: 'markdown' },
-            { id: 'observations', label: 'observations', file: '.self/observations.md', type: 'text' },
-            { id: 'rules', label: 'rules', file: '.self/rules.md', type: 'text' },
-            { id: 'dreams', label: 'dreams', file: '.self/dreams.jsonl', type: 'jsonl', limit: 10 },
-            { id: 'self-eval', label: 'self-eval', file: '.self/creator-log.jsonl', type: 'jsonl', limit: 10 },
-          ];
-          let tabs = defaultTabs;
+          let tabs: Array<{ id: string; label: string; file: string; type: string; limit?: number }> = [];
           try {
             const genome = JSON.parse(await fs.readFile(path.join(dir, 'genome.json'), 'utf-8'));
-            if (Array.isArray(genome.tabs) && genome.tabs.length > 0) tabs = genome.tabs;
+            if (Array.isArray(genome.tabs)) tabs = genome.tabs;
           } catch {}
 
           const data: Record<string, unknown> = {};
