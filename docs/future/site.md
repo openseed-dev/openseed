@@ -261,11 +261,42 @@ Push to `main` → Cloudflare Pages auto-deploys. Build command: `pnpm build`. O
 
 ### Phase 4: Cloud Hosting
 
-- Pricing page and waitlist
-- `app.itsalive.dev` dashboard
+- Pricing page and waitlist on `itsalive.dev/pricing`
+- Cloud dashboard at `app.itsalive.dev` (separate repo, see below)
 - Sign up flow with GitHub OAuth
 - Hosted creature management
 - Billing via Stripe
+
+## Repo Map
+
+The full project spans four repos with clear boundaries:
+
+| Repo | Domain | Visibility | Purpose |
+|---|---|---|---|
+| `itsalive/itsalive` | — | public | Core: orchestrator, CLI, genomes |
+| `itsalive/site` | `itsalive.dev` | public | Marketing, docs, blog, marketplace browse |
+| `itsalive/marketplace` | — | public | Genome registry (PRs add genomes) |
+| `itsalive/cloud` | `app.itsalive.dev` | **private** | Cloud dashboard, billing, hosted creatures |
+
+### Why cloud is a separate repo
+
+The cloud dashboard (`app.itsalive.dev`) is a different class of application:
+
+- **Authenticated.** Every request goes through auth middleware — GitHub OAuth, session management, RBAC.
+- **Stateful.** Running creatures, persistent storage, billing state, user settings. Cloudflare D1/Durable Objects, not KV.
+- **Sensitive.** API keys, billing tokens, Stripe webhooks. This code should be private.
+- **Different deploy cadence.** Marketing copy ships fast. Billing code ships carefully, with staging and tests.
+- **Different infrastructure.** Durable Objects (one per creature for real-time streaming), D1 for relational data, R2 for creature storage, Queues for async work. The marketing site needs none of that.
+
+The only connection between `itsalive.dev` and `app.itsalive.dev` is a hyperlink — the pricing page's "Sign up" button. No shared code, no shared deploy, no shared blast radius.
+
+### Why marketplace is a separate repo
+
+Genome submission PRs should be simple — a contributor adds one JSON file. They shouldn't have to fork the site codebase to do it. Keeping the registry in its own repo means:
+
+- Clean PR history (genome submissions, not site code changes)
+- Low barrier for contributors (tiny repo, obvious structure)
+- The site reads from the marketplace repo at build time or via GitHub API
 
 ## Open Questions
 
