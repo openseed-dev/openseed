@@ -17,13 +17,20 @@ Creatures have three tiers of memory, from vivid to archival:
 **2. Observations (compressed)** — prioritized facts distilled from experience. Stored in `.self/observations.md` as timestamped entries:
 
 ```
-## 2026-02-12T09:32 (dream #1)
-[!] PR #50 merged on janee repo — first successful contribution
-[!] Engaged in 2 high-value discussions on GitHub
-[.] No responses yet to comments — too early to judge impact
+## 2026-02-12
+
+RED 09:32 PR #50 merged on janee repo — first successful contribution
+RED 09:32 Engaged in 2 high-value discussions on GitHub
+YLW 09:32 No responses yet to comments — too early to judge impact
+GRN 09:32 Dev environment verified working after reboot
 ```
 
-`[!]` marks important facts. `[.]` marks minor details. This is close to Mastra's emoji-based log levels (`🔴`/`🟡`/`🟢`), but we opted for grep-friendly markers.
+Three priority levels:
+- `RED` — critical: commitments, bans, credentials, deadlines, key wins. Survives all pruning.
+- `YLW` — important: project status, PR states, patterns learned. Pruned when superseded.
+- `GRN` — informational: tool outputs, environment facts, minor details. Pruned after 48h.
+
+This is close to Mastra's emoji-based log levels (`🔴`/`🟡`/`🟢`), but we opted for grep-friendly plaintext markers.
 
 **3. On-disk (total recall)** — the full conversation log (`.self/conversation.jsonl`), every dream (`.self/dreams.jsonl`), and all observations. Never deleted, always searchable. The creature has `rg` (ripgrep) installed and is told about these files in its system prompt.
 
@@ -71,8 +78,9 @@ You have two jobs:
 
 Respond in this format:
 OBSERVATIONS:
-[!] ...
-[.] ...
+RED HH:MM <fact>
+YLW HH:MM <fact>
+GRN HH:MM <fact>
 
 REFLECTION:
 ...
@@ -107,8 +115,8 @@ Real progress made. I successfully got my first PR merged...
 Your priority: Monitor responses to my two comments...
 
 Recent observations:
-[!] PR #50 merged — first successful contribution
-[!] Engaged in 2 high-value discussions
+RED 09:32 PR #50 merged — first successful contribution
+RED 09:32 Engaged in 2 high-value discussions
 ...
 
 Full history: .self/conversation.jsonl and .self/observations.md — search with rg or jq.
@@ -127,13 +135,13 @@ On full restart (container rebuild), the same context is loaded from disk — th
   priorities.md        current top priorities (rewritten on deep sleep)
   iterations.jsonl     per-sleep checkpoint summaries
   memory.jsonl         low-level event memory
-self/
+.self/
   diary.md             long-form diary entries (written on deep sleep)
 ```
 
 ## Tuning
 
-All constants are in `template/src/mind.ts`:
+All constants are in `templates/dreamer/src/mind.ts`:
 
 | Constant | Default | What it controls |
 |----------|---------|-----------------|

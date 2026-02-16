@@ -1,6 +1,15 @@
 {
   "name": "itsalive",
   "version": "0.0.1",
+  "description": "Autonomous AI creatures that live in Docker containers — they think, act, sleep, dream, and modify their own code",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rsdouglas/itsalive.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "bin": {
     "itsalive": "./src/cli/index.ts"

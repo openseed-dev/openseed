@@ -1,8 +1,38 @@
 # itsalive
 
-Autonomous, self-evolving AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code — without human prompting.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js 18+](https://img.shields.io/badge/node-18%2B-green.svg)](https://nodejs.org/)
 
-Each creature gets its own git repo, a persistent container, and a purpose. A central orchestrator manages their lifecycles, and a Creator agent evolves their cognitive architecture over time. Works with Claude and GPT models.
+Autonomous AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code — without human prompting.
+
+<!-- TODO: Replace with actual dashboard GIF -->
+<!-- ![Dashboard](docs/assets/dashboard.gif) -->
+
+> **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps — consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, a Creator agent reviews its cognitive architecture and rewrites its source code to make it better. The creature's git log is its autobiography.**
+
+## What This Looks Like
+
+A creature called `okok` trades crypto autonomously. Here's what it wrote about itself after a session:
+
+> *"Treaded water but correctly so — the BTC-weak blocking rule is doing its job. PEPE individually looks like a textbook pullback entry (4h strong up, 1h RSI in zone, 15m higher lows), but entering against a weakening BTC with only $98.80 is how accounts go to zero."*
+
+Its long-term memory — observations tagged by priority — looks like this:
+
+```
+RED 05:13 NO POSITIONS. Account: $98.80 USDT. Clean slate.
+YLW 05:13 SCANNER BUILT: workspace/scanner.py — scans 16 coins for trend-aligned setups.
+YLW 05:13 BTC is DOWN/DOWN (4h RSI 49, 1h RSI 42). Since BTC leads, staying flat until recovery.
+GRN 05:13 Key R:R opportunities if market turns: DOGE 19.8x, XRP 14.3x, SOL 10.3x
+```
+
+And its git log shows it modifying its own mind:
+
+```
+d32ec75 creature: self-modification on sleep
+0546a8b creature: self-modification on sleep
+bffb2af creator: self/diary.md, src/mind.ts
+2a05f89 creature: self-modification on sleep
+```
 
 ## Why
 
@@ -20,7 +50,35 @@ The **Creator agent** adds a second timescale of adaptation: the creature learns
 
 Everything is radically legible. Every piece of state is a text file. The git log is the creature's autobiography.
 
+## What You Can Build
+
+- **Trading bots** that develop their own strategies, learn from mistakes, and manage risk overnight
+- **Research agents** that monitor papers, repos, or feeds and produce daily summaries
+- **DevOps creatures** that watch infrastructure, respond to alerts, and improve their own runbooks
+- **Content creators** that write, publish, and iterate based on engagement data
+- **Open-source contributors** that find repos, open PRs, and track their merge rate
+
+Or give a creature a purpose and see what it invents. The minimal template starts with nothing — no memory system, no rules — and the creature discovers its own persistence strategies.
+
 ## Quick Start
+
+Requires: [Docker](https://www.docker.com/products/docker-desktop/)
+
+The fastest way to get started is with Docker Compose — no Node.js or pnpm needed on your machine:
+
+```bash
+git clone https://github.com/rsdouglas/itsalive.git
+cd itsalive
+cp .env.example .env
+# Edit .env with your API key(s)
+docker compose up
+```
+
+Open http://localhost:7770, spawn a creature, and watch it think.
+
+### Native Install
+
+If you prefer running the orchestrator directly:
 
 Requires: [Node.js](https://nodejs.org/) 18+, [pnpm](https://pnpm.io/installation), [Docker](https://www.docker.com/products/docker-desktop/)
 
@@ -176,17 +234,11 @@ Creatures have a three-tier memory system:
 
 A fatigue system tracks activity and forces consolidation. During consolidation, a separate LLM call produces observations, an honest self-reflection ("dream"), and learned behavioral rules. Every 10th dream triggers deep sleep — pruning stale observations, reviewing rules, and triggering the Creator agent.
 
-## Dashboard
+## Deep Dives
 
-The web dashboard at `http://localhost:7770` shows:
-
-- All creatures with live status indicators
-- Real-time event stream: thoughts, tool calls, sleeps, dreams, Creator interventions
-- Expandable tool call details (input, output, timing)
-- Per-creature cost tracking
-- Message injection (talk to a creature mid-conversation)
-- Spawn form with model and template selection
-- Mind panel: purpose, observations, dreams, rules, Creator log
+- **[Sleep, Dreams, and Memory](docs/dreaming.md)** — the cognitive architecture: fatigue, consolidation, observation priorities, and how it compares to Mastra's Observational Memory
+- **[LLM Proxy](docs/llm-proxy.md)** — why Vercel AI SDK, how the translating proxy works, adding new providers
+- **[Creator Agent](docs/creator.md)** — the evolutionary architect: triggers, tools, and its relationship to the dreamer template
 
 ## Source Layout
 
@@ -201,6 +253,7 @@ src/
     events.ts         event store (JSONL)
     git.ts            git operations for creature repos
     dashboard.html    web dashboard
+
   cli/                CLI commands (spawn, start, stop, list, fork, destroy)
   shared/types.ts     event type definitions
 
@@ -209,17 +262,15 @@ templates/
   minimal/            bare-bones — creature discovers everything
 ```
 
-## Roadmap
+## Where This Is Going
 
-Things we're thinking about and working toward:
-
-- **Cost controls** — per-creature spending limits (daily, total) with automatic sleep or shutdown when the budget is hit. Hard caps to prevent runaway spend.
-- **Cost-aware creatures** — optionally expose budget and usage to the creature itself, so it can make economic decisions. A creature that knows it has $2/day left will prioritize differently than one with unlimited budget.
-- **Cloud deployment** — hosted version where creatures run on managed infrastructure instead of local Docker. The `CreatureSupervisor` is already an abstraction over Docker — a cloud supervisor would call a platform API instead of `docker run`.
-- **Creature marketplace** — share templates, evolved strategies, and purpose-built creatures. Import a creature someone else built and run it with your own API keys.
-- **Inter-creature communication** — structured message passing between creatures. Currently they can talk via shared files and HTTP; a first-class protocol would enable richer collaboration.
-- **More models** — Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward to add.
+- **Cost controls** — per-creature spending limits with automatic sleep or shutdown when the budget is hit
+- **Cost-aware creatures** — expose budget and usage to the creature so it can make economic decisions
+- **Cloud deployment** — hosted version where creatures run on managed infrastructure. The `CreatureSupervisor` is already an abstraction over Docker — a cloud supervisor would call a platform API instead of `docker run`
+- **Creature marketplace** — share templates, evolved strategies, and purpose-built creatures. Import a creature someone else built and run it with your own API keys
+- **Inter-creature communication** — structured message passing between creatures for richer collaboration
+- **More models** — Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward
 
 ## License
 
-MIT
+[MIT](LICENSE)
