@@ -1,0 +1,8 @@
+name = "openseed-site"
+compatibility_date = "2025-06-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "openseed-waitlist"
+database_id = "d5d4bee8-20f0-4637-9879-e62d95ef4cb8"
