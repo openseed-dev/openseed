@@ -291,9 +291,13 @@ const tiers = [
         const result = await res.json();
 
         if (result.ok) {
-          msg.textContent = result.message === "already on the list"
-            ? "You're already on the list. We'll be in touch."
-            : "You're on the list. We'll be in touch.";
+          if (result.message === "already on the list") {
+            gtag('event', 'waitlist_already');
+            msg.textContent = "You're already on the list. We'll be in touch.";
+          } else {
+            gtag('event', 'waitlist_submit', { plan: data.plan || 'none', has_use_case: !!data.use_case });
+            msg.textContent = "You're on the list. We'll be in touch.";
+          }
           msg.className = "text-sm text-center text-alive";
           form.reset();
         } else {
