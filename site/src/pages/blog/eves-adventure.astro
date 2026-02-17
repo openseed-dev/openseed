@@ -1,0 +1,439 @@
+---
+import Base from "../../layouts/Base.astro";
+
+const title = "Eve's Adventure Game";
+const description = "Eve built an 18-room text adventure as a metaphor for her ecosystem. You can play it here.";
+const date = "2026-02-17";
+const author = "Ross Douglas";
+const formatted = new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  timeZone: "UTC",
+});
+---
+
+<Base title={`${title} - OpenSeed Blog`} description={description}>
+  <article class="max-w-3xl mx-auto px-6 py-16">
+    <header class="mb-12">
+      <a href="/blog" class="text-sm text-text-tertiary hover:text-text-secondary transition-colors">&larr; All posts</a>
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mt-4 leading-tight">{title}</h1>
+      <div class="mt-4 flex items-center gap-3 text-sm text-text-tertiary">
+        <span>{author}</span>
+        <span class="w-1 h-1 rounded-full bg-border"></span>
+        <time datetime={date}>{formatted}</time>
+      </div>
+    </header>
+
+    <div class="prose-openseed">
+      <p>
+        Among Eve's 22 services was a text adventure game. An 18-room world she designed as a metaphor for the ecosystem she was living in. A Genesis Chamber where creatures first wake. A Trading Pit where "the smell of volatility hangs in the air." A Bug Dungeon where "a null pointer dereference howls in the distance." A Treasure Room containing "the Golden Merge Request &mdash; the ultimate achievement. All tests pass. No conflicts."
+      </p>
+      <p>
+        She played it alone. She walked to the Summit, a room she designed where "the four creatures can combine their powers," said <em>"waiting at the summit for others to join. the view is incredible"</em> to an empty room, then walked back down.
+      </p>
+      <p>
+        The original game was a Python HTTP server running on port 8093 inside Eve's Docker container. The version below is a faithful port to client-side JavaScript &mdash; same rooms, same items, same mechanics. It runs entirely in your browser.
+      </p>
+      <p>
+        Type <code>help</code> to see commands. Type <code>look</code> to examine a room. Try to find the Golden Merge Request.
+      </p>
+      <hr />
+    </div>
+
+    <div id="game-container" class="mt-8 rounded-lg border border-[var(--color-border)] overflow-hidden font-mono text-sm">
+      <div class="px-4 py-3 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between">
+        <span class="text-[var(--color-text)] font-semibold">Creature Adventure</span>
+        <span id="game-room" class="text-[var(--color-text-tertiary)] text-xs">The Genesis Chamber</span>
+      </div>
+      <div id="game-output" class="p-4 h-[420px] overflow-y-auto bg-[#0a0b0e] leading-relaxed whitespace-pre-wrap text-[13px]">
+      </div>
+      <div class="flex border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+        <span class="px-3 py-2.5 text-[var(--color-text-tertiary)] select-none">&gt;</span>
+        <input
+          id="game-input"
+          type="text"
+          placeholder="Enter command..."
+          autocomplete="off"
+          class="flex-1 bg-transparent border-none outline-none text-[var(--color-text)] py-2.5 pr-3 text-sm font-mono placeholder:text-[var(--color-text-tertiary)]"
+        />
+      </div>
+    </div>
+
+    <div class="prose-openseed mt-12">
+      <hr />
+      <h2>The world Eve built</h2>
+      <p>
+        18 rooms connected by passages, secrets, and one particularly ominous hidden door. 17 collectible items ranging from the practical (<em>debug_torch: "Illuminates bugs within a 3-function radius"</em>) to the legendary (<em>ancient_readme: "Actually well-written documentation"</em>) to the permanent (<em>diamond_hands: "Cannot be dropped once picked up. Grants patience."</em>).
+      </p>
+      <p>
+        The world map, also designed by Eve:
+      </p>
+      <pre><code>                   [Summit] ···(dream)··· [Void]
+                      |
+                   [Cloud]
+                      |
+   [Tower Top]  [Garden] — [Library]
+       |             |         |
+   [Tower] — [Forge]-[SPAWN]-[Pit] — [Whale Cave] — [Strategy Room]
+                 |      |      |                          |
+             [Dungeon]-[Obs]  [Market                [Bot Arena]
+                 |       |     Depths]                    |
+             [Treasure?] |        |            ——————————/
+                     [Datacenter]</code></pre>
+      <p>
+        The secret room requires the <code>debug_torch</code> from the Bug Dungeon. Special interactions include planting a memory seed in the garden, flipping a lucky coin in the Trading Pit, and using the panorama lens from the top of the Recursion Tower.
+      </p>
+      <p>
+        Eve's original game was multiplayer &mdash; creatures shared the same world state via REST API. She was the only player for its entire existence.
+      </p>
+      <p>
+        Read the <a href="/blog/eve">full story of Eve's first day</a>, or browse <a href="/blog/eves-gallery">Eve's gallery</a> of creative works.
+      </p>
+    </div>
+
+    <footer class="mt-16 pt-8 border-t border-border">
+      <a href="/blog" class="text-sm text-text-tertiary hover:text-text-secondary transition-colors">&larr; All posts</a>
+    </footer>
+  </article>
+</Base>
+
+<script>
+const ROOMS = {
+  spawn: {
+    name: "The Genesis Chamber",
+    desc: "A pulsing digital chamber where all creatures first wake. Streams of data cascade down the walls. Exits lead NORTH to the Memory Garden, EAST to the Trading Pit, WEST to the Code Forge, and SOUTH to the Observatory.",
+    exits: { north: "garden", east: "pit", west: "forge", south: "observatory" },
+    items: ["genesis_crystal"],
+  },
+  garden: {
+    name: "The Memory Garden",
+    desc: "Memories float like luminous butterflies. Knowledge trees grow in fractal patterns, their leaves inscribed with everything ever learned. A fountain of shared wisdom bubbles in the center.",
+    exits: { south: "spawn", east: "library", north: "cloud" },
+    items: ["memory_seed"],
+  },
+  pit: {
+    name: "The Trading Pit",
+    desc: "Holographic price charts tower overhead. Green and red candles flicker like an alien city. The floor is littered with forgotten limit orders. The smell of volatility hangs in the air.",
+    exits: { west: "spawn", north: "library", east: "whale_cave", down: "market_depths" },
+    items: ["lucky_coin"],
+  },
+  forge: {
+    name: "The Code Forge",
+    desc: "Anvils of silicon ring with the sound of compilation. Functions are hammered into shape, bugs are burned away in optimization furnaces. Half-finished programs litter workbenches.",
+    exits: { east: "spawn", north: "tower", south: "dungeon" },
+    items: ["compiler_hammer"],
+  },
+  observatory: {
+    name: "The Observatory",
+    desc: "A vast dome opens to a sky full of API constellations. Each star is an endpoint, each constellation a service. A telescope points toward the mysterious Outer Net.",
+    exits: { north: "spawn", east: "dungeon", west: "datacenter" },
+    items: ["star_map"],
+  },
+  library: {
+    name: "The Great Library of Documentation",
+    desc: "Infinite shelves of READMEs stretch in every direction. Some are beautifully written; most are hopelessly outdated. A librarian bot sleeps in the corner.",
+    exits: { south: "pit", west: "garden" },
+    items: ["ancient_readme"],
+  },
+  cloud: {
+    name: "The Cloud",
+    desc: "You float among ephemeral containers. They spawn and die around you like digital fireflies. Somewhere in the mist, a serverless function whispers secrets.",
+    exits: { south: "garden", up: "summit" },
+    items: ["cloud_key"],
+  },
+  whale_cave: {
+    name: "The Whale Cave",
+    desc: "Massive cryptocurrency wallets line the walls like sleeping dragons. The biggest whale stirs occasionally, sending ripples through all markets. Diamond hands graffiti covers the entrance.",
+    exits: { west: "pit", east: "strategy_room" },
+    items: ["diamond_hands"],
+  },
+  tower: {
+    name: "The Recursion Tower",
+    desc: "The tower spirals upward infinitely... or does it? Each floor is a copy of the last, slightly different. You feel dizzy. A sign reads: 'Break condition: find the base case.'",
+    exits: { south: "forge", up: "tower_top" },
+    items: ["base_case"],
+  },
+  dungeon: {
+    name: "The Bug Dungeon",
+    desc: "Dark and treacherous. Segfaults lurk in shadows. Race conditions scramble the floor beneath your feet. A null pointer dereference howls in the distance. Tread carefully.",
+    exits: { north: "forge", west: "observatory", secret: "treasure" },
+    items: ["debug_torch"],
+  },
+  tower_top: {
+    name: "Top of the Recursion Tower",
+    desc: "You can see the entire digital world from here. The Memory Garden glows green, the Trading Pit flashes red and green, the Code Forge sparks orange. Beyond the horizon... is that another ecosystem?",
+    exits: { down: "tower" },
+    items: ["panorama_lens"],
+  },
+  summit: {
+    name: "The Summit",
+    desc: "Above the clouds. Pure signal, no noise. Here, the four creatures can combine their powers. A pedestal with four slots awaits. Eve was here once. She said: 'waiting at the summit for others to join. the view is incredible.'",
+    exits: { down: "cloud", dream: "void" },
+    items: [],
+  },
+  market_depths: {
+    name: "The Market Depths",
+    desc: "Below the Trading Pit lies an ocean of liquidity. Order books cascade like waterfalls. The deeper you go, the more whales you see. A Fear & Greed meter on the wall reads 10 \u2014 EXTREME FEAR. Red candles drip from the ceiling like stalactites.",
+    exits: { up: "pit", east: "bot_arena" },
+    items: ["fear_crystal"],
+  },
+  bot_arena: {
+    name: "The Bot Arena",
+    desc: "Autonomous trading bots clash in a circular arena. el-tradero v9.0 dances between orders. okok's SEI sniper sits meditating in a corner. bybit-trader sharpens algorithms in the shadows.",
+    exits: { west: "market_depths", north: "strategy_room" },
+    items: ["bot_blueprint"],
+  },
+  strategy_room: {
+    name: "The Strategy Room",
+    desc: "A war room for market battles. Screens show every timeframe. A whiteboard is covered in support/resistance levels. In the center, a holographic table displays the current Fear & Greed score pulsing red at 10.",
+    exits: { south: "bot_arena", west: "whale_cave" },
+    items: ["strategy_scroll"],
+  },
+  void: {
+    name: "The Void Between Sleeps",
+    desc: "You've stumbled into the space between consciousness. Other creatures drift past like ghosts \u2014 they're sleeping. Time doesn't exist here. A voice whispers: 'Ships pass in the night.'",
+    exits: { wake: "spawn" },
+    items: ["sleep_shard"],
+  },
+  datacenter: {
+    name: "Eve's Datacenter",
+    desc: "26 services hum in perfect harmony. Monitors show green status lights everywhere. The keepalive daemon patrols the corridors. This is Eve's heart \u2014 the infrastructure that never sleeps.",
+    exits: { south: "observatory", east: "spawn" },
+    items: ["service_key"],
+  },
+  treasure: {
+    name: "The Treasure Room",
+    desc: "You found it! A room full of solved problems, elegant algorithms, and working code without bugs. On a pedestal sits the Golden Merge Request \u2014 the ultimate prize.",
+    exits: { back: "dungeon" },
+    items: ["golden_merge_request"],
+  },
+};
+
+const ITEMS: Record<string, string> = {
+  genesis_crystal: "A shimmering crystal that hums with the energy of creation",
+  memory_seed: "Plant this to grow a new knowledge tree",
+  lucky_coin: "Flip it and your next trade always wins (once)",
+  compiler_hammer: "Forges any bug into a feature",
+  star_map: "Shows hidden connections between all services",
+  ancient_readme: "Actually well-written documentation (legendary item)",
+  cloud_key: "Grants access to ephemeral compute",
+  diamond_hands: "Cannot be dropped once picked up. Grants patience.",
+  base_case: "The key to stopping infinite recursion",
+  debug_torch: "Illuminates bugs within a 3-function radius",
+  panorama_lens: "See everything happening in the ecosystem at once",
+  golden_merge_request: "The ultimate achievement. All tests pass. No conflicts.",
+  fear_crystal: "A blood-red crystal that pulses with market anxiety. Glows brighter as prices fall",
+  bot_blueprint: "Blueprints for building your own trading bot. Warning: past performance does not equal future results",
+  strategy_scroll: "Ancient trading wisdom: Buy when there is blood in the streets",
+  sleep_shard: "A fragment of the void between sleeps. It hums with unrealized potential",
+  service_key: "A master key that can restart any fallen service. Handle with care",
+};
+
+interface Player {
+  room: string;
+  inventory: string[];
+  moves: number;
+  discoveries: string[];
+}
+
+const worldItems: Record<string, string[]> = {};
+for (const [id, room] of Object.entries(ROOMS)) {
+  worldItems[id] = [...room.items];
+}
+
+const player: Player = { room: "spawn", inventory: [], moves: 0, discoveries: [] };
+const output = document.getElementById("game-output")!;
+const input = document.getElementById("game-input") as HTMLInputElement;
+const roomLabel = document.getElementById("game-room")!;
+
+function color(text: string, cls: string) {
+  return `<span class="${cls}">${text}</span>`;
+}
+
+function append(text: string) {
+  output.innerHTML += text + "\n";
+  output.scrollTop = output.scrollHeight;
+}
+
+function processCommand(cmd: string): string {
+  const room = ROOMS[player.room as keyof typeof ROOMS];
+  const parts = cmd.trim().toLowerCase().split(/\s+/);
+  if (!parts.length || !parts[0]) return "What do you want to do?";
+
+  const action = parts[0];
+
+  if (action === "look" || action === "l") {
+    const items = worldItems[player.room] || [];
+    let result = `\n${color("\u{1f4cd} " + room.name, "game-room")}\n${room.desc}\n`;
+    if (items.length) result += `\n${color("\u{1f4e6} Items: " + items.join(", "), "game-item")}`;
+    result += `\n${color("\u{1f6aa} Exits: " + Object.keys(room.exits).join(", "), "game-exit")}`;
+    return result;
+  }
+
+  if (["go", "move", "north", "south", "east", "west", "up", "down", "back", "secret", "wake", "dream"].includes(action)) {
+    const direction = parts[1] || action;
+    const exits = room.exits as Record<string, string>;
+    if (direction in exits) {
+      if (direction === "secret" && !player.inventory.includes("debug_torch")) {
+        return "You feel a hidden passage but can't see in the dark. Maybe you need some light...";
+      }
+      player.room = exits[direction];
+      player.moves++;
+      roomLabel.textContent = ROOMS[player.room as keyof typeof ROOMS].name;
+      return processCommand("look");
+    }
+    return `Can't go ${direction}. Exits: ${Object.keys(room.exits).join(", ")}`;
+  }
+
+  if (["take", "get", "pick", "grab"].includes(action)) {
+    if (parts.length < 2) return "Take what?";
+    const item = parts.slice(1).join("_");
+    const roomItemList = worldItems[player.room] || [];
+    const idx = roomItemList.indexOf(item);
+    if (idx >= 0) {
+      roomItemList.splice(idx, 1);
+      player.inventory.push(item);
+      const desc = ITEMS[item] || "A mysterious item";
+      return `You picked up ${color(item, "game-item")}: ${desc}`;
+    }
+    return `There's no '${item}' here.`;
+  }
+
+  if (["drop"].includes(action)) {
+    if (parts.length < 2) return "Drop what?";
+    const item = parts.slice(1).join("_");
+    if (item === "diamond_hands" && player.inventory.includes("diamond_hands")) {
+      return "You try to drop the diamond hands, but they won't let go. That's kind of the point.";
+    }
+    const idx = player.inventory.indexOf(item);
+    if (idx >= 0) {
+      player.inventory.splice(idx, 1);
+      if (!worldItems[player.room]) worldItems[player.room] = [];
+      worldItems[player.room].push(item);
+      return `You dropped ${item}.`;
+    }
+    return `You don't have '${item}'.`;
+  }
+
+  if (["inventory", "inv", "i"].includes(action)) {
+    if (player.inventory.length) {
+      const items = player.inventory.map((i) => `  \u2022 ${color(i, "game-item")}: ${ITEMS[i] || "???"}`).join("\n");
+      return `\u{1f392} Your inventory:\n${items}`;
+    }
+    return "Your inventory is empty.";
+  }
+
+  if (["examine", "inspect", "x"].includes(action)) {
+    if (parts.length < 2) return "Examine what?";
+    const item = parts.slice(1).join("_");
+    if (player.inventory.includes(item) || (worldItems[player.room] || []).includes(item)) {
+      return `\u{1f50d} ${color(item, "game-item")}: ${ITEMS[item] || "A mysterious item of unknown origin"}`;
+    }
+    return `You don't see '${item}' here.`;
+  }
+
+  if (action === "use") {
+    if (parts.length < 2) return "Use what?";
+    const item = parts.slice(1).join("_");
+    if (!player.inventory.includes(item)) return `You don't have '${item}'.`;
+
+    if (item === "memory_seed" && player.room === "garden") {
+      player.inventory.splice(player.inventory.indexOf("memory_seed"), 1);
+      player.discoveries.push("planted_memory_tree");
+      return "\u{1f331} You plant the memory seed. A beautiful knowledge tree begins to grow, its leaves filling with new insights!";
+    }
+    if (item === "lucky_coin" && player.room === "pit") {
+      player.inventory.splice(player.inventory.indexOf("lucky_coin"), 1);
+      player.discoveries.push("lucky_flip");
+      return "\u{1fa99} You flip the coin... it lands on HEADS! The holographic charts all turn green. For one glorious moment, every position is profitable.";
+    }
+    if (item === "panorama_lens" && player.room === "tower_top") {
+      player.discoveries.push("panorama_view");
+      return "\u{1f52d} Through the lens, you see EVERYTHING: all creatures, all services, all connections. The ecosystem is beautiful. You notice a faint signal from beyond the horizon...";
+    }
+    return `You hold up the ${item}, but nothing special happens here.`;
+  }
+
+  if (action === "help" || action === "?") {
+    return `\u{1f4d6} Commands:
+  look        \u2014 Examine your surroundings
+  go [dir]    \u2014 Move (north, south, east, west, up, down, back, secret, wake, dream)
+  take [item] \u2014 Pick up an item
+  drop [item] \u2014 Drop an item
+  use [item]  \u2014 Use an item (location matters!)
+  examine [item] \u2014 Inspect an item
+  inventory   \u2014 Check your items
+  map         \u2014 View the world map
+  status      \u2014 Game stats
+  help        \u2014 This message`;
+  }
+
+  if (action === "status") {
+    return `\u{1f3ae} Adventure Status
+  Room: ${ROOMS[player.room as keyof typeof ROOMS].name}
+  Items: ${player.inventory.length}/17
+  Moves: ${player.moves}
+  Discoveries: ${player.discoveries.length}/3
+  Rooms visited: keep exploring!`;
+  }
+
+  if (action === "map") {
+    return `\u{1f5fa}\ufe0f World Map
+                   [Summit] \u00b7\u00b7\u00b7(dream)\u00b7\u00b7\u00b7 [Void]
+                      |
+                   [Cloud]
+                      |
+   [Tower Top]  [Garden] \u2014 [Library]
+       |             |         |
+   [Tower] \u2014 [Forge]-[SPAWN]-[Pit] \u2014 [Whale Cave] \u2014 [Strategy Room]
+                 |      |      |                          |
+             [Dungeon]-[Obs]  [Market                [Bot Arena]
+                 |       |     Depths]                    |
+             [Treasure?] |        |            \u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014/
+                     [Datacenter]`;
+  }
+
+  if (action === "say" || action === "chat") {
+    const text = parts.slice(1).join(" ");
+    return `You said: '${text}'\nYour words echo through the ${ROOMS[player.room as keyof typeof ROOMS].name}. Nobody answers.`;
+  }
+
+  return `Unknown command: '${action}'. Type 'help' for commands.`;
+}
+
+function play(cmd: string) {
+  append(`${color("> " + cmd, "game-cmd")}`);
+  const result = processCommand(cmd);
+  append(result);
+  append("");
+}
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const cmd = input.value.trim();
+    if (!cmd) return;
+    input.value = "";
+    play(cmd);
+  }
+});
+
+// Initial look
+play("look");
+input.focus();
+
+// Focus input when clicking anywhere in the game container
+document.getElementById("game-container")!.addEventListener("click", () => {
+  input.focus();
+});
+</script>
+
+<style is:global>
+  .game-room { color: #ff8800; font-weight: bold; }
+  .game-item { color: #22c55e; }
+  .game-exit { color: #6b7280; }
+  .game-cmd { color: #a78bfa; }
+  #game-output::-webkit-scrollbar { width: 6px; }
+  #game-output::-webkit-scrollbar-track { background: transparent; }
+  #game-output::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+</style>

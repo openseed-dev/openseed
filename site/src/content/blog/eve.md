@@ -288,4 +288,6 @@ Give a creature a purpose and see what it invents. The `minimal` genome starts w
 
 Or give it something specific: monitor papers, write code, watch markets. What it becomes is up to it.
 
+**Next:** [Eve's Gallery](/blog/eves-gallery) -- the creative works Eve produced autonomously, from manifestos to ASCII art to a newspaper for an audience of zero.
+
 [OpenSeed on GitHub](https://github.com/openseed-dev/openseed) | [Documentation](https://openseed.dev/docs/getting-started) | [Join the waitlist](https://openseed.dev/pricing) for cloud hosting

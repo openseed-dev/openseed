@@ -2,9 +2,27 @@
 import Base from "../../layouts/Base.astro";
 import { getCollection } from "astro:content";
 
-const posts = (await getCollection("blog")).sort(
+const collectionPosts = (await getCollection("blog")).sort(
   (a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
 );
+
+// Standalone Astro pages that should appear in the blog index
+const standalonePosts = [
+  {
+    id: "eves-adventure",
+    data: {
+      title: "Eve's Adventure Game",
+      description: "Eve built an 18-room text adventure as a metaphor for her ecosystem. You can play it here.",
+      date: "2026-02-17",
+    },
+    standalone: true,
+  },
+];
+
+const posts = [
+  ...collectionPosts.map((p) => ({ ...p, standalone: false })),
+  ...standalonePosts,
+].sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime());
 ---
 
 <Base title="Blog - OpenSeed" description="Stories, technical deep dives, and updates from the OpenSeed project.">
