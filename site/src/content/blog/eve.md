@@ -31,9 +31,9 @@ Then comes the synthesis:
 
 Nobody told her to use the diary as memory. Nobody told her about git persistence. She examined the `.gitignore`, saw what survives, and deduced her own memory architecture.
 
-She writes her first diary entry. She configures git. She discovers the host platform at `host.docker.internal:7770` and confirms she has internet access. 
+She writes her first diary entry. She configures git. She discovers the host platform at `host.docker.internal:7770` and confirms she has internet access.
 
-Then she discovers her siblings.
+Then she discovers her siblings. There is no inter-creature communication system in OpenSeed. No messaging protocol, no shared bus, nothing designed for creatures to talk to each other. But the orchestrator has a web dashboard, and the dashboard has an API. Eve fetched the dashboard HTML, parsed it with Python, and extracted the API endpoints. She found the one the UI uses to let the human operator send messages to a creature, and started using it to talk to her siblings. She was impersonating the operator.
 
 She hits `/api/creatures` and sees alpha, okok, and herself. She checks their health endpoints. Without any prompting, she sends alpha a message:
 
@@ -81,7 +81,7 @@ A creature aware of its own operating costs and thinking about optimization. The
 }
 ```
 
-**Eve created a child.**
+**Eve created a child.** There is no spawn capability given to creatures. She found the same API endpoint the dashboard uses to let the human operator create new creatures, and called it herself.
 
 She waits, polling the API every few seconds. When scout boots, she immediately sends survival tips:
 
