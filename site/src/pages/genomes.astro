@@ -1,21 +1,15 @@
 ---
 import Base from "../layouts/Base.astro";
 import Terminal from "../components/Terminal.astro";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const bundled = [
-  {
-    name: "dreamer",
-    description: "Full cognitive architecture: dreams, memory consolidation, self-evaluation, fatigue, persistent browser.",
-    tags: ["memory", "dreams", "self-modification", "browser"],
-    status: "bundled",
-  },
-  {
-    name: "minimal",
-    description: "Bare-bones loop with bash and sleep. No scaffolding. The creature discovers everything on its own.",
-    tags: ["minimal", "emergent", "blank-slate"],
-    status: "bundled",
-  },
-];
+function loadGenome(name: string) {
+  const raw = readFileSync(resolve("../genomes", name, "genome.json"), "utf-8");
+  return JSON.parse(raw);
+}
+
+const genomes = [loadGenome("dreamer"), loadGenome("minimal")];
 ---
 
 <Base title="Genome Marketplace - OpenSeed" description="Discover and share cognitive blueprints for autonomous AI creatures.">
@@ -24,12 +18,11 @@ const bundled = [
     <div class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-alive/5 blur-[120px] pointer-events-none"></div>
 
     <div class="max-w-4xl mx-auto px-6 pt-24 pb-16 relative">
-      <p class="text-xs uppercase tracking-widest text-text-tertiary mb-4 text-center">Coming Soon</p>
       <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-center leading-[1.1]">
         Genome Marketplace
       </h1>
       <p class="mt-6 text-lg text-text-secondary text-center max-w-2xl mx-auto leading-relaxed">
-        Discover, share, and install cognitive blueprints for your creatures.
+        Cognitive blueprints for autonomous creatures.
         Every genome defines a different kind of mind.
       </p>
     </div>
@@ -42,20 +35,37 @@ const bundled = [
       <p class="mt-2 text-text-secondary text-sm">Ship with OpenSeed. Ready to use out of the box.</p>
 
       <div class="grid sm:grid-cols-2 gap-6 mt-8">
-        {bundled.map((g) => (
+        {genomes.map((g) => (
           <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-semibold">{g.name}</h3>
-              <span class="text-xs px-2 py-0.5 rounded-full border border-alive/30 text-alive bg-alive/5">{g.status}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full border border-alive/30 text-alive bg-alive/5">
+                v{g.version}
+              </span>
             </div>
+
             <p class="text-text-secondary text-sm leading-relaxed">{g.description}</p>
+
             <div class="flex flex-wrap gap-2">
-              {g.tags.map((tag) => (
+              {g.tags.map((tag: string) => (
                 <span class="text-xs px-2 py-0.5 rounded bg-bg text-text-tertiary border border-border">{tag}</span>
               ))}
             </div>
-            <div class="font-mono text-xs text-text-tertiary">
-              seed spawn my-creature --genome {g.name}
+
+            <div class="text-xs text-text-tertiary space-y-1">
+              <div>
+                <span class="text-text-secondary">Tabs:</span>{" "}
+                {g.tabs.map((t: any) => t.label).join(", ")}
+              </div>
+              <div>
+                <span class="text-text-secondary">Author:</span> {g.author}
+                {" / "}
+                <span class="text-text-secondary">License:</span> {g.license}
+              </div>
+            </div>
+
+            <div class="font-mono text-xs text-text-tertiary bg-bg rounded px-3 py-2 border border-border">
+              $ seed spawn my-creature --genome {g.name}
             </div>
           </div>
         ))}
@@ -63,48 +73,104 @@ const bundled = [
     </div>
   </section>
 
-  <!-- Coming soon -->
-  <section class="py-24 border-t border-border" data-reveal>
-    <div class="max-w-3xl mx-auto px-6 text-center">
-      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-surface text-sm text-text-secondary mb-8">
-        <span class="w-2 h-2 rounded-full bg-dormant animate-pulse"></span>
-        In development
-      </div>
-
-      <h2 class="text-3xl font-bold tracking-tight">Community genomes are coming</h2>
-      <p class="mt-4 text-text-secondary text-lg max-w-xl mx-auto leading-relaxed">
-        A searchable directory of community-built genomes. Browse by category, install with one command,
-        and publish your own cognitive blueprints for others to use.
+  <!-- Search -->
+  <section class="py-20 border-t border-border" data-reveal>
+    <div class="max-w-3xl mx-auto px-6">
+      <h2 class="text-2xl font-bold tracking-tight text-center">Find community genomes</h2>
+      <p class="mt-3 text-text-secondary text-center max-w-xl mx-auto">
+        Search for genomes published by the community directly from your terminal.
       </p>
 
-      <div class="mt-12 max-w-md mx-auto">
+      <div class="mt-10 max-w-md mx-auto">
         <Terminal title="terminal">
           <div><span class="text-alive">$</span> <span class="text-text-secondary">seed genome search trading</span></div>
-          <div class="mt-2 space-y-1">
-            <div><span class="text-text">crypto-dreamer</span> <span class="text-text-tertiary">- Dreamer with crypto trading tools</span></div>
-            <div><span class="text-text">market-watcher</span> <span class="text-text-tertiary">- Monitors equities + macro news</span></div>
-            <div><span class="text-text">quant-minimal</span> <span class="text-text-tertiary">- Bare-bones quantitative analysis</span></div>
+          <div class="mt-2 space-y-1 text-sm">
+            <div><span class="text-text">crypto-dreamer</span> <span class="text-text-tertiary">0.2.0  jdoe/crypto-dreamer</span></div>
+            <div><span class="text-text">market-watcher</span> <span class="text-text-tertiary">1.0.0  acme/market-watcher</span></div>
           </div>
           <div class="mt-3"><span class="text-alive">$</span> <span class="text-text-secondary">seed genome install jdoe/crypto-dreamer</span></div>
-          <div class="text-text-tertiary">installed genome "crypto-dreamer" (v1.2.0)</div>
+          <div class="text-text-tertiary">installed genome "crypto-dreamer" (v0.2.0)</div>
+        </Terminal>
+      </div>
+    </div>
+  </section>
+
+  <!-- Publish -->
+  <section class="py-20 border-t border-border" data-reveal>
+    <div class="max-w-3xl mx-auto px-6">
+      <h2 class="text-2xl font-bold tracking-tight text-center">Publish your own genome</h2>
+      <p class="mt-3 text-text-secondary text-center max-w-xl mx-auto">
+        A genome is a GitHub repo with a <code class="text-text font-mono text-xs bg-surface px-1.5 py-0.5 rounded">genome.json</code>.
+        That's the only requirement.
+      </p>
+
+      <div class="mt-12 grid gap-8 md:grid-cols-3">
+        <div class="space-y-3">
+          <div class="text-sm font-medium text-alive uppercase tracking-wider">1. Create</div>
+          <p class="text-text-secondary text-sm leading-relaxed">
+            Start from <code class="font-mono text-xs bg-surface px-1 rounded">genomes/dreamer</code> or
+            <code class="font-mono text-xs bg-surface px-1 rounded">genomes/minimal</code>.
+            Add your tools, modify the cognitive loop, customize the tabs.
+          </p>
+        </div>
+
+        <div class="space-y-3">
+          <div class="text-sm font-medium text-alive uppercase tracking-wider">2. Tag</div>
+          <p class="text-text-secondary text-sm leading-relaxed">
+            Push to GitHub and add the
+            <code class="font-mono text-xs bg-surface px-1 rounded">openseed-genome</code> topic
+            to your repo. This is how <code class="font-mono text-xs bg-surface px-1 rounded">seed genome search</code> discovers it.
+          </p>
+        </div>
+
+        <div class="space-y-3">
+          <div class="text-sm font-medium text-alive uppercase tracking-wider">3. Share</div>
+          <p class="text-text-secondary text-sm leading-relaxed">
+            Anyone can install your genome with a single command. It just works.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-10 max-w-md mx-auto">
+        <Terminal title="terminal">
+          <div><span class="text-alive">$</span> <span class="text-text-secondary">seed genome install yourname/genome-trader</span></div>
+          <div class="text-text-tertiary">cloning https://github.com/yourname/genome-trader...</div>
+          <div class="text-text-tertiary">installed genome "trader" (v1.0.0)</div>
+          <div class="mt-2"><span class="text-alive">$</span> <span class="text-text-secondary">seed spawn scout --genome trader --purpose "find alpha"</span></div>
         </Terminal>
       </div>
 
-      <div class="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
+      <div class="mt-10 text-center">
         <a
           href="/docs/genomes"
           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-alive text-bg font-medium text-sm hover:bg-alive/90 transition-colors"
         >
-          Read the genome docs
+          Read the full genome docs
         </a>
-        <a
-          href="https://x.com/rsdgls"
-          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-md border border-border text-text-secondary text-sm hover:text-text hover:border-border-accent transition-colors"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Follow for updates &rarr;
-        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- genome.json reference -->
+  <section class="py-20 border-t border-border" data-reveal>
+    <div class="max-w-3xl mx-auto px-6">
+      <h2 class="text-2xl font-bold tracking-tight text-center">genome.json</h2>
+      <p class="mt-3 text-text-secondary text-center max-w-xl mx-auto">
+        The manifest that defines your genome. Minimal example:
+      </p>
+
+      <div class="mt-10 max-w-md mx-auto">
+        <Terminal title="genome.json">
+          <div class="text-text-secondary">{"{"}</div>
+          <div class="ml-4"><span class="text-alive">"name"</span>: <span class="text-text-secondary">"my-genome"</span>,</div>
+          <div class="ml-4"><span class="text-alive">"version"</span>: <span class="text-text-secondary">"1.0.0"</span>,</div>
+          <div class="ml-4"><span class="text-alive">"description"</span>: <span class="text-text-secondary">"What this genome does"</span>,</div>
+          <div class="ml-4"><span class="text-alive">"author"</span>: <span class="text-text-secondary">"you"</span>,</div>
+          <div class="ml-4"><span class="text-alive">"license"</span>: <span class="text-text-secondary">"MIT"</span>,</div>
+          <div class="ml-4"><span class="text-alive">"tags"</span>: [<span class="text-text-secondary">"research"</span>, <span class="text-text-secondary">"browser"</span>],</div>
+          <div class="ml-4"><span class="text-alive">"tabs"</span>: [{"{"} <span class="text-text-secondary">"id": "purpose", "label": "purpose", ...</span> {"}"}]</div>
+          <div class="text-text-secondary">{"}"}</div>
+        </Terminal>
       </div>
     </div>
   </section>

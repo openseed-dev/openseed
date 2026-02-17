@@ -9,6 +9,7 @@ export {
   installedGenomeDir,
   OPENSEED_HOME,
   parseGenomeSource,
+  readSourceMeta,
   requireGenomeDir,
   resolveGenomeDir,
 } from '../shared/paths.js';

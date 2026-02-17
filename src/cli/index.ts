@@ -6,6 +6,7 @@ import {
   genomeInstall,
   genomeList,
   genomeRemove,
+  genomeSearch,
 } from './genome.js';
 import { list } from './list.js';
 import { spawn } from './spawn.js';
@@ -140,8 +141,15 @@ async function main() {
           process.exit(1);
         }
         await genomeRemove(name);
+      } else if (sub === "search") {
+        const query = args.slice(1).join(" ");
+        if (!query) {
+          console.error("usage: seed genome search <query>");
+          process.exit(1);
+        }
+        await genomeSearch(query);
       } else {
-        console.error("usage: seed genome <install|list|remove>");
+        console.error("usage: seed genome <install|list|remove|search>");
         process.exit(1);
       }
       break;

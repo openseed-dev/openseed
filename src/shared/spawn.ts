@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import { copyDir } from './fs.js';
 import {
   CREATURES_DIR,
+  readSourceMeta,
   requireGenomeDir,
 } from './paths.js';
 
@@ -85,12 +86,14 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   await fs.mkdir(CREATURES_DIR, { recursive: true });
   await copyDir(tpl, dir);
 
+  const sourceMeta = readSourceMeta(tpl);
   const birth = {
     id: crypto.randomUUID(),
     name: opts.name,
     born: new Date().toISOString(),
     genome: genomeName,
     genome_version: readGenomeVersion(tpl),
+    ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
     parent: null as string | null,
     ...(opts.model ? { model: opts.model } : {}),
   };

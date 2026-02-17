@@ -10,6 +10,10 @@ import {
   parseGenomeSource,
 } from '../shared/paths.js';
 
+function writeSourceJson(dir: string, repo: string, sha: string): void {
+  fs.writeFileSync(path.join(dir, '.source.json'), JSON.stringify({ repo, sha, installedAt: new Date().toISOString() }, null, 2) + '\n');
+}
+
 interface GenomeMeta {
   name: string;
   version?: string;
@@ -43,11 +47,15 @@ export async function genomeInstall(source: string): Promise<void> {
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
       execSync(`git clone --depth 1 --filter=blob:none --sparse ${cloneUrl} ${tmpDir}`, { stdio: 'inherit' });
       execSync(`git sparse-checkout set ${subdir}`, { cwd: tmpDir, stdio: 'inherit' });
+      const sha = execSync('git rev-parse HEAD', { cwd: tmpDir, encoding: 'utf-8' }).trim();
       const extracted = path.join(tmpDir, subdir);
       fs.renameSync(extracted, dest);
+      writeSourceJson(dest, cloneUrl, sha);
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } else {
       execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: 'inherit' });
+      const sha = execSync('git rev-parse HEAD', { cwd: dest, encoding: 'utf-8' }).trim();
+      writeSourceJson(dest, cloneUrl, sha);
     }
   } catch {
     try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
@@ -114,6 +122,54 @@ export async function genomeList(): Promise<void> {
   for (const r of rows) {
     console.log(`${r.name.padEnd(nameW)}  ${r.version.padEnd(verW)}  ${r.source.padEnd(srcW)}  ${r.description}`);
   }
+}
+
+export async function genomeSearch(query: string): Promise<void> {
+  const q = encodeURIComponent(`topic:openseed-genome ${query}`);
+  const url = `https://api.github.com/search/repositories?q=${q}&sort=stars&per_page=20`;
+
+  let data: any;
+  try {
+    const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'openseed-cli' } });
+    if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+    data = await res.json();
+  } catch (err: any) {
+    console.error(`search failed: ${err.message}`);
+    process.exit(1);
+  }
+
+  if (!data.items?.length) {
+    console.log(`no genomes found for "${query}"`);
+    return;
+  }
+
+  // Fetch genome.json from each repo for richer metadata
+  const rows: Array<{ name: string; version: string; repo: string; description: string }> = [];
+  for (const item of data.items) {
+    let gName = item.name.replace(/^genome-/, '');
+    let version = '?';
+    try {
+      const raw = await fetch(`https://raw.githubusercontent.com/${item.full_name}/${item.default_branch}/genome.json`, { headers: { 'User-Agent': 'openseed-cli' } });
+      if (raw.ok) {
+        const gj = await raw.json();
+        if (gj.name) gName = gj.name;
+        if (gj.version) version = gj.version;
+      }
+    } catch {}
+    rows.push({ name: gName, version, repo: item.full_name, description: item.description || '' });
+  }
+
+  const nameW = Math.max(6, ...rows.map(r => r.name.length));
+  const verW = Math.max(7, ...rows.map(r => r.version.length));
+  const repoW = Math.max(4, ...rows.map(r => r.repo.length));
+
+  console.log(`${'name'.padEnd(nameW)}  ${'version'.padEnd(verW)}  ${'repo'.padEnd(repoW)}  description`);
+  console.log(`${'─'.repeat(nameW)}  ${'─'.repeat(verW)}  ${'─'.repeat(repoW)}  ${'─'.repeat(30)}`);
+  for (const r of rows) {
+    console.log(`${r.name.padEnd(nameW)}  ${r.version.padEnd(verW)}  ${r.repo.padEnd(repoW)}  ${r.description}`);
+  }
+
+  console.log(`\ninstall with: seed genome install <repo>`);
 }
 
 export async function genomeRemove(name: string): Promise<void> {

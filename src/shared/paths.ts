@@ -67,6 +67,23 @@ export function resolveGenomeDir(genome = "dreamer"): string | null {
   return null;
 }
 
+/** Write .source.json to record where a genome was cloned from. */
+function writeSourceMeta(dir: string, cloneUrl: string, gitDir?: string): void {
+  try {
+    const sha = execSync("git rev-parse HEAD", { cwd: gitDir || dir, encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+    fs.writeFileSync(path.join(dir, ".source.json"), JSON.stringify({ repo: cloneUrl, sha, installedAt: new Date().toISOString() }, null, 2) + "\n");
+  } catch {}
+}
+
+/** Read .source.json from a genome directory, if present. */
+export function readSourceMeta(dir: string): { repo: string; sha: string } | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dir, ".source.json"), "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
 /** Try to auto-install a genome from GitHub. Returns the installed path or null. */
 export function autoInstallGenome(genome: string): string | null {
   const { cloneUrl, name, subdir } = parseGenomeSource(genome);
@@ -77,7 +94,6 @@ export function autoInstallGenome(genome: string): string | null {
     fs.mkdirSync(GENOMES_DIR, { recursive: true });
 
     if (subdir) {
-      // Sparse checkout: clone only the subdirectory
       const tmpDir = dest + ".tmp";
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
       execSync(`git clone --depth 1 --filter=blob:none --sparse ${cloneUrl} ${tmpDir}`, { stdio: "pipe" });
@@ -87,9 +103,11 @@ export function autoInstallGenome(genome: string): string | null {
         throw new Error(`no genome.json found at ${subdir}`);
       }
       fs.renameSync(extracted, dest);
+      writeSourceMeta(dest, cloneUrl, tmpDir);
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } else {
       execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: "pipe" });
+      writeSourceMeta(dest, cloneUrl);
     }
 
     console.log(`installed genome "${name}" to ${dest}`);

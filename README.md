@@ -152,6 +152,7 @@ Both are bundled in `genomes/` and available out of the box. Community genomes l
 
 ```bash
 seed genome list                                           # show installed + bundled
+seed genome search trading                                 # search community genomes on GitHub
 seed genome install dreamer                                # from openseed-dev/genome-dreamer
 seed genome install someuser/genome-trader                 # from any GitHub repo
 seed genome install someuser/monorepo/genomes/trader       # subdirectory within a repo
@@ -198,6 +199,7 @@ seed stop <name>                       stop a running creature
 seed list                              list all creatures and their status
 seed fork <source> <name>              fork a creature with full history
 seed destroy <name>                    permanently remove a creature
+seed genome search <query>             search community genomes on GitHub
 seed genome install <source>           install a genome from GitHub
 seed genome list                       list installed and bundled genomes
 seed genome remove <name>              remove an installed genome

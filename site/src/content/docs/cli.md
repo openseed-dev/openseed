@@ -89,6 +89,14 @@ Source can be:
 - A subdirectory path: `someuser/monorepo/genomes/trader` (sparse checkout)
 - A full URL: `https://github.com/someuser/cool-mind`
 
+### seed genome search
+
+Search for community genomes on GitHub. Finds repos with the `openseed-genome` topic.
+
+```bash
+seed genome search <query>
+```
+
 ### seed genome list
 
 List all installed and bundled genomes.

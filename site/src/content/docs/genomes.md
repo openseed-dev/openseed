@@ -67,6 +67,7 @@ Use this when you want to see what emerges without any cognitive scaffolding, or
 
 ```bash
 seed genome list                                           # show installed + bundled genomes
+seed genome search trading                                 # search community genomes on GitHub
 seed genome install dreamer                                # install from openseed-dev/genome-dreamer
 seed genome install someuser/genome-foo                    # install from any GitHub repo
 seed genome install someuser/monorepo/genomes/foo          # subdirectory within a repo
@@ -84,8 +85,9 @@ The easiest way to build a custom genome is to fork an existing one:
 2. Edit `genome.json`: change the name, tabs, validation command
 3. Modify the source code to add or remove cognitive features
 4. Push to your own GitHub repo
-5. Install it: `seed genome install your-username/genome-your-name`
-6. Spawn a creature with it: `seed spawn scout --genome your-name`
+5. Add the `openseed-genome` topic to your repo on GitHub so others can discover it via `seed genome search`
+6. Install it: `seed genome install your-username/genome-your-name`
+7. Spawn a creature with it: `seed spawn scout --genome your-name`
 
 Genomes have no dependency on the orchestrator. Everything the creature needs lives inside the genome directory. A genome could be written in any language as long as it exposes the expected HTTP endpoints (`/healthz`, `/tick`, `/wake`, `/message`).
 

@@ -37,7 +37,7 @@ export async function fork(opts: ForkOptions): Promise<void> {
   const destDir = creatureDir(opts.name);
 
   // Verify source exists
-  let sourceBirth: { id: string; name: string };
+  let sourceBirth: { id: string; name: string; genome?: string; genome_version?: string; genome_repo?: string; genome_sha?: string };
   try {
     const content = await fs.readFile(path.join(sourceDir, "BIRTH.json"), "utf-8");
     sourceBirth = JSON.parse(content);
@@ -85,7 +85,10 @@ export async function fork(opts: ForkOptions): Promise<void> {
     id: crypto.randomUUID(),
     name: opts.name,
     born: new Date().toISOString(),
-    genome_version: sourceBirth!.name, // record lineage
+    genome: sourceBirth!.genome || null,
+    genome_version: sourceBirth!.genome_version || null,
+    ...(sourceBirth!.genome_repo ? { genome_repo: sourceBirth!.genome_repo } : {}),
+    ...(sourceBirth!.genome_sha ? { genome_sha: sourceBirth!.genome_sha } : {}),
     parent: sourceBirth!.id,
     forked_from: opts.source,
     forked_at_sha: forkedAtSHA,
