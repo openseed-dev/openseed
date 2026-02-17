@@ -72,12 +72,39 @@
     .budget-info {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 4px 10px; background: #111; border: 1px solid #222;
-      border-radius: 4px; font-size: 11px; color: #888;
+      border-radius: 4px; font-size: 11px; color: #888; cursor: pointer;
     }
+    .budget-info:hover { border-color: #444; }
     .budget-info .budget-label { color: #666; }
     .budget-info .budget-value { color: #f80; }
     .budget-info .budget-value.over { color: #f33; }
     .budget-info .budget-value.ok { color: #0f0; }
+    .budget-editor {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; background: #111; border: 1px solid #58f;
+      border-radius: 4px; font-size: 11px; color: #888;
+    }
+    .budget-editor input {
+      width: 60px; background: #0a0a0a; border: 1px solid #333;
+      color: #f80; padding: 2px 6px; border-radius: 3px;
+      font-family: inherit; font-size: 11px; text-align: right;
+    }
+    .budget-editor input:focus { outline: none; border-color: #58f; }
+    .budget-editor select {
+      background: #0a0a0a; border: 1px solid #333; color: #ccc;
+      padding: 2px 4px; border-radius: 3px; font-family: inherit; font-size: 11px;
+    }
+    .budget-editor select:focus { outline: none; border-color: #58f; }
+    .budget-editor .be-save {
+      background: #1a2a1a; border: 1px solid #0f0; color: #0f0;
+      padding: 1px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px;
+    }
+    .budget-editor .be-save:hover { background: #2a3a2a; }
+    .budget-editor .be-cancel {
+      background: none; border: 1px solid #333; color: #666;
+      padding: 1px 6px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px;
+    }
+    .budget-editor .be-cancel:hover { color: #aaa; border-color: #555; }
     .sleep-reason { font-size: 10px; color: #f33; margin-left: 4px; }
     .btn {
       background: #222; border: 1px solid #333; color: #aaa;
@@ -534,11 +561,16 @@
       renderSidebar();
     }
 
+    let lastBudget = null;
+
     function renderBudgetInfo(budget) {
       const el = document.getElementById('budgetInfo');
       if (!el || !budget) return;
+      lastBudget = budget;
+      el.className = 'budget-info';
+      el.onclick = () => openBudgetEditor();
       if (budget.action === 'off') {
-        el.innerHTML = '<span class="budget-label">cap off</span>';
+        el.innerHTML = '<span class="budget-label">cap off</span><span style="color:#444">click to edit</span>';
         return;
       }
       const pct = budget.daily_cap_usd > 0 ? Math.min(100, (budget.daily_spent_usd / budget.daily_cap_usd) * 100) : 0;
@@ -548,6 +580,48 @@
         + '<span class="budget-label">/ ' + fmtCost(budget.daily_cap_usd) + '</span>'
         + '<div class="budget-bar" style="width:60px"><div class="budget-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div>'
         + (budget.status === 'exceeded' ? '<span class="budget-value over">exceeded</span>' : '');
+    }
+
+    function openBudgetEditor() {
+      const el = document.getElementById('budgetInfo');
+      if (!el || !selected) return;
+      const cap = lastBudget ? lastBudget.daily_cap_usd : 20;
+      const action = lastBudget ? lastBudget.action : 'sleep';
+      el.className = 'budget-editor';
+      el.onclick = null;
+      el.innerHTML = '<span class="budget-label">daily $</span>'
+        + '<input id="beCap" type="number" min="0" step="1" value="' + cap + '" />'
+        + '<select id="beAction">'
+        + '<option value="sleep"' + (action==='sleep'?' selected':'') + '>sleep when exceeded</option>'
+        + '<option value="warn"' + (action==='warn'?' selected':'') + '>warn only</option>'
+        + '<option value="off"' + (action==='off'?' selected':'') + '>no cap</option>'
+        + '</select>'
+        + '<button class="be-save" onclick="saveBudget()">save</button>'
+        + '<button class="be-cancel" onclick="cancelBudgetEdit()">cancel</button>';
+      document.getElementById('beCap').focus();
+      document.getElementById('beCap').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') saveBudget();
+        if (e.key === 'Escape') cancelBudgetEdit();
+      });
+    }
+
+    async function saveBudget() {
+      if (!selected) return;
+      const capVal = parseFloat(document.getElementById('beCap').value);
+      const actionVal = document.getElementById('beAction').value;
+      try {
+        await fetch('/api/creatures/' + selected + '/budget', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ daily_usd: capVal, action: actionVal }),
+        });
+        const res = await fetch('/api/creatures/' + selected + '/budget');
+        renderBudgetInfo(await res.json());
+      } catch (e) { cancelBudgetEdit(); }
+    }
+
+    function cancelBudgetEdit() {
+      if (lastBudget) renderBudgetInfo(lastBudget);
     }
 
     async function loadMind() {

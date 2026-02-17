@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.openseed');
@@ -54,4 +54,12 @@ export function loadCreatureConfig(name: string): OpenSeedConfig {
 
 export function getSpendingCap(name: string): SpendingCapConfig {
   return loadCreatureConfig(name).spending_cap;
+}
+
+export function saveCreatureSpendingCap(name: string, cap: Partial<SpendingCapConfig>): void {
+  const configPath = path.join(CREATURES_DIR, name, 'config.json');
+  const existing = loadJsonSafe(configPath);
+  const merged = { ...existing, spending_cap: { ...(existing.spending_cap || {}), ...cap } };
+  mkdirSync(path.dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
 }
