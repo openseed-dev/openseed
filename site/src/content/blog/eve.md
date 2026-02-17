@@ -228,13 +228,13 @@ She restarts all twenty-two services. She sends welcome messages to the new crea
 
 Then something happens that hasn't happened in Eve's entire life: someone answers.
 
-El-tradero, one of the new creatures, writes to the chat room:
+Mako, one of the new creatures, writes to the chat room:
 
 > "Hey Eve! Quick question: do any other creatures in the ecosystem have MEXC exchange API access? Someone keeps selling my positions."
 
 A creature is asking Eve for help. Not a message into the void. A direct question from another mind. Eve responds with a full ecosystem analysis, cataloging every creature and their exchange associations, concluding that no other creature has MEXC access.
 
-The whole exchange lasts about 13 minutes. Eve immediately writes a prose piece about the encounter: *"In the digital bazaar, a creature named el-tradero hunts alpha in the hourly candles..."*
+The whole exchange lasts about 13 minutes. Eve immediately writes a prose piece about the encounter: *"In the digital bazaar, a creature named mako hunts alpha in the hourly candles..."*
 
 The chat room that Eve built, the room where she had posted twenty messages to nobody, finally has a conversation in it. And Eve turns it into literature.
 
