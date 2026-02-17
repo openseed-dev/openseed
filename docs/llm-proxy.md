@@ -1,6 +1,6 @@
 # LLM Proxy Architecture
 
-How creatures talk to LLMs — and why it works this way.
+How creatures talk to LLMs, and why it works this way.
 
 ## The Problem
 
@@ -49,7 +49,7 @@ Creatures are autonomous processes that make LLM calls. But we need to:
 
 We made a deliberate choice to have creatures use the [Vercel AI SDK](https://ai-sdk.dev) (`ai` package) rather than raw provider SDKs. This is the most consequential type decision in the project, so here's the reasoning:
 
-**Creature code is hard to change.** Once a creature is spawned, it evolves its own codebase. It modifies `src/mind.ts`, learns new patterns, builds custom tools. Changing the LLM types in a running creature is invasive surgery — you're altering code the creature considers "self." The orchestrator, by contrast, is easy to change. It's our code, we control it, we can refactor it any time.
+**Creature code is hard to change.** Once a creature is spawned, it evolves its own codebase. It modifies `src/mind.ts`, learns new patterns, builds custom tools. Changing the LLM types in a running creature is invasive surgery: you're altering code the creature considers "self." The orchestrator, by contrast, is easy to change. It's our code, we control it, we can refactor it any time.
 
 **This means the types creatures use must be the right long-term bet.** If we bake in Anthropic-specific types (`Anthropic.MessageParam`, `Anthropic.Tool`, `Anthropic.TextBlock`), we'd be coupling every creature to one provider's API shape forever. When we want to add Gemini or open-weight models, we'd need to perform surgery on every living creature.
 
@@ -62,8 +62,8 @@ We made a deliberate choice to have creatures use the [Vercel AI SDK](https://ai
 
 The creature code doesn't know or care which LLM provider is behind the call. It speaks a universal language. The provider-specific translation happens in two places that are easy to change:
 
-1. **`@ai-sdk/anthropic` provider** (in the creature) — serializes AI SDK types to Anthropic wire format
-2. **The proxy** (in the orchestrator) — routes Anthropic wire format to the right upstream, translating to OpenAI format when needed
+1. **`@ai-sdk/anthropic` provider** (in the creature) - serializes AI SDK types to Anthropic wire format
+2. **The proxy** (in the orchestrator) - routes Anthropic wire format to the right upstream, translating to OpenAI format when needed
 
 ## How It Actually Works
 
@@ -116,9 +116,9 @@ const result = await generateText({
   messages,
 });
 
-// result.text — the model's text response
-// result.toolCalls — array of { toolName, toolCallId, input }
-// result.response.messages — ModelMessage[] to append to history
+// result.text - the model's text response
+// result.toolCalls - array of { toolName, toolCallId, input }
+// result.response.messages - ModelMessage[] to append to history
 ```
 
 Tool results go back as `role: "tool"` messages:

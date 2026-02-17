@@ -51,7 +51,7 @@ export async function fork(opts: ForkOptions): Promise<void> {
   if (runInfo) {
     try {
       process.kill(runInfo.host_pid, 0);
-      console.error(`creature "${opts.source}" is running — stop it first to fork cleanly`);
+      console.error(`creature "${opts.source}" is running, stop it first to fork cleanly`);
       process.exit(1);
     } catch {
       // Not actually running, stale file

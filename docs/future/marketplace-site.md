@@ -1,6 +1,6 @@
 # Marketplace Site
 
-Design doc for the openseed genome marketplace — a browse/search/submit site powered by a public registry repo and Cloudflare.
+Design doc for the openseed genome marketplace: a browse/search/submit site powered by a public registry repo and Cloudflare.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ openseed/marketplace/
 └── README.md
 ```
 
-A registry entry is minimal — just a pointer to the genome's actual repo:
+A registry entry is minimal, just a pointer to the genome's actual repo:
 
 ```json
 {
@@ -87,7 +87,7 @@ Filter bar: tag filter, search box, sort dropdown (stars / newest / most spawned
 
 ### Genome Detail (`/genome/:name`)
 
-Full genome page. The landing page for a genome — this is what gets shared on Twitter, indexed by Google.
+Full genome page. The landing page for a genome. This is what gets shared on Twitter and indexed by Google.
 
 - Rendered README (the genome author controls this content)
 - Sidebar: install command, version, author, license, star count, tags, last updated
@@ -117,7 +117,7 @@ The page includes a validator: paste your repo URL, it checks `genome.json` is v
    - Fetches `genome.json` from the repo
    - Validates required fields (name, version, description, author, license)
    - Checks no naming conflict with existing entries
-   - Posts a comment: "Validated: **researcher** v2.1.0 — Deep research agent with web browsing"
+   - Posts a comment: "Validated: **researcher** v2.1.0, Deep research agent with web browsing"
 3. If validation fails, the Action comments with specific errors
 4. Maintainer reviews code quality / legitimacy, merges
 5. Merge triggers site rebuild via Cloudflare Pages deploy hook
@@ -137,7 +137,7 @@ The page includes a validator: paste your repo URL, it checks `genome.json` is v
 
 Every genome detail page needs to be a good landing page:
 
-- **Title**: `{name} — openseed genome marketplace`
+- **Title**: `{name} | openseed genome marketplace`
 - **OG image**: Auto-generated card with genome name, description, tags, star count. Use Cloudflare Workers + @cloudflare/pages-plugin-sentry or a simple SVG→PNG pipeline.
 - **OG description**: The genome's description field
 - **Canonical URL**: `https://marketplace.openseed.dev/genome/{name}`
@@ -154,7 +154,7 @@ Genome authors embed a badge in their repo README:
 [![openseed genome](https://marketplace.openseed.dev/badge/{name}.svg)](https://marketplace.openseed.dev/genome/{name})
 ```
 
-The badge is served by a Worker — dynamic SVG showing the genome name and spawn count. Every genome repo becomes a funnel back to the marketplace.
+The badge is served by a Worker (dynamic SVG showing the genome name and spawn count). Every genome repo becomes a funnel back to the marketplace.
 
 ### Spawn count tracking
 
@@ -165,7 +165,7 @@ POST https://marketplace.openseed.dev/api/spawn
 { "genome": "researcher", "version": "2.1.0" }
 ```
 
-No PII, no creature details — just a counter. Opt-in via `openseed` config. Powers the "X creatures spawned" stat on genome pages.
+No PII, no creature details, just a counter. Opt-in via `openseed` config. Powers the "X creatures spawned" stat on genome pages.
 
 The counter lives in Cloudflare KV or D1. Simple increment.
 
@@ -210,7 +210,7 @@ Astro on Cloudflare Pages. Reasons:
 - Native Cloudflare Pages adapter
 - Fast builds, good DX
 - Markdown rendering built in (for genome READMEs)
-- Lightweight — no React/Vue runtime needed
+- Lightweight, no React/Vue runtime needed
 
 If Astro feels heavy, even a vanilla HTML + Tailwind site with Workers functions would work for v1. The pages are simple.
 
@@ -218,10 +218,10 @@ If Astro feels heavy, even a vanilla HTML + Tailwind site with Workers functions
 
 Cloudflare Workers for all API endpoints:
 
-- `GET /api/genomes` — list/search genomes (reads from KV)
-- `GET /api/genomes/:name` — genome detail (reads from KV)
-- `POST /api/spawn` — spawn counter (writes to KV)
-- `GET /badge/:name.svg` — dynamic badge
+- `GET /api/genomes` : list/search genomes (reads from KV)
+- `GET /api/genomes/:name` : genome detail (reads from KV)
+- `POST /api/spawn` : spawn counter (writes to KV)
+- `GET /badge/:name.svg` : dynamic badge
 
 ### Storage
 
@@ -237,9 +237,9 @@ For v1, KV is sufficient. D1 can come later if we add user accounts or richer an
 ## Security
 
 - Registry PRs are reviewed by maintainers before merge. No auto-merge.
-- The validation Action only reads from the genome repo — no code execution.
+- The validation Action only reads from the genome repo. No code execution.
 - The spawn counter endpoint is rate-limited and accepts no sensitive data.
-- Genome repos are public — users can audit the code before spawning.
+- Genome repos are public. Users can audit the code before spawning.
 - The marketplace never handles API keys or credentials.
 
 ## Phases

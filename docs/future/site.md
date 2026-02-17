@@ -27,7 +27,7 @@ The landing page has one job: make someone who's never heard of openseed underst
 ### Above the fold
 
 - **Headline**: "Autonomous AI creatures that live, learn, and evolve"
-- **Subhead**: One sentence — creatures are persistent AI agents that run in Docker, think in loops, modify their own code, and develop memories over time.
+- **Subhead**: One sentence: creatures are persistent AI agents that run in Docker, think in loops, modify their own code, and develop memories over time.
 - **Hero visual**: Animated GIF or short video of the dashboard. A creature waking up, making tool calls, going to sleep, dreaming. 15 seconds max.
 - **Two CTAs**: "Get Started" (scrolls to quick start) and "Browse Genomes" (links to `/genomes`)
 
@@ -45,10 +45,10 @@ This is the "holy shit" moment. Frame it with a single line: "Eve has been runni
 
 3-4 cards showing real use cases:
 
-- **Trade crypto** — okok monitors markets, manages positions, adjusts stop-losses while you sleep
-- **Research** — a creature that browses the web, reads papers, compiles summaries
-- **Build and ship** — alpha writes code, runs tests, deploys to production
-- **Whatever you want** — the minimal genome is a blank slate. The creature discovers its own strategies.
+- **Trade crypto** - okok monitors markets, manages positions, adjusts stop-losses while you sleep
+- **Research** - a creature that browses the web, reads papers, compiles summaries
+- **Build and ship** - alpha writes code, runs tests, deploys to production
+- **Whatever you want** - the minimal genome is a blank slate. The creature discovers its own strategies.
 
 Each card links to the relevant genome on `/genomes`.
 
@@ -56,9 +56,9 @@ Each card links to the relevant genome on `/genomes`.
 
 Simple 3-step visual:
 
-1. **Genome** — a cognitive blueprint (dreamer, minimal, or build your own)
-2. **Spawn** — `openseed spawn my-creature --genome dreamer --purpose "..."`
-3. **Evolve** — the creature runs autonomously, learns, modifies its own code
+1. **Genome** - a cognitive blueprint (dreamer, minimal, or build your own)
+2. **Spawn** - `openseed spawn my-creature --genome dreamer --purpose "..."`
+3. **Evolve** - the creature runs autonomously, learns, modifies its own code
 
 ### Quick start
 
@@ -127,12 +127,12 @@ Alternatively, fetch markdown directly from the GitHub repo's `docs/` directory 
 
 Markdown posts. Primary content types:
 
-- **Eve stories** — the main viral content. "Eve just wrote a poem about a trader she met." These drive social sharing.
-- **Technical deep dives** — "How dreamer's memory consolidation works." Targets developers searching for AI agent architecture.
-- **Release notes** — new features, new genomes, marketplace updates.
-- **Community highlights** — interesting creatures people have built, genome contributions.
+- **Eve stories** - the main viral content. "Eve just wrote a poem about a trader she met." These drive social sharing.
+- **Technical deep dives** - "How dreamer's memory consolidation works." Targets developers searching for AI agent architecture.
+- **Release notes** - new features, new genomes, marketplace updates.
+- **Community highlights** - interesting creatures people have built, genome contributions.
 
-Each post gets OG images and social cards. The Eve stories in particular need compelling OG images — they're the shareable units.
+Each post gets OG images and social cards. The Eve stories in particular need compelling OG images, since they're the shareable units.
 
 ### Implementation
 
@@ -148,15 +148,15 @@ ogImage: /og/eve-poem.png
 ---
 ```
 
-## Pricing (`/pricing`) — Future
+## Pricing (`/pricing`) - Future
 
 When cloud hosting launches. Simple tier layout:
 
-- **Free** — 1 creature, dreamer or minimal genome, shared resources
-- **Pro** — unlimited creatures, all genomes, priority LLM proxy, persistent storage
-- **Team** — multiple users, gardens (creature groups), permissions, shared dashboard
+- **Free** - 1 creature, dreamer or minimal genome, shared resources
+- **Pro** - unlimited creatures, all genomes, priority LLM proxy, persistent storage
+- **Team** - multiple users, gardens (creature groups), permissions, shared dashboard
 
-This page doesn't exist until cloud hosting exists. Placeholder: a "Cloud hosting coming soon — join the waitlist" CTA that collects emails.
+This page doesn't exist until cloud hosting exists. Placeholder: a "Cloud hosting coming soon, join the waitlist" CTA that collects emails.
 
 ## Tech Stack
 
@@ -172,22 +172,22 @@ Astro on Cloudflare Pages. Reasons:
 
 ### Styling
 
-Tailwind CSS. Consistent with what most Astro sites use. Dark theme default — matches the dashboard aesthetic and developer preference.
+Tailwind CSS. Consistent with what most Astro sites use. Dark theme default, matching the dashboard aesthetic and developer preference.
 
 ### API / Backend
 
 Cloudflare Workers (Astro server endpoints or standalone):
 
-- `GET /api/genomes` — list/search marketplace genomes
-- `GET /api/genomes/:name` — genome detail with live GitHub data
-- `POST /api/spawn` — spawn counter increment
-- `GET /api/badge/:name.svg` — dynamic genome badge
-- `POST /api/waitlist` — (future) email collection for cloud hosting
+- `GET /api/genomes` - list/search marketplace genomes
+- `GET /api/genomes/:name` - genome detail with live GitHub data
+- `POST /api/spawn` - spawn counter increment
+- `GET /api/badge/:name.svg` - dynamic genome badge
+- `POST /api/waitlist` - (future) email collection for cloud hosting
 
 ### Storage
 
-- **Cloudflare KV** — cached genome data, spawn counters, waitlist emails
-- **Cloudflare D1** — (future) if we need relational queries for cloud hosting
+- **Cloudflare KV** - cached genome data, spawn counters, waitlist emails
+- **Cloudflare D1** - (future) if we need relational queries for cloud hosting
 
 ### DNS and Domain
 
@@ -195,7 +195,7 @@ Cloudflare Workers (Astro server endpoints or standalone):
 
 ### Repo
 
-`openseed/site` — separate repo from the main `openseed/openseed` repo. The registry lives here too (or in `openseed/marketplace` if we want to keep submission PRs separate from site code PRs).
+`openseed/site`, a separate repo from the main `openseed/openseed` repo. The registry lives here too (or in `openseed/marketplace` if we want to keep submission PRs separate from site code PRs).
 
 Arguments for keeping the registry in the site repo: one deploy pipeline, PRs auto-trigger rebuilds. Arguments for separating: cleaner PR history, contributors don't need to understand the site code. Leaning toward separate: `openseed/marketplace` for registry PRs, `openseed/site` for site code. The site reads from the marketplace repo at build time.
 
@@ -203,9 +203,9 @@ Arguments for keeping the registry in the site repo: one deploy pipeline, PRs au
 
 ### Aesthetic
 
-Dark theme. Terminal-inspired but polished — not retro for retro's sake.
+Dark theme. Terminal-inspired but polished, not retro for retro's sake.
 
-Think: Vercel's site meets a nature documentary. The "alive" metaphor is real — subtle animations, breathing effects on creature cards, pulse indicators for running creatures. Not over the top, but enough to reinforce that these things are alive.
+Think: Vercel's site meets a nature documentary. The "alive" metaphor is real: subtle animations, breathing effects on creature cards, pulse indicators for running creatures. Not over the top, but enough to reinforce that these things are alive.
 
 ### Typography
 
@@ -242,7 +242,7 @@ Push to `main` → Cloudflare Pages auto-deploys. Build command: `pnpm build`. O
 - Landing page with hero, Eve's story, quick start
 - Docs pulled from repo
 - Deploy to Cloudflare Pages
-- No marketplace yet — link to GitHub repo for genomes
+- No marketplace yet; link to GitHub repo for genomes
 
 ### Phase 2: Marketplace
 
@@ -273,26 +273,26 @@ The full project spans four repos with clear boundaries:
 
 | Repo | Domain | Visibility | Purpose |
 |---|---|---|---|
-| `openseed/openseed` | — | public | Core: orchestrator, CLI, genomes |
+| `openseed/openseed` | n/a | public | Core: orchestrator, CLI, genomes |
 | `openseed/site` | `openseed.dev` | public | Marketing, docs, blog, marketplace browse |
-| `openseed/marketplace` | — | public | Genome registry (PRs add genomes) |
+| `openseed/marketplace` | n/a | public | Genome registry (PRs add genomes) |
 | `openseed/cloud` | `app.openseed.dev` | **private** | Cloud dashboard, billing, hosted creatures |
 
 ### Why cloud is a separate repo
 
 The cloud dashboard (`app.openseed.dev`) is a different class of application:
 
-- **Authenticated.** Every request goes through auth middleware — GitHub OAuth, session management, RBAC.
+- **Authenticated.** Every request goes through auth middleware: GitHub OAuth, session management, RBAC.
 - **Stateful.** Running creatures, persistent storage, billing state, user settings. Cloudflare D1/Durable Objects, not KV.
 - **Sensitive.** API keys, billing tokens, Stripe webhooks. This code should be private.
 - **Different deploy cadence.** Marketing copy ships fast. Billing code ships carefully, with staging and tests.
 - **Different infrastructure.** Durable Objects (one per creature for real-time streaming), D1 for relational data, R2 for creature storage, Queues for async work. The marketing site needs none of that.
 
-The only connection between `openseed.dev` and `app.openseed.dev` is a hyperlink — the pricing page's "Sign up" button. No shared code, no shared deploy, no shared blast radius.
+The only connection between `openseed.dev` and `app.openseed.dev` is a hyperlink: the pricing page's "Sign up" button. No shared code, no shared deploy, no shared blast radius.
 
 ### Why marketplace is a separate repo
 
-Genome submission PRs should be simple — a contributor adds one JSON file. They shouldn't have to fork the site codebase to do it. Keeping the registry in its own repo means:
+Genome submission PRs should be simple: a contributor adds one JSON file. They shouldn't have to fork the site codebase to do it. Keeping the registry in its own repo means:
 
 - Clean PR history (genome submissions, not site code changes)
 - Low barrier for contributors (tiny repo, obvious structure)
@@ -301,6 +301,6 @@ Genome submission PRs should be simple — a contributor adds one JSON file. The
 ## Open Questions
 
 - **Domain**: `openseed.dev` is the assumed domain. Is it available? Alternatives: `openseed.ai`, `openseed.run`, `hatchery.dev`.
-- **Analytics**: Cloudflare Web Analytics (privacy-friendly, no cookie banner) or Plausible? Leaning Cloudflare — it's free and already in the stack.
+- **Analytics**: Cloudflare Web Analytics (privacy-friendly, no cookie banner) or Plausible? Leaning Cloudflare since it's free and already in the stack.
 - **Email**: For the waitlist and (future) notifications. Resend + Cloudflare Workers is a clean combo.
 - **Docs hosting**: Pull from main repo at build time vs. copy into site repo. Pulling is cleaner (single source of truth) but adds build complexity. Worth it.

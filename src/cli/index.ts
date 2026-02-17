@@ -16,7 +16,7 @@ import { up } from './up.js';
 const [command, ...args] = process.argv.slice(2);
 
 function usage(): never {
-  console.log(`openseed — autonomous creature framework
+  console.log(`openseed: autonomous creature framework
 
 commands:
   up [--port 7770]                start the orchestrator + dashboard

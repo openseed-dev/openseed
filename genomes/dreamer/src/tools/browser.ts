@@ -40,7 +40,7 @@ async function ensureContext(): Promise<BrowserContext> {
   };
 
   // Use installed Chrome if available (better anti-bot), fall back to Playwright's Chromium
-  // In Docker containers, Chrome won't be installed — falls back automatically
+  // In Docker containers, Chrome won't be installed; falls back automatically
   try {
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
       channel: "chrome",
@@ -215,7 +215,7 @@ export async function executeBrowser(
       case "tabs": {
         const ctx = await ensureContext();
         const allPages = ctx.pages();
-        const tabList = allPages.map((p, i) => `[${i}] ${p.url()} — ${p.isClosed() ? "(closed)" : "open"}`);
+        const tabList = allPages.map((p, i) => `[${i}] ${p.url()} | ${p.isClosed() ? "(closed)" : "open"}`);
         return { ok: true, data: tabList.join("\n") };
       }
 
@@ -289,19 +289,19 @@ export const browserTool = {
   description: `Control a headless Chromium browser with a persistent profile. Cookies, sessions, logins, and localStorage survive across restarts.
 
 Actions:
-- goto { url } — navigate to URL
-- click { selector } — click an element
-- fill { selector, text } — clear a field and type text
-- type { selector, text } — type text without clearing (for search boxes etc.)
-- press { key } — press a keyboard key (Enter, Tab, Escape, etc.)
-- snapshot — get current page state without acting
-- evaluate { script } — run JavaScript on the page
-- wait { selector?, ms? } — wait for an element or a duration
-- tabs — list open tabs
-- switch_tab { index } — switch to a different tab
-- new_tab { url? } — open a new tab
-- info — get the raw CDP endpoint URL for direct access (use when built-in actions aren't enough)
-- close — shut down the browser (profile is preserved on disk)
+- goto { url } : navigate to URL
+- click { selector } : click an element
+- fill { selector, text } : clear a field and type text
+- type { selector, text } : type text without clearing (for search boxes etc.)
+- press { key } : press a keyboard key (Enter, Tab, Escape, etc.)
+- snapshot : get current page state without acting
+- evaluate { script } : run JavaScript on the page
+- wait { selector?, ms? } : wait for an element or a duration
+- tabs : list open tabs
+- switch_tab { index } : switch to a different tab
+- new_tab { url? } : open a new tab
+- info : get the raw CDP endpoint URL for direct access (use when built-in actions aren't enough)
+- close : shut down the browser (profile is preserved on disk)
 
 Every action returns a text snapshot of the page: URL, title, visible text, and interactive elements.
 

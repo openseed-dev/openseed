@@ -45,7 +45,7 @@ export async function executeBash(
   return new Promise((resolve) => {
     const proc = spawn("bash", ["-c", command], {
       cwd,
-      // File FDs instead of pipes — background children inherit file descriptors
+      // File FDs instead of pipes so background children inherit file descriptors
       // that stay valid even after we close our copies. No SIGPIPE.
       // detached creates a new session so /dev/tty is unavailable.
       stdio: ["ignore", outFd, errFd],
@@ -53,7 +53,7 @@ export async function executeBash(
       env: { ...process.env, ...NON_INTERACTIVE_ENV },
     });
 
-    // Close our FD copies — the child has its own
+    // Close our FD copies; the child has its own
     closeSync(outFd);
     closeSync(errFd);
 
@@ -85,7 +85,7 @@ export async function executeBash(
       }, 200);
     };
 
-    // Use 'exit' not 'close' — with file-based stdio there are no pipe streams
+    // Use 'exit' not 'close' because with file-based stdio there are no pipe streams
     // to drain, and 'exit' fires as soon as the foreground bash exits.
     // This clears the timeout immediately, so background processes in the same
     // process group aren't killed by the 120s timer.
@@ -111,7 +111,7 @@ You can:
 - Run scripts: node script.js
 - Any other CLI tool available
 
-Commands time out after 120s by default. You have no terminal — interactive prompts (sudo, ssh password, etc.) will fail immediately.
+Commands time out after 120s by default. You have no terminal, so interactive prompts (sudo, ssh password, etc.) will fail immediately.
 
 Examples:
 - Check git status: git status

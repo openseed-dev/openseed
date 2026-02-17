@@ -112,7 +112,7 @@ function translateResponseToAnthropic(openaiResp: any): any {
         input: parsedInput,
       });
     }
-    // Skip 'reasoning' items — creatures don't know about them
+    // Skip 'reasoning' items; creatures don't know about them
   }
 
   const stopReason = hasToolUse ? 'tool_use' : 'end_turn';

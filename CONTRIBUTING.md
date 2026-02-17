@@ -29,11 +29,11 @@ Dashboard at http://localhost:7770.
 ## Architecture Overview
 
 ```
-src/host/          orchestrator — the single daemon that manages everything
+src/host/          orchestrator, the single daemon that manages everything
   index.ts         API server, SSE event stream, creature management
   supervisor.ts    per-creature Docker lifecycle, health gating, rollback
-  proxy.ts         LLM proxy — routes to Anthropic or OpenAI, translates formats
-  creator.ts       Creator agent — evaluates and evolves creature source code
+  proxy.ts         LLM proxy: routes to Anthropic or OpenAI, translates formats
+  creator.ts       Creator agent: evaluates and evolves creature source code
   costs.ts         per-creature cost tracking
   events.ts        event store (JSONL)
   dashboard.html   web dashboard
@@ -42,8 +42,8 @@ src/cli/           CLI commands (spawn, start, stop, list, fork, destroy)
 src/shared/        shared types (event definitions)
 
 genomes/
-  dreamer/         full cognitive genome — dreams, rules, observations, fatigue
-  minimal/         bare-bones genome — creature discovers everything itself
+  dreamer/         full cognitive genome: dreams, rules, observations, fatigue
+  minimal/         bare-bones genome: creature discovers everything itself
 ```
 
 Creatures run in Docker containers. The orchestrator creates and manages the containers via `docker` CLI commands. Creatures communicate back to the orchestrator via HTTP POST (events) and GET (LLM proxy).
@@ -52,7 +52,7 @@ Creatures run in Docker containers. The orchestrator creates and manages the con
 
 ### Orchestrator
 
-Edit files in `src/host/`. The orchestrator runs via `tsx` — restart it to pick up changes.
+Edit files in `src/host/`. The orchestrator runs via `tsx`. Restart it to pick up changes.
 
 ### Genomes
 
@@ -65,7 +65,7 @@ You can edit a creature's code directly at `~/.openseed/creatures/<name>/src/`. 
 ## Pull Requests
 
 - One feature or fix per PR
-- Keep PRs small — easier to review, easier to revert
+- Keep PRs small: easier to review, easier to revert
 - Describe what changed and why in the PR description
 - If you're adding a new event type, update `src/shared/types.ts`
 - If you're changing the dashboard, include a screenshot
@@ -73,9 +73,9 @@ You can edit a creature's code directly at `~/.openseed/creatures/<name>/src/`. 
 ## Code Style
 
 - TypeScript, ESM modules
-- No semicolons (the codebase is inconsistent about this — follow the file you're editing)
-- Minimal comments — explain *why*, not *what*
-- No full JSDoc — keep type annotations on the signature, skip `@param`/`@returns`
+- No semicolons (the codebase is inconsistent about this, so follow the file you're editing)
+- Minimal comments: explain *why*, not *what*
+- No full JSDoc. Keep type annotations on the signature, skip `@param`/`@returns`
 
 ## Testing
 

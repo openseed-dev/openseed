@@ -257,7 +257,7 @@ export class Orchestrator {
     if (this.supervisors.has(name)) {
       await this.stopCreature(name);
     }
-    // Docker cleanup — remove container and image but keep files
+    // Docker cleanup: remove container and image but keep files
     try { await execAsync(`docker kill creature-${name}`); } catch {}
     try { await execAsync(`docker rm -f creature-${name}`); } catch {}
     try { await execAsync(`docker rmi creature-${name}`); } catch {}
@@ -300,17 +300,17 @@ export class Orchestrator {
           if (validate) {
             await execAsync(validate, { cwd: dir, timeout: 30_000 });
           }
-          await execAsync(`git add -A && git commit -m "creature: self-modification — ${reason.slice(0, 60)}" --allow-empty`, {
+          await execAsync(`git add -A && git commit -m "creature: self-modification, ${reason.slice(0, 60)}" --allow-empty`, {
             cwd: dir,
           });
-          // docker restart — process restarts, container environment preserved
+          // docker restart: process restarts, container environment preserved
           await supervisor.restart();
           console.log(`[${name}] creature-requested restart completed`);
         } catch (err: any) {
           const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
           console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
           try {
-            await this.sendMessage(name, `[SYSTEM] Your restart request failed — TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
+            await this.sendMessage(name, `[SYSTEM] Your restart request failed. TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
           } catch {}
         }
       }
@@ -372,7 +372,7 @@ export class Orchestrator {
         return;
       }
 
-      // LLM proxy — creatures call this instead of api.anthropic.com
+      // LLM proxy: creatures call this instead of api.anthropic.com
       // Detects model from request body, routes to Anthropic or OpenAI (with translation)
       if (p === '/v1/messages' && req.method === 'POST') {
         await handleLLMProxy(req, res, this.costs);
@@ -435,7 +435,7 @@ export class Orchestrator {
           const dir = path.join(CREATURES_DIR, name);
           try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e: any) { if (e.message.includes('already exists')) throw e; }
 
-          // Return 202 immediately — spawn runs in background
+          // Return 202 immediately; spawn runs in background
           res.writeHead(202, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, name, status: 'spawning' }));
 
@@ -559,7 +559,7 @@ export class Orchestrator {
             const body = await readBody(req);
             const { text } = JSON.parse(body);
             await this.sendMessage(name, text);
-            // Always attempt to wake — forceWake() is a no-op if not sleeping,
+            // Always attempt to wake. forceWake() is a no-op if not sleeping,
             // and supervisor may lose sleeping status on orchestrator restart
             const sup = this.supervisors.get(name);
             if (sup?.port) {

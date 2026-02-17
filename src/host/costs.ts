@@ -14,7 +14,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'claude-opus-4-6':   { input: 5 / 1e6,    output: 25 / 1e6 },
   'claude-sonnet-4-5': { input: 3 / 1e6,    output: 15 / 1e6 },
   'claude-haiku-4-5':  { input: 1 / 1e6,    output: 5 / 1e6 },
-  // OpenAI — GPT
+  // OpenAI GPT
   'gpt-5.2':           { input: 1.75 / 1e6, output: 14 / 1e6 },
   'gpt-5.1':           { input: 1.25 / 1e6, output: 10 / 1e6 },
   'gpt-5':             { input: 1.25 / 1e6, output: 10 / 1e6 },
@@ -25,7 +25,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'gpt-4.1':           { input: 2 / 1e6,    output: 8 / 1e6 },
   'gpt-4.1-mini':      { input: 0.4 / 1e6,  output: 1.6 / 1e6 },
   'gpt-4.1-nano':      { input: 0.1 / 1e6,  output: 0.4 / 1e6 },
-  // OpenAI — reasoning
+  // OpenAI reasoning
   'o4-mini':           { input: 1.1 / 1e6,  output: 4.4 / 1e6 },
   'o3-mini':           { input: 1.1 / 1e6,  output: 4.4 / 1e6 },
   'o3':                { input: 2 / 1e6,    output: 8 / 1e6 },

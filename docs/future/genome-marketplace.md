@@ -139,7 +139,7 @@ cd ~/.openseed/creatures/my-researcher
 git diff genome-v2.1..HEAD
 ```
 
-This is the phenotype — what the creature became vs. what it started as. Two creatures from the same genome, given different purposes, produce different diffs. The genome community could study these diffs to improve the genome itself.
+This is the phenotype: what the creature became vs. what it started as. Two creatures from the same genome, given different purposes, produce different diffs. The genome community could study these diffs to improve the genome itself.
 
 ### Contributing back
 
@@ -158,7 +158,7 @@ The orchestrator reads `permissions` from `genome.json` at spawn time:
 
 ### Trust model
 
-Genomes are open source by nature — the user can read the code before spawning. Trust signals:
+Genomes are open source by nature. The user can read the code before spawning. Trust signals:
 
 1. **Code review**: It's a git repo. Read the source.
 2. **Community**: Stars, forks, contributor count, issue activity.
@@ -230,4 +230,4 @@ This is complex and can wait. Mentioning it here because the manifest schema sho
 - **Genome naming conflicts**: Two repos could claim the same `name` in `genome.json`. First-come-first-served? Scoped names like `@someone/researcher`?
 - **Private genomes**: Should the CLI support private repos? Probably yes (via SSH keys or GitHub tokens). The marketplace only indexes public repos.
 - **Genome signing**: Should genome releases be signed? Adds trust but adds friction. Probably not for v1.
-- **Monetization**: Should genome authors be able to charge? Probably not — keep the ecosystem open. But the permissions model could support "requires API key for service X" which is indirect monetization.
+- **Monetization**: Should genome authors be able to charge? Probably not; keep the ecosystem open. But the permissions model could support "requires API key for service X" which is indirect monetization.

@@ -47,7 +47,7 @@ export async function genomeInstall(source: string): Promise<void> {
 
   const meta = readGenomeMeta(dest);
   if (!meta) {
-    console.error(`cloned repo has no genome.json — not a valid genome`);
+    console.error(`cloned repo has no genome.json, not a valid genome`);
     fs.rmSync(dest, { recursive: true, force: true });
     process.exit(1);
   }

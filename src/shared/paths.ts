@@ -56,7 +56,7 @@ export function autoInstallGenome(genome: string): string | null {
   const { cloneUrl, name } = parseGenomeSource(genome);
   const dest = installedGenomeDir(name);
 
-  console.log(`genome "${genome}" not found locally — installing from ${cloneUrl}...`);
+  console.log(`genome "${genome}" not found locally, installing from ${cloneUrl}...`);
   try {
     fs.mkdirSync(GENOMES_DIR, { recursive: true });
     execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: "pipe" });

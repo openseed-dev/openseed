@@ -342,9 +342,9 @@ export class CreatureSupervisor {
     this.expectingExit = true;
     this.clearTimers();
 
-    // Guard A: if Docker is down, don't rollback or retry — infrastructure is the problem
+    // Guard A: if Docker is down, don't rollback or retry. Infrastructure is the problem.
     if (!this.isDockerAvailable()) {
-      console.log(`[${this.name}] Docker unavailable — stopping (not rolling back)`);
+      console.log(`[${this.name}] Docker unavailable, stopping (not rolling back)`);
       this.status = 'stopped';
       this.creature = null;
       await this.emit({ t: new Date().toISOString(), type: 'host.infra_failure', reason: 'Docker unavailable' });
@@ -387,9 +387,9 @@ export class CreatureSupervisor {
       fsSync.appendFileSync(path.join(ROLLBACK_DIR, `${this.name}.jsonl`), entry + '\n');
     } catch {}
 
-    // Guard C: max consecutive failures — stop trying
+    // Guard C: max consecutive failures, stop trying
     if (this.consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
-      console.log(`[${this.name}] ${this.consecutiveFailures} consecutive failures — giving up`);
+      console.log(`[${this.name}] ${this.consecutiveFailures} consecutive failures, giving up`);
       this.status = 'stopped';
       this.creature = null;
       return;

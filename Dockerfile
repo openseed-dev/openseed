@@ -2,7 +2,7 @@ FROM node:22-slim
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Docker CLI — needed to manage creature containers via socket mount
+# Docker CLI, needed to manage creature containers via socket mount
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg && \
     install -m 0755 -d /etc/apt/keyrings && \

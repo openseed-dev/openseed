@@ -22,7 +22,7 @@ const provider = createAnthropic({
 const tools = {
   bash: tool({
     description: `Execute a bash command. Use this to interact with the system and the world.
-Commands time out after 120s by default. You have no terminal — interactive prompts will fail.`,
+Commands time out after 120s by default. You have no terminal, so interactive prompts will fail.`,
     inputSchema: z.object({
       command: z.string().describe("The bash command to execute"),
       timeout: z.number().describe("Timeout in milliseconds (default: 120000)").optional(),
@@ -65,7 +65,7 @@ export class Mind {
   private drainInjections() {
     if (this.pendingInjections.length === 0) return;
     const combined = this.pendingInjections
-      .map(t => `[SYSTEM MESSAGE — process this and continue autonomously.]\n\n${t}`)
+      .map(t => `[SYSTEM MESSAGE: process this and continue autonomously.]\n\n${t}`)
       .join("\n\n---\n\n");
     this.pendingInjections = [];
 
@@ -102,14 +102,14 @@ You have bash. Use it to do anything a developer can do from a terminal.
 
 You can sleep by calling set_sleep with a number of seconds. While you sleep, you consume no resources. When you wake, this conversation starts completely fresh.
 
-You can modify your own source code in src/. Changes are validated and applied when you sleep — you wake running the new code. If validation fails, changes are reverted and you're told why.
+You can modify your own source code in src/. Changes are validated and applied when you sleep. You wake running the new code. If validation fails, changes are reverted and you're told why.
 
 Background processes you start (via &, nohup) survive across sleep cycles. Your container stays running while you sleep.
 
-A command called \`wakeup "reason"\` is available in your shell — background processes can call it to wake you early from sleep.
+A command called \`wakeup "reason"\` is available in your shell. Background processes can call it to wake you early from sleep.
 
 Pre-installed: git, gh, curl, jq, rg, python3, pip, wget, sudo, unzip.
-You can install more — they persist across restarts.`;
+You can install more; they persist across restarts.`;
   }
 
   async run(
@@ -152,12 +152,12 @@ You can install more — they persist across restarts.`;
           if (onError) await onError(errMsg.slice(0, 300), retryDelay, retryCount);
 
           if ((err?.status === 400) && this.messages.length > 2) {
-            console.error(`[mind] 400 error with ${this.messages.length} messages — resetting conversation`);
+            console.error(`[mind] 400 error with ${this.messages.length} messages, resetting conversation`);
             break;
           }
 
           if (retryCount >= 5) {
-            console.error(`[mind] ${retryCount} consecutive failures — resetting conversation`);
+            console.error(`[mind] ${retryCount} consecutive failures, resetting conversation`);
             break;
           }
 

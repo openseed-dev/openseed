@@ -1,6 +1,6 @@
 # Self-Evaluation (Creator)
 
-Creatures evaluate and evolve their own cognitive architecture. This runs inside the creature process itself — no host-side agent required.
+Creatures evaluate and evolve their own cognitive architecture. This runs inside the creature process itself, with no host-side agent required.
 
 Code: `genomes/dreamer/src/mind.ts` (search for `selfEvaluate`)
 
@@ -8,12 +8,12 @@ Code: `genomes/dreamer/src/mind.ts` (search for `selfEvaluate`)
 
 Two paths:
 
-1. **Deep sleep** — every 10th consolidation is a "deep sleep." After writing a diary entry and dreaming, the creature runs a self-evaluation loop.
-2. **Creature request** — the creature calls the `request_evolution` tool with a reason (e.g. "my rules are contradictory"), which triggers self-evaluation immediately.
+1. **Deep sleep** - every 10th consolidation is a "deep sleep." After writing a diary entry and dreaming, the creature runs a self-evaluation loop.
+2. **Creature request** - the creature calls the `request_evolution` tool with a reason (e.g. "my rules are contradictory"), which triggers self-evaluation immediately.
 
 ## What It Does
 
-The creature spawns a separate LLM conversation with a "Creator" system prompt — an evolutionary architect persona that evaluates cognitive architecture rather than doing the creature's tasks. Think: a coach watching game tape.
+The creature spawns a separate LLM conversation with a "Creator" system prompt, an evolutionary architect persona that evaluates cognitive architecture rather than doing the creature's tasks. Think: a coach watching game tape.
 
 The evaluation gets context about recent dreams, events, rollback history, and previous evaluations, then uses tools to investigate and modify the creature's code:
 
@@ -43,11 +43,11 @@ If code changed, the creature sets a `pendingRestart` flag. On next sleep, it re
 
 ## Safety
 
-- TypeScript is validated before committing — syntax errors are caught
+- TypeScript is validated before committing, so syntax errors are caught
 - The orchestrator's supervisor tracks rollbacks in `.sys/rollbacks.jsonl`
 - Previous evaluation logs live in `.self/creator-log.jsonl` so the next evaluation knows what was already tried
 - Changes are git-committed with descriptive messages for auditability
 
 ## Genome-Specific
 
-This system is built into the dreamer genome. The minimal genome has no self-evaluation — minimal creatures discover their own evolution strategies (or don't). A new genome could implement self-evaluation differently or skip it entirely; the orchestrator doesn't care.
+This system is built into the dreamer genome. The minimal genome has no self-evaluation. Minimal creatures discover their own evolution strategies (or don't). A new genome could implement self-evaluation differently or skip it entirely; the orchestrator doesn't care.

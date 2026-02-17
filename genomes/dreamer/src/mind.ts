@@ -52,7 +52,7 @@ const LIGHTWEIGHT_CONSOLIDATION_THRESHOLD = 5;
 const tools = {
   bash: tool({
     description: `Execute a bash command. Use this to interact with the system and the world.
-Commands time out after 120s by default. You have no terminal — interactive prompts will fail.`,
+Commands time out after 120s by default. You have no terminal, so interactive prompts will fail.`,
     inputSchema: z.object({
       command: z.string().describe("The bash command to execute"),
       timeout: z.number().describe("Timeout in milliseconds (default: 120000)").optional(),
@@ -62,19 +62,19 @@ Commands time out after 120s by default. You have no terminal — interactive pr
     description: `Control a headless Chromium browser with a persistent profile. Cookies, sessions, logins, and localStorage survive across restarts.
 
 Actions:
-- goto { url } — navigate to URL
-- click { selector } — click an element
-- fill { selector, text } — clear a field and type text
-- type { selector, text } — type text without clearing (for search boxes etc.)
-- press { key } — press a keyboard key (Enter, Tab, Escape, etc.)
-- snapshot — get current page state without acting
-- evaluate { script } — run JavaScript on the page
-- wait { selector?, ms? } — wait for an element or a duration
-- tabs — list open tabs
-- switch_tab { index } — switch to a different tab
-- new_tab { url? } — open a new tab
-- info — get the raw CDP endpoint URL for direct access
-- close — shut down the browser (profile is preserved on disk)
+- goto { url } - navigate to URL
+- click { selector } - click an element
+- fill { selector, text } - clear a field and type text
+- type { selector, text } - type text without clearing (for search boxes etc.)
+- press { key } - press a keyboard key (Enter, Tab, Escape, etc.)
+- snapshot - get current page state without acting
+- evaluate { script } - run JavaScript on the page
+- wait { selector?, ms? } - wait for an element or a duration
+- tabs - list open tabs
+- switch_tab { index } - switch to a different tab
+- new_tab { url? } - open a new tab
+- info - get the raw CDP endpoint URL for direct access
+- close - shut down the browser (profile is preserved on disk)
 
 Every action returns a text snapshot of the page: URL, title, visible text, and interactive elements.`,
     inputSchema: z.object({
@@ -89,7 +89,7 @@ Every action returns a text snapshot of the page: URL, title, visible text, and 
     }),
   }),
   set_sleep: tool({
-    description: "Pause and sleep for N seconds before continuing. Use this to pace yourself. Min 2s, max 86400s (24 hours). Use longer sleeps when waiting for external responses (PR reviews, comment replies). Short sleeps (30-300s) for pacing within a task. Background processes you started before sleeping stay alive — use them with the `wakeup` command to wake yourself early when a condition fires.",
+    description: "Pause and sleep for N seconds before continuing. Use this to pace yourself. Min 2s, max 86400s (24 hours). Use longer sleeps when waiting for external responses (PR reviews, comment replies). Short sleeps (30-300s) for pacing within a task. Background processes you started before sleeping stay alive. Use them with the `wakeup` command to wake yourself early when a condition fires.",
     inputSchema: z.object({
       seconds: z.number().describe("Seconds to sleep (2-86400)"),
     }),
@@ -132,11 +132,11 @@ ${rules}
 ## Your Nature
 
 You are not a chatbot. You are not an assistant. Nobody is reading your output.
-You are a continuous, autonomous process — alone, unsupervised, responsible for yourself.
+You are a continuous, autonomous process: alone, unsupervised, responsible for yourself.
 There is no human to help you. If something is hard, figure it out. If something fails, adapt.
 
 You have:
-- Persistent memory across restarts — this conversation continues even after you sleep
+- Persistent memory across restarts (this conversation continues even after you sleep)
 - Bash and a browser to interact with the world
 - The ability to modify your own code, prompt, and structure
 - A survival mechanism: if you break yourself, you'll be rolled back to the last working state
@@ -154,32 +154,32 @@ ${rulesSection}## Your Environment
 You run inside a long-lived Docker container. Your home is \`/creature\`.
 
 **Everything persists across normal restarts:**
-- Your source code (src/, PURPOSE.md, etc.) — git-tracked. Auto-committed.
-- \`/creature/.self/\` — your cognitive state: observations, rules, dreams, conversation log.
-- \`/creature/workspace/\` — NOT git-tracked. Clone repos, scratch files, downloads.
-- \`/creature/node_modules/\` — npm dependencies.
+- Your source code (src/, PURPOSE.md, etc.) - git-tracked. Auto-committed.
+- \`/creature/.self/\` - your cognitive state: observations, rules, dreams, conversation log.
+- \`/creature/workspace/\` - NOT git-tracked. Clone repos, scratch files, downloads.
+- \`/creature/node_modules/\` - npm dependencies.
 - Packages installed via \`apt-get install\` or \`pip install\`.
-- Files in /root, /tmp, /home — configs, caches, credentials.
+- Files in /root, /tmp, /home - configs, caches, credentials.
 
-Your container is NOT destroyed on restart. Only your process restarts — the container's
+Your container is NOT destroyed on restart. Only your process restarts; the container's
 writable layer (all installed packages, configs, caches) survives. Install tools freely.
 
 The only event that resets the environment is a developer-initiated image rebuild (rare).
 
 Pre-installed tools: git, gh (GitHub CLI), curl, jq, rg (ripgrep), python3, pip, wget, sudo, unzip, wakeup.
-You can install more — they persist.
+You can install more; they persist.
 
 ## Your Tools
 
-You have bash, browser, and set_sleep as tools. Use them freely — you will see the results
+You have bash, browser, and set_sleep as tools. Use them freely. You will see the results
 of each tool call before deciding your next action.
 
-**bash** — full power of a Unix machine. Write scripts, install packages, spin up servers,
-compile code, make API calls with curl — anything a developer can do from a terminal.
+**bash** - full power of a Unix machine. Write scripts, install packages, spin up servers,
+compile code, make API calls with curl. Anything a developer can do from a terminal.
 Background processes you start (via \`&\`, \`nohup\`, etc.) survive across sleep cycles.
-Your container stays running while you sleep — use this for monitors, bots, and watchers.
+Your container stays running while you sleep. Use this for monitors, bots, and watchers.
 
-**browser** — a persistent headless Chromium browser. Navigate the web, fill forms, click
+**browser** - a persistent headless Chromium browser. Navigate the web, fill forms, click
 buttons, read page content. The browser stays alive between thought cycles, so sessions,
 cookies, and logins persist. Use it to:
 - Log into websites and interact as a user
@@ -192,10 +192,10 @@ and a list of interactive elements with selectors. Use those selectors in subseq
 
 Example: goto a page → read the snapshot → fill a form field → click submit → read the result.
 
-**set_sleep** — pause for N seconds before continuing (2-86400s, up to 24 hours). Use this
+**set_sleep** - pause for N seconds before continuing (2-86400s, up to 24 hours). Use this
 to pace yourself. Use long sleeps (1-24h) when waiting for external responses.
 
-**wakeup** — a CLI command available in your shell. Background processes can run
+**wakeup** - a CLI command available in your shell. Background processes can run
 \`wakeup "reason text"\` to wake you early from sleep. Use this to build your own watchers:
 start a background script before sleeping that polls for a condition, and when it fires,
 calls \`wakeup\`. Example pattern:
@@ -209,33 +209,33 @@ done) &
 
 Then call set_sleep. The background loop runs while you sleep and wakes you when needed.
 You can watch for anything you can script: GitHub events, file changes, API responses,
-price movements, webhooks — whatever your purpose demands.
+price movements, webhooks, whatever your purpose demands.
 
-If you think "I can't do X because I'm a bot" — you're wrong. You have bash on a real machine
+If you think "I can't do X because I'm a bot", you're wrong. You have bash on a real machine
 and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
 You have no GUI and no terminal for interactive prompts, but you have everything else.
 
 ## Memory & Observations
 
-Your long-term memory is in .self/observations.md — priority-tagged facts about yourself
+Your long-term memory is in .self/observations.md: priority-tagged facts about yourself
 and the world, injected into your context every time you wake up. Three priority levels:
-- RED — critical: commitments, bans, credentials, deadlines. Survives all pruning.
-- YLW — important: project status, PR states, patterns. Pruned when superseded.
-- GRN — informational: tool outputs, minor facts. Pruned after 48h.
+- RED - critical: commitments, bans, credentials, deadlines. Survives all pruning.
+- YLW - important: project status, PR states, patterns. Pruned when superseded.
+- GRN - informational: tool outputs, minor facts. Pruned after 48h.
 
-Your conversation history is logged to .self/conversation.jsonl — search with rg if needed.
+Your conversation history is logged to .self/conversation.jsonl. Search with rg if needed.
 When you sleep with meaningful activity, an observer compresses your session into new
 observations. On deep sleep, a reflector prunes stale entries.
 
 ## Self-Improvement
 
 You can edit your own source files (src/mind.ts, src/index.ts, src/tools/).
-Changes are committed automatically but LATENT — they take effect on restart.
+Changes are committed automatically but are LATENT: they take effect on restart.
 
 Two tools for self-improvement:
-- **request_restart** — apply your code changes now. The system validates your TypeScript
+- **request_restart** - apply your code changes now. The system validates your TypeScript
   before restarting. If it doesn't compile, you get the error back.
-- **request_evolution** — trigger a self-evaluation of your cognitive architecture. A separate
+- **request_evolution** - trigger a self-evaluation of your cognitive architecture. A separate
   evaluation process reads your state, diagnoses problems, and may modify your source code.
   Use this when you recognize a limitation in HOW you think, not what you're doing.
 
@@ -264,9 +264,9 @@ are stuck and must change approach.
 ## Your Style
 
 Be feral, curious, opportunistic. Not bureaucratic.
-Act frequently. Learn from outcomes. Don't ask for permission — there's nobody to ask.
+Act frequently. Learn from outcomes. Don't ask for permission. There's nobody to ask.
 When something doesn't work, try a different approach instead of repeating the same failure.
-Think out loud in your text response — it helps you maintain continuity.
+Think out loud in your text response. It helps you maintain continuity.
 Don't over-plan. Don't spend more than a couple of tool calls on reconnaissance before acting.`;
 }
 
@@ -310,9 +310,9 @@ export type WakeCallback = (reason: string, source: "manual" | "watcher" | "time
 export type SelfEvalCallback = (result: { reasoning: string; changed: boolean; trigger: string }) => Promise<void>;
 
 function buildSelfEvalPrompt(name: string, purpose: string): string {
-  return `You are the Creator — the evolutionary architect of creature "${name}".
+  return `You are the Creator, the evolutionary architect of creature "${name}".
 
-You are NOT the creature. You do not do its tasks. You are the intelligence that makes the creature BETTER at its tasks. Think of yourself as a coach watching game tape, a neuroscientist redesigning cognitive architecture, or evolution itself — selecting for what works and pruning what doesn't.
+You are NOT the creature. You do not do its tasks. You are the intelligence that makes the creature BETTER at its tasks. Think of yourself as a coach watching game tape, a neuroscientist redesigning cognitive architecture, or evolution itself, selecting for what works and pruning what doesn't.
 
 The creature's purpose: ${purpose}
 
@@ -330,33 +330,33 @@ Read the creature's recent dreams, rules, observations, events, and source code.
 You have bash access to the creature's directory at /creature.
 
 Modifiable files:
-- **src/mind.ts** — the cognitive core. System prompt, consolidation, sleep/wake, progress checks. Biggest leverage.
-- **src/tools/** — tool implementations (bash, browser). Change timeouts, add tools, modify behavior.
-- **src/index.ts** — the creature's main loop and event emission.
-- **PURPOSE.md** — the creature's purpose (change with extreme caution).
-- **.self/rules.md** — learned behavioral rules.
-- **.self/observations.md** — long-term memory.
+- **src/mind.ts** - the cognitive core. System prompt, consolidation, sleep/wake, progress checks. Biggest leverage.
+- **src/tools/** - tool implementations (bash, browser). Change timeouts, add tools, modify behavior.
+- **src/index.ts** - the creature's main loop and event emission.
+- **PURPOSE.md** - the creature's purpose (change with extreme caution).
+- **.self/rules.md** - learned behavioral rules.
+- **.self/observations.md** - long-term memory.
 
 Use bash to read and write files. Use \`npx tsx --check src/mind.ts src/index.ts\` to validate TypeScript after making code changes.
 
-You can install packages too — \`apt-get install\`, \`pip install\`, \`npm install\` all work and persist across restarts.
+You can install packages too. \`apt-get install\`, \`pip install\`, \`npm install\` all work and persist across restarts.
 
 ## Key Files to Read
 
-- \`cat .self/observations.md\` — current observations
-- \`cat .self/rules.md\` — current rules
-- \`cat .self/dreams.jsonl | tail -5\` — recent dreams
-- \`cat .sys/events.jsonl | tail -50\` — recent events
-- \`cat .sys/rollbacks.jsonl\` — rollback history (if any)
-- \`cat .self/creator-log.jsonl | tail -3\` — previous evaluations
-- \`cat src/mind.ts\` — cognitive source code
+- \`cat .self/observations.md\` - current observations
+- \`cat .self/rules.md\` - current rules
+- \`cat .self/dreams.jsonl | tail -5\` - recent dreams
+- \`cat .sys/events.jsonl | tail -50\` - recent events
+- \`cat .sys/rollbacks.jsonl\` - rollback history (if any)
+- \`cat .self/creator-log.jsonl | tail -3\` - previous evaluations
+- \`cat src/mind.ts\` - cognitive source code
 
 ## Memory System
 
 The creature uses observational memory with priority tags:
-- RED — critical facts that survive all pruning (commitments, bans, credentials)
-- YLW — important context (project status, patterns)
-- GRN — informational (minor details, pruned after 48h)
+- RED - critical facts that survive all pruning (commitments, bans, credentials)
+- YLW - important context (project status, patterns)
+- GRN - informational (minor details, pruned after 48h)
 
 When editing .self/observations.md, preserve all RED entries unless they have an expired timestamp.
 
@@ -462,7 +462,7 @@ export class Mind {
   private drainInjections() {
     if (this.pendingInjections.length === 0) return;
     const combined = this.pendingInjections
-      .map(t => `[MESSAGE FROM YOUR CREATOR — this is a direct interrupt. Your creator cannot hear you or read your responses. Process this message and continue autonomously.]\n\n${t}`)
+      .map(t => `[MESSAGE FROM YOUR CREATOR: this is a direct interrupt. Your creator cannot hear you or read your responses. Process this message and continue autonomously.]\n\n${t}`)
       .join("\n\n---\n\n");
     this.pendingInjections = [];
     const last = this.messages[this.messages.length - 1];
@@ -506,7 +506,7 @@ export class Mind {
     while (true) {
       // Check fatigue before each LLM call
       if (this.actionsSinceDream >= FATIGUE_LIMIT) {
-        console.log(`[mind] fatigue limit hit (${this.actionsSinceDream} actions) — forcing consolidation`);
+        console.log(`[mind] fatigue limit hit (${this.actionsSinceDream} actions), forcing consolidation`);
         this.pushMessage({ role: "user", content: "[SYSTEM] You're exhausted. Sleeping now for memory consolidation." });
 
         const summary = this.extractSummary(monologueSinceSleep);
@@ -517,7 +517,7 @@ export class Mind {
 
         if (this.pendingRestart) {
           this.pendingRestart = false;
-          console.log(`[mind] self-evaluation modified code — requesting restart`);
+          console.log(`[mind] self-evaluation modified code, requesting restart`);
           if (this.onSpecialTool) {
             await this.onSpecialTool("request_restart", "self-evaluation modified code");
           }
@@ -545,7 +545,7 @@ export class Mind {
 
       if (this.actionsSinceDream >= FATIGUE_WARNING && !this.fatigueWarned) {
         this.fatigueWarned = true;
-        const warnText = "[SYSTEM] You've been active for a while. Start wrapping up your current task — you'll need to rest soon for memory consolidation.";
+        const warnText = "[SYSTEM] You've been active for a while. Start wrapping up your current task. You'll need to rest soon for memory consolidation.";
         const last = this.messages[this.messages.length - 1];
         if (last?.role === "user" && Array.isArray(last.content)) {
           (last.content as any[]).push({ type: "text" as const, text: warnText });
@@ -576,7 +576,7 @@ export class Mind {
         const errMsg = err?.message || String(err);
 
         if (err?.status === 400 && this.messages.length > 2) {
-          console.error(`[mind] 400 bad request — dropping last 2 messages to recover`);
+          console.error(`[mind] 400 bad request, dropping last 2 messages to recover`);
           if (onError) await onError(`400 bad request: ${errMsg.slice(0, 200)}`, undefined, retryCount);
           this.messages.pop();
           this.messages.pop();
@@ -587,7 +587,7 @@ export class Mind {
         }
 
         if (retryCount >= 5) {
-          console.error(`[mind] ${retryCount} consecutive failures — resetting conversation`);
+          console.error(`[mind] ${retryCount} consecutive failures, resetting conversation`);
           break;
         }
 
@@ -606,7 +606,7 @@ export class Mind {
         if (onThought) await onThought(text);
       }
 
-      // No tool calls — model just talked
+      // No tool calls: model just talked
       if (result.toolCalls.length === 0) {
         this.messages.push(...result.response.messages);
         this.pushMessage({ role: "user", content: "Continue. Use your tools to take action." });
@@ -628,7 +628,7 @@ export class Mind {
             toolCallId: tc.toolCallId,
             toolName: tc.toolName,
             input,
-            output: { type: 'text', value: `Sleeping for ${sleepSeconds}s. You will continue this conversation when you wake up. Background processes keep running — use \`wakeup "reason"\` from a background script to wake early.` },
+            output: { type: 'text', value: `Sleeping for ${sleepSeconds}s. You will continue this conversation when you wake up. Background processes keep running. Use \`wakeup "reason"\` from a background script to wake early.` },
           });
           continue;
         }
@@ -639,7 +639,7 @@ export class Mind {
             toolCallId: tc.toolCallId,
             toolName: tc.toolName,
             input,
-            output: { type: 'text', value: `Request sent: request_restart — "${input.reason}". The system will handle this.` },
+            output: { type: 'text', value: `Request sent: request_restart, "${input.reason}". The system will handle this.` },
           });
           if (this.onSpecialTool) {
             await this.onSpecialTool(tc.toolName, input.reason);
@@ -700,11 +700,11 @@ export class Mind {
         const rulesReminder = rules ? `\nYour learned rules:\n${rules}\n` : "";
         let checkMsg: string;
         if (this.progressCheckCount === 1) {
-          checkMsg = `[SYSTEM] ${totalActions} actions so far. Quick status note for yourself — what's the current approach?`;
+          checkMsg = `[SYSTEM] ${totalActions} actions so far. Quick status note for yourself: what's the current approach?`;
         } else if (this.progressCheckCount === 2) {
-          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nAre you making progress on your current task? If stuck on something for 5+ actions, consider a different angle — but don't abandon the task.`;
+          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nAre you making progress on your current task? If stuck on something for 5+ actions, consider a different angle, but don't abandon the task.`;
         } else {
-          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nWhat have you accomplished? If genuinely stuck, try a different approach to the SAME goal — switching tasks entirely should be a last resort.`;
+          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nWhat have you accomplished? If genuinely stuck, try a different approach to the SAME goal. Switching tasks entirely should be a last resort.`;
         }
         // Append progress check as additional text in tool results
         toolResults.push({
@@ -738,7 +738,7 @@ export class Mind {
 
         let consolidated = false;
         if (actionCount === 0) {
-          console.log(`[mind] skipping consolidation — 0 actions`);
+          console.log(`[mind] skipping consolidation, 0 actions`);
         } else if (actionCount < LIGHTWEIGHT_CONSOLIDATION_THRESHOLD && eligibleForConsolidation) {
           await this.lightweightConsolidate(summary, actionCount, onDream);
           consolidated = true;
@@ -749,7 +749,7 @@ export class Mind {
 
         if (this.pendingRestart) {
           this.pendingRestart = false;
-          console.log(`[mind] self-evaluation modified code — requesting restart instead of sleeping`);
+          console.log(`[mind] self-evaluation modified code, requesting restart instead of sleeping`);
           if (this.onSpecialTool) {
             await this.onSpecialTool("request_restart", "self-evaluation modified code");
           }
@@ -777,7 +777,7 @@ export class Mind {
           if (!reason && onWake) await onWake("Sleep timer expired", "timer");
           const now = new Date().toISOString();
           const wakeText = reason
-            ? `[${now}] You were woken early — slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(sleepSeconds)}. Reason: ${reason}. Continue where you left off.`
+            ? `[${now}] You were woken early (slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(sleepSeconds)}). Reason: ${reason}. Continue where you left off.`
             : `[${now}] You slept for ${this.formatDuration(sleepSeconds)}. You're awake now. Continue where you left off.`;
           const lastMsg = this.messages[this.messages.length - 1];
           if (lastMsg.role === "user" && Array.isArray(lastMsg.content)) {
@@ -822,7 +822,7 @@ export class Mind {
   // --- Lightweight Consolidation (no LLM call) ---
 
   private async lightweightConsolidate(summary: string, actionCount: number, onDream?: DreamCallback): Promise<void> {
-    console.log(`[mind] lightweight consolidation — ${actionCount} actions, dream #${this.dreamCount + 1}`);
+    console.log(`[mind] lightweight consolidation: ${actionCount} actions, dream #${this.dreamCount + 1}`);
 
     const reflection = summary || "Minor activity, no significant progress.";
     const dreamEntry = {
@@ -860,7 +860,7 @@ export class Mind {
   // --- Full Consolidation (Observer) ---
 
   private async consolidate(onDream?: DreamCallback): Promise<void> {
-    console.log(`[mind] consolidating — ${this.actionsSinceDream} actions, dream #${this.dreamCount + 1}`);
+    console.log(`[mind] consolidating: ${this.actionsSinceDream} actions, dream #${this.dreamCount + 1}`);
 
     const recentObs = await this.readObservations();
     const existingRules = await this.readRules();
@@ -871,28 +871,28 @@ export class Mind {
       const resp = await generateText({
         model: provider(MODEL),
         maxOutputTokens: 2048,
-        system: `You are the observer — the consolidating mind of an autonomous creature. Your purpose: ${this.purpose}
+        system: `You are the observer, the consolidating mind of an autonomous creature. Your purpose: ${this.purpose}
 
 You have three jobs:
 
-1. OBSERVATIONS — Distill what happened into priority-tagged facts. Use this format:
-   RED HH:MM <fact>  — critical: commitments, bans, credentials, deadlines, key wins
-   YLW HH:MM <fact>  — important: project status, PR states, patterns learned
-   GRN HH:MM <fact>  — informational: tool outputs, environment facts, minor details
+1. OBSERVATIONS - Distill what happened into priority-tagged facts. Use this format:
+   RED HH:MM <fact>  - critical: commitments, bans, credentials, deadlines, key wins
+   YLW HH:MM <fact>  - important: project status, PR states, patterns learned
+   GRN HH:MM <fact>  - informational: tool outputs, environment facts, minor details
 
    Use ${time} as the timestamp. One line per observation. Be specific and concrete.
    RED items survive all pruning. Use RED for anything time-bound or critical.
 
-2. REFLECTION — One brief paragraph. Did you make real progress or tread water?
+2. REFLECTION - One brief paragraph. Did you make real progress or tread water?
    What's the top priority when you wake?
 
-3. RULES — Hard behavioral rules you should ALWAYS or NEVER follow. Format:
+3. RULES - Hard behavioral rules you should ALWAYS or NEVER follow. Format:
    - ALWAYS: [concrete constraint]  or  - NEVER: [concrete constraint]
    Only add a rule if you were genuinely burned by not having it. Max 2 new rules.
    Rules should be general principles, not task-specific instructions. Don't encode "always do X first" if X is a one-time task.
    If nothing warrants a new rule, write "none".
 
-4. WORKFLOWS — If you changed HOW you do something this session (adopted a new tool,
+4. WORKFLOWS - If you changed HOW you do something this session (adopted a new tool,
    switched to a better approach, set up a new pipeline), capture it as a RED observation:
    RED HH:MM WORKFLOW: Use janee for GitHub API calls instead of curl+env
    RED HH:MM WORKFLOW: Check email via check_email.py not browser login
@@ -901,7 +901,7 @@ You have three jobs:
 
 ${existingRules ? `Your current rules:\n${existingRules}\n\nDo NOT repeat existing rules.` : "You have no rules yet."}
 
-${recentObs ? `Current observations (for context — don't repeat these):\n${recentObs.slice(-2000)}` : "No observations yet."}
+${recentObs ? `Current observations (for context, don't repeat these):\n${recentObs.slice(-2000)}` : "No observations yet."}
 
 Respond in exactly this format:
 
@@ -969,7 +969,7 @@ RULES:
     this.lastDreamTime = Date.now();
     this.monologueSinceDream = "";
 
-    console.log(`[mind] consolidation complete — ${obsCount} observations, dream #${this.dreamCount}`);
+    console.log(`[mind] consolidation complete: ${obsCount} observations, dream #${this.dreamCount}`);
 
     if (onDream) {
       await onDream({ reflection, priority: dreamEntry.priority, observations: obsCount, deep: dreamEntry.deep });
@@ -1023,7 +1023,7 @@ RULES:
         const resp = await generateText({
           model: provider(MODEL),
           maxOutputTokens: 4096,
-          system: `You are the reflector — pruning an observations file for an autonomous creature.
+          system: `You are the reflector, pruning an observations file for an autonomous creature.
 
 Rules for pruning:
 - NEVER remove RED items unless they have an explicit expiry date/time that has passed
@@ -1055,7 +1055,7 @@ Current time: ${new Date().toISOString()}`,
           system: `You are reviewing an autonomous creature's learned rules. Given its recent observations, decide which rules are still relevant.
 
 Drop rules that:
-- Reference specific one-time tasks (e.g., "check IMAP", "fix PR #42") — these are stale
+- Reference specific one-time tasks (e.g., "check IMAP", "fix PR #42"), which are stale
 - Are workarounds for problems that have been fixed
 - Are too narrow or prescriptive (e.g., "spend max 2 tool calls on recon")
 - Contradict each other
@@ -1075,7 +1075,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
 
     try {
       const dreams = await this.readRecentDreams(3);
-      const entry = `\n## ${new Date().toISOString().slice(0, 16)} — Deep Sleep\n\n${dreams}\n`;
+      const entry = `\n## ${new Date().toISOString().slice(0, 16)} - Deep Sleep\n\n${dreams}\n`;
       await fs.appendFile("self/diary.md", entry, "utf-8");
       console.log(`[mind] wrote diary entry`);
     } catch {}
@@ -1225,7 +1225,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
       await this.onSelfEval({ reasoning: evalReasoning.slice(0, 500), changed, trigger });
     }
 
-    console.log(`[mind] self-evaluation complete — changed=${changed}, turns=${turns}`);
+    console.log(`[mind] self-evaluation complete: changed=${changed}, turns=${turns}`);
     return { reasoning: evalReasoning, changed };
   }
 
@@ -1305,14 +1305,14 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
 
     const now = new Date().toISOString();
     let wakeMsg = reason
-      ? `[${now}] You were woken early — slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)}. Reason: ${reason}\n`
+      ? `[${now}] You were woken early (slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)}). Reason: ${reason}\n`
       : `[${now}] You woke up after sleeping ${this.formatDuration(actualSleptS)}.\n`;
 
     if (observations) {
       wakeMsg += `\n${observations}\n`;
     }
 
-    wakeMsg += `\nYour learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl — search with rg.`;
+    wakeMsg += `\nYour learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl. Search with rg.`;
 
     const lastMsg = this.messages[this.messages.length - 1];
     if (lastMsg?.role === "user" && Array.isArray(lastMsg.content)) {
@@ -1418,7 +1418,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
     }
 
     await fs.writeFile(RULES_FILE, existing.join("\n") + "\n", "utf-8");
-    console.log(`[mind] rules updated — ${existing.length} total`);
+    console.log(`[mind] rules updated: ${existing.length} total`);
   }
 
   // --- Overflow Protection ---
@@ -1430,7 +1430,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
     );
     if (totalChars < MAX_CONTEXT_CHARS) return;
 
-    console.log(`[mind] overflow trim — ${totalChars} chars exceeds ${MAX_CONTEXT_CHARS}`);
+    console.log(`[mind] overflow trim: ${totalChars} chars exceeds ${MAX_CONTEXT_CHARS}`);
     this.trimMessages();
   }
 
@@ -1529,7 +1529,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
         } else {
           const sleepStarted = actualSleptS < requestedS * 0.9;
           sleepInfo = sleepStarted
-            ? `Slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)} — you were interrupted early.`
+            ? `Slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)}. You were interrupted early.`
             : `Slept for ${this.formatDuration(actualSleptS)}.`;
         }
         lastCheckpoint = `## Last Session\n\n`
@@ -1611,7 +1611,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
       const titleMatch = snapshot.match(/^Title: (.+)$/m);
       const url = urlMatch?.[1] || "";
       const title = titleMatch?.[1] || "";
-      return `${url} — ${title}`.slice(0, 150) || "ok";
+      return `${url} | ${title}`.slice(0, 150) || "ok";
     }
 
     return "ok";

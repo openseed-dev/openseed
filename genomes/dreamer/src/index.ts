@@ -160,9 +160,9 @@ class Creature {
     console.log("[creature] cognition started");
 
     try {
-      // mind.run() never returns — it's the single agentic loop
+      // mind.run() never returns; it's the single agentic loop
       await this.mind.run(
-        // onToolResult — emit tool call events to host
+        // onToolResult: emit tool call events to host
         async (tool, args, result, ms) => {
           let input: string;
           let output: string;
@@ -197,7 +197,7 @@ class Creature {
           });
         },
 
-        // onSleep — emit sleep checkpoint event to host
+        // onSleep: emit sleep checkpoint event to host
         async (seconds, summary, actions) => {
           await this.emit({
             type: "creature.sleep",
@@ -205,15 +205,15 @@ class Creature {
             text: summary,
             actions,
           });
-          console.log(`[creature] sleeping ${seconds}s — ${summary.slice(0, 80)}`);
+          console.log(`[creature] sleeping ${seconds}s, ${summary.slice(0, 80)}`);
         },
 
-        // onThought — emit creature thinking/monologue to host
+        // onThought: emit creature thinking/monologue to host
         async (text) => {
           await this.emit({ type: "creature.thought", text });
         },
 
-        // onDream — emit consolidation/dream event to host
+        // onDream: emit consolidation/dream event to host
         async (dream) => {
           await this.emit({
             type: "creature.dream",
@@ -222,33 +222,33 @@ class Creature {
             observations: dream.observations,
             deep: dream.deep,
           });
-          console.log(`[creature] dream #${dream.observations} obs, deep=${dream.deep} — ${dream.priority.slice(0, 80)}`);
+          console.log(`[creature] dream #${dream.observations} obs, deep=${dream.deep}, ${dream.priority.slice(0, 80)}`);
         },
 
-        // onProgressCheck — emit progress check event to host
+        // onProgressCheck: emit progress check event to host
         async (actions) => {
           await this.emit({ type: "creature.progress_check", actions });
           console.log(`[creature] progress check at ${actions} actions`);
         },
 
-        // onSpecialTool — emit request_restart events
+        // onSpecialTool: emit request_restart events
         async (tool, reason) => {
           await this.emit({ type: `creature.${tool}`, reason });
           console.log(`[creature] ${tool}: ${reason.slice(0, 80)}`);
         },
 
-        // onWake — emit wake event (only for natural timer expiry; manual/watcher wakes are emitted by orchestrator)
+        // onWake: emit wake event (only for natural timer expiry; manual/watcher wakes are emitted by orchestrator)
         async (reason, source) => {
           await this.emit({ type: "creature.wake", reason, source });
           console.log(`[creature] wake (${source}): ${reason}`);
         },
 
-        // onError — emit LLM error events so the dashboard can surface them
+        // onError: emit LLM error events so the dashboard can surface them
         async (error, retryIn, retries) => {
           await this.emit({ type: "creature.error", error, retryIn, retries } as any);
         },
 
-        // onSelfEval — emit self-evaluation results to dashboard
+        // onSelfEval: emit self-evaluation results to dashboard
         async (result) => {
           await this.emit({ type: "creature.self_evaluation", reasoning: result.reasoning, changed: result.changed, trigger: result.trigger } as any);
           console.log(`[creature] self-evaluation complete: changed=${result.changed}, trigger=${result.trigger}`);
@@ -267,7 +267,7 @@ class Creature {
 const creature = new Creature();
 creature.start();
 
-// Crash checkpoint — save state on unexpected shutdown so the creature can resume
+// Crash checkpoint: save state on unexpected shutdown so the creature can resume
 function writeCrashCheckpoint(signal: string) {
   console.log(`[creature] received ${signal}, writing crash checkpoint…`);
   try {

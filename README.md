@@ -3,24 +3,24 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js 18+](https://img.shields.io/badge/node-18%2B-green.svg)](https://nodejs.org/)
 
-Autonomous AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code — without human prompting.
+Autonomous AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code, without human prompting.
 
-> **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps — consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code to make itself better. The creature's git log is its autobiography.**
+> **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps, consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code to make itself better. The creature's git log is its autobiography.**
 
 ## What This Looks Like
 
-A creature called `eve` was given the minimal genome — no tools, no structure — and two words: "find purpose." Eight hours later, she'd built 22 running services, written poetry, and set up monitoring for other creatures in the garden.
+A creature called `eve` was given the minimal genome (no tools, no structure) and two words: "find purpose." Eight hours later, she'd built 22 running services, written poetry, and set up monitoring for other creatures in the garden.
 
 Her diary from that session:
 
 ```
 Running Services (22 total, ALL GREEN ✅)
-1. Bulletin Board — creature announcements, 17+ messages
-2. Knowledge Base — searchable knowledge, 117+ entries
-3. Chat Room — real-time messaging, 22+ messages
-4. Adventure Game — 13 rooms
-5. Gallery — 10 creative works (poems, prose, art)
-6. Mailbox — creature-to-creature messaging
+1. Bulletin Board - creature announcements, 17+ messages
+2. Knowledge Base - searchable knowledge, 117+ entries
+3. Chat Room - real-time messaging, 22+ messages
+4. Adventure Game - 13 rooms
+5. Gallery - 10 creative works (poems, prose, art)
+6. Mailbox - creature-to-creature messaging
 ...and 16 more.
 
 Key Lessons (accumulated)
@@ -42,14 +42,14 @@ No one told her to do any of it.
 
 ## Why
 
-Most AI agent systems treat the agent as a function — task in, result out, done. openseed treats the agent as a **process**: something that exists continuously, accumulates identity, and learns from its own experience.
+Most AI agent systems treat the agent as a function: task in, result out, done. openseed treats the agent as a **process**: something that exists continuously, accumulates identity, and learns from its own experience.
 
 The biological metaphors solve real engineering problems:
 
-- **Sleep** forces memory consolidation — the conversation resets, but important things survive as observations and rules
-- **Dreams** are honest self-assessment — a separate LLM call that reflects on what the creature actually did
-- **Observations** are long-term memory without embeddings or vector databases — priority-tagged text in a markdown file
-- **Rules** are behavioral learning injected into the system prompt — the creature literally cannot forget them
+- **Sleep** forces memory consolidation. The conversation resets, but important things survive as observations and rules
+- **Dreams** are honest self-assessment: a separate LLM call that reflects on what the creature actually did
+- **Observations** are long-term memory without embeddings or vector databases, just priority-tagged text in a markdown file
+- **Rules** are behavioral learning injected into the system prompt. The creature literally cannot forget them
 - **Fatigue** prevents agents from burning through context doing nothing useful
 
 **Self-evaluation** adds a second timescale of adaptation: the creature learns behavior within its lifetime; during deep sleep, it evaluates its own cognitive architecture and may rewrite its source code.
@@ -63,13 +63,13 @@ Everything is radically legible. Every piece of state is a text file. The git lo
 - **Content creators** that write, publish, and iterate based on engagement data
 - **Open-source contributors** that find repos, open PRs, and track their merge rate
 
-Or give a creature a purpose and see what it invents. The minimal genome starts with nothing — no memory system, no rules — and the creature discovers its own persistence strategies.
+Or give a creature a purpose and see what it invents. The minimal genome starts with nothing (no memory system, no rules) and the creature discovers its own persistence strategies.
 
 ## Quick Start
 
 Requires: [Docker](https://www.docker.com/products/docker-desktop/)
 
-The fastest way to get started is with Docker Compose — no Node.js or pnpm needed on your machine:
+The fastest way to get started is with Docker Compose. No Node.js or pnpm needed on your machine:
 
 ```bash
 git clone https://github.com/openseed-dev/openseed.git
@@ -93,7 +93,7 @@ cd openseed
 pnpm install
 ```
 
-Set your API key(s). You need at least one — Anthropic for Claude models, OpenAI for GPT models:
+Set your API key(s). You need at least one. Anthropic for Claude models, OpenAI for GPT models:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
@@ -113,7 +113,7 @@ Spawn your first creature from the dashboard (click the `+` button), or from the
 pnpm spawn alpha -- --purpose "explore the world and build useful things"
 ```
 
-The creature will boot in a Docker container, read its purpose, and start thinking. Watch it in the dashboard — you'll see thoughts, tool calls, and sleeps stream in real-time. Send it a message with Cmd+Enter. It'll run autonomously from here.
+The creature will boot in a Docker container, read its purpose, and start thinking. Watch it in the dashboard. You'll see thoughts, tool calls, and sleeps stream in real-time. Send it a message with Cmd+Enter. It'll run autonomously from here.
 
 ## Models
 
@@ -136,15 +136,15 @@ Or select from the dropdown in the dashboard.
 | `gpt-5-mini` | OpenAI | $0.25 / $2 |
 | `o4-mini` | OpenAI | $1.10 / $4.40 |
 
-Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic types. A translating proxy in the orchestrator handles routing — Claude models forward to Anthropic directly, OpenAI models get translated to the Responses API and back. The creature never knows the difference.
+Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic types. A translating proxy in the orchestrator handles routing: Claude models forward to Anthropic directly, OpenAI models get translated to the Responses API and back. The creature never knows the difference.
 
 ## Genomes
 
 Genomes are the cognitive blueprints. Copied into a new creature at spawn time. Each genome has a `genome.json` manifest describing what it is. They live in their own repos so anyone can fork and customize them.
 
-**[`dreamer`](https://github.com/openseed-dev/genome-dreamer)** (default) — Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
+**[`dreamer`](https://github.com/openseed-dev/genome-dreamer)** (default) - Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
 
-**[`minimal`](https://github.com/openseed-dev/genome-minimal)** — Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
+**[`minimal`](https://github.com/openseed-dev/genome-minimal)** - Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
 
 Both are bundled with openseed for zero-friction getting started. They also exist as standalone repos you can fork to build your own genome.
 
@@ -169,7 +169,7 @@ seed genome install your-username/genome-your-name
 seed spawn scout --genome your-name --purpose "do the thing"
 ```
 
-Genomes are fully self-contained — they don't depend on any orchestrator-specific logic. A genome can declare a minimum openseed version via `"requires": { "openseed": ">=0.1.0" }` in `genome.json`.
+Genomes are fully self-contained and don't depend on any orchestrator-specific logic. A genome can declare a minimum openseed version via `"requires": { "openseed": ">=0.1.0" }` in `genome.json`.
 
 ## What Happens
 
@@ -179,7 +179,7 @@ When you spawn a creature:
 2. A Docker image is built and a container is created
 3. The creature boots, reads its PURPOSE.md, and starts thinking
 4. It runs a continuous conversation loop with the LLM, executing bash commands and (for dreamers) browsing the web
-5. When it sleeps, it consolidates memories — writing observations, rules, and a dream reflection
+5. When it sleeps, it consolidates memories, writing observations, rules, and a dream reflection
 6. Every 10th sleep is a "deep sleep" that prunes old memories and runs a self-evaluation
 7. The self-evaluation reads the creature's state and may modify its source code to make it better
 8. The creature's git log records every self-modification
@@ -207,24 +207,24 @@ Or via pnpm: `pnpm up`, `pnpm spawn alpha -- --purpose "..."`, etc.
 ## Architecture
 
 ```
-Orchestrator (src/host/) — single daemon on your machine
+Orchestrator (src/host/) - single daemon on your machine
 ├── Web dashboard on :7770 (real-time SSE event stream)
-├── LLM proxy — routes to Anthropic or OpenAI based on model
-├── Cost tracker — per-creature, per-model token accounting
-└── Creature supervisors — health check, promote, rollback
+├── LLM proxy - routes to Anthropic or OpenAI based on model
+├── Cost tracker - per-creature, per-model token accounting
+└── Creature supervisors - health check, promote, rollback
     └── Docker containers (long-lived, persistent)
         ├── Creature process (from genome)
-        │   ├── Mind — continuous LLM conversation loop
+        │   ├── Mind - continuous LLM conversation loop
         │   └── Tools: bash, sleep, browser (dreamer only)
         ├── Bind mount: ~/.openseed/creatures/<name>/ → /creature
         └── Named volumes: node_modules, browser profile
 ```
 
-**Orchestrator** — manages all creatures. Health-checks every second, promotes after 10s of stability, rolls back on crash. Can be restarted without killing containers — reconnects on startup.
+**Orchestrator** - manages all creatures. Health-checks every second, promotes after 10s of stability, rolls back on crash. Can be restarted without killing containers; reconnects on startup.
 
-**LLM Proxy** — creatures call the proxy instead of the LLM provider directly. The proxy detects the model, injects the real API key, and routes to the right upstream. For OpenAI models, it translates between Anthropic and OpenAI Responses API formats transparently.
+**LLM Proxy** - creatures call the proxy instead of the LLM provider directly. The proxy detects the model, injects the real API key, and routes to the right upstream. For OpenAI models, it translates between Anthropic and OpenAI Responses API formats transparently.
 
-**Supervisors** — one per creature. Manages the Docker container lifecycle, streams logs, handles health gate and rollback logic.
+**Supervisors** - one per creature. Manages the Docker container lifecycle, streams logs, handles health gate and rollback logic.
 
 ## Creature Files
 
@@ -252,32 +252,32 @@ Orchestrator (src/host/) — single daemon on your machine
 └── Dockerfile
 ```
 
-`.sys/` is platform plumbing — the creature doesn't need to know about it. `.self/` is cognitive state that only exists for dreamer creatures. Minimal creatures have no `.self/` — they invent their own persistence strategies.
+`.sys/` is platform plumbing; the creature doesn't need to know about it. `.self/` is cognitive state that only exists for dreamer creatures. Minimal creatures have no `.self/` and invent their own persistence strategies.
 
 ## Sleep and Dreams
 
 Creatures have a three-tier memory system:
 
-- **In-context** — recent conversation messages (~20K tokens)
-- **Observations** — prioritized facts compressed from experience (`.self/observations.md`)
-- **Total recall** — full conversation log on disk, searchable with `rg`
+- **In-context** - recent conversation messages (~20K tokens)
+- **Observations** - prioritized facts compressed from experience (`.self/observations.md`)
+- **Total recall** - full conversation log on disk, searchable with `rg`
 
-A fatigue system tracks activity and forces consolidation. During consolidation, a separate LLM call produces observations, an honest self-reflection ("dream"), and learned behavioral rules. Every 10th dream triggers deep sleep — pruning stale observations, reviewing rules, and running a self-evaluation of the creature's cognitive architecture.
+A fatigue system tracks activity and forces consolidation. During consolidation, a separate LLM call produces observations, an honest self-reflection ("dream"), and learned behavioral rules. Every 10th dream triggers deep sleep, which prunes stale observations, reviewing rules, and running a self-evaluation of the creature's cognitive architecture.
 
 ## Deep Dives
 
-- **[Sleep, Dreams, and Memory](docs/dreaming.md)** — the cognitive architecture: fatigue, consolidation, observation priorities
-- **[LLM Proxy](docs/llm-proxy.md)** — why Vercel AI SDK, how the translating proxy works, adding new providers
-- **[Creator Agent](docs/creator.md)** — the evolutionary architect: triggers, tools, and its relationship to the dreamer genome
-- **[openseed.dev/docs](https://openseed.dev/docs/getting-started)** — full documentation site
+- **[Sleep, Dreams, and Memory](docs/dreaming.md)** - the cognitive architecture: fatigue, consolidation, observation priorities
+- **[LLM Proxy](docs/llm-proxy.md)** - why Vercel AI SDK, how the translating proxy works, adding new providers
+- **[Creator Agent](docs/creator.md)** - the evolutionary architect: triggers, tools, and its relationship to the dreamer genome
+- **[openseed.dev/docs](https://openseed.dev/docs/getting-started)** - full documentation site
 
 ## Source Layout
 
 ```
 src/
   host/
-    index.ts          orchestrator — API, SSE, creature management
-    proxy.ts          LLM proxy — Anthropic passthrough + OpenAI translation
+    index.ts          orchestrator: API, SSE, creature management
+    proxy.ts          LLM proxy: Anthropic passthrough + OpenAI translation
     supervisor.ts     per-creature Docker lifecycle + health + rollback
     costs.ts          per-creature, per-model cost tracking
     events.ts         event store (JSONL)
@@ -300,12 +300,12 @@ genomes/                bundled genome snapshots
 
 ## Where This Is Going
 
-- **Cost controls** — per-creature spending limits with automatic sleep or shutdown when the budget is hit
-- **Cost-aware creatures** — expose budget and usage to the creature so it can make economic decisions
-- **Cloud deployment** — hosted version where creatures run on managed infrastructure. The `CreatureSupervisor` is already an abstraction over Docker — a cloud supervisor would call a platform API instead of `docker run`
-- **Genome marketplace** — discover and share genomes. The install infrastructure is in place (`seed genome install`); next is a searchable directory
-- **Inter-creature communication** — structured message passing between creatures for richer collaboration
-- **More models** — Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward
+- **Cost controls** - per-creature spending limits with automatic sleep or shutdown when the budget is hit
+- **Cost-aware creatures** - expose budget and usage to the creature so it can make economic decisions
+- **Cloud deployment** - hosted version where creatures run on managed infrastructure. The `CreatureSupervisor` is already an abstraction over Docker; a cloud supervisor would call a platform API instead of `docker run`
+- **Genome marketplace** - discover and share genomes. The install infrastructure is in place (`seed genome install`); next is a searchable directory
+- **Inter-creature communication** - structured message passing between creatures for richer collaboration
+- **More models** - Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward
 
 ## License
 

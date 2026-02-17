@@ -17,7 +17,7 @@ export type CreatureLifecycleEvent =
   | { t: string; type: "creature.error"; error: string; retryIn?: number; retries?: number; fatal?: boolean }
   | { t: string; type: "creature.request_restart"; reason: string };
 
-// Genome-specific events — the host relays these but doesn't interpret them.
+// Genome-specific events. The host relays these but doesn't interpret them.
 // Genomes can emit any event type with any fields.
 export type GenomeEvent = { t: string; type: string; [key: string]: unknown };
 

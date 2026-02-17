@@ -150,7 +150,7 @@ class Creature {
 const creature = new Creature();
 creature.start();
 
-// Crash checkpoint — minimal version just logs
+// Crash checkpoint: minimal version just logs
 function onSignal(signal: string) {
   console.log(`[creature] received ${signal}`);
   const state = creature.mind.getState();

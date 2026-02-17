@@ -1,4 +1,4 @@
-// Re-export from shared — single source of truth for all path constants
+// Re-export from shared. Single source of truth for all path constants.
 export {
   autoInstallGenome,
   BUNDLED_GENOMES_DIR,
