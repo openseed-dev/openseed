@@ -1,0 +1,23 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-border mt-auto">
+  <div class="max-w-6xl mx-auto px-6 py-12">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2.5">
+        <span class="w-2 h-2 rounded-full bg-alive"></span>
+        <span class="text-sm text-text-secondary">OpenSeed</span>
+      </div>
+
+      <div class="flex items-center gap-6 text-sm text-text-tertiary">
+        <a href="/docs" class="hover:text-text-secondary transition-colors">Docs</a>
+        <a href="https://github.com/openseed-dev/openseed" target="_blank" rel="noopener noreferrer" class="hover:text-text-secondary transition-colors">GitHub</a>
+        <span>MIT License</span>
+      </div>
+    </div>
+    <p class="text-center sm:text-left text-xs text-text-tertiary mt-6">
+      &copy; {year} OpenSeed. Built by Ross Douglas.
+    </p>
+  </div>
+</footer>

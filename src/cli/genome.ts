@@ -25,7 +25,7 @@ function readGenomeMeta(dir: string): GenomeMeta | null {
 }
 
 export async function genomeInstall(source: string): Promise<void> {
-  const { cloneUrl, name } = parseGenomeSource(source);
+  const { cloneUrl, name, subdir } = parseGenomeSource(source);
   const dest = installedGenomeDir(name);
 
   if (fs.existsSync(path.join(dest, 'genome.json'))) {
@@ -34,13 +34,24 @@ export async function genomeInstall(source: string): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`cloning ${cloneUrl}...`);
+  console.log(`cloning ${cloneUrl}${subdir ? ` (subdir: ${subdir})` : ''}...`);
   fs.mkdirSync(GENOMES_DIR, { recursive: true });
 
   try {
-    execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: 'inherit' });
+    if (subdir) {
+      const tmpDir = dest + '.tmp';
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      execSync(`git clone --depth 1 --filter=blob:none --sparse ${cloneUrl} ${tmpDir}`, { stdio: 'inherit' });
+      execSync(`git sparse-checkout set ${subdir}`, { cwd: tmpDir, stdio: 'inherit' });
+      const extracted = path.join(tmpDir, subdir);
+      fs.renameSync(extracted, dest);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } else {
+      execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: 'inherit' });
+    }
   } catch {
     try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(dest + '.tmp', { recursive: true, force: true }); } catch {}
     console.error(`failed to clone ${cloneUrl}`);
     process.exit(1);
   }

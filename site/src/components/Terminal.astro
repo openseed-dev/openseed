@@ -1,0 +1,89 @@
+---
+interface Props {
+  title?: string;
+  typed?: boolean;
+  class?: string;
+}
+
+const { title, typed = false, class: className = "" } = Astro.props;
+---
+
+<div class:list={["terminal-wrapper rounded-lg border border-border overflow-hidden", className]}>
+  <!-- Title bar -->
+  <div class="flex items-center gap-2 px-4 py-3 bg-surface border-b border-border">
+    <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
+    <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
+    <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
+    {title && <span class="ml-2 text-xs text-text-tertiary">{title}</span>}
+  </div>
+
+  <!-- Content -->
+  <div
+    class:list={[
+      "bg-surface p-5 font-mono text-sm leading-relaxed overflow-x-auto",
+      typed && "terminal-typed",
+    ]}
+  >
+    <slot />
+  </div>
+</div>
+
+{typed && (
+  <script>
+    function initTypedTerminals() {
+      document.querySelectorAll(".terminal-typed").forEach((el) => {
+        const lines = el.querySelectorAll<HTMLElement>("[data-line]");
+        if (!lines.length) return;
+
+        let totalDelay = 0;
+        lines.forEach((line) => {
+          const text = line.textContent || "";
+          line.textContent = "";
+          line.style.visibility = "visible";
+
+          const lineDelay = totalDelay;
+          totalDelay += text.length * 25 + 200;
+
+          let i = 0;
+          setTimeout(() => {
+            const cursor = document.createElement("span");
+            cursor.className = "terminal-cursor";
+            cursor.textContent = "\u2588";
+            line.appendChild(cursor);
+
+            function typeChar() {
+              if (i < text.length) {
+                line.insertBefore(
+                  document.createTextNode(text[i]),
+                  cursor
+                );
+                i++;
+                setTimeout(typeChar, 15 + Math.random() * 30);
+              } else {
+                cursor.remove();
+              }
+            }
+            typeChar();
+          }, lineDelay);
+        });
+      });
+    }
+
+    // Run on page load and after view transitions
+    initTypedTerminals();
+    document.addEventListener("astro:after-swap", initTypedTerminals);
+  </script>
+)}
+
+<style>
+  .terminal-cursor {
+    color: var(--color-alive);
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+  .terminal-typed [data-line] {
+    visibility: hidden;
+  }
+</style>

@@ -22,21 +22,37 @@ export function installedGenomeDir(genome: string): string {
 }
 
 /**
- * Parse a genome source into a clone URL and local name.
- *   "dreamer"                                → openseed-dev/genome-dreamer
- *   "someuser/genome-trader"                 → someuser/genome-trader
- *   "https://github.com/someuser/cool-mind"  → full URL used directly
+ * Parse a genome source into a clone URL, local name, and optional subdirectory.
+ *   "dreamer"                                  → openseed-dev/genome-dreamer
+ *   "someuser/genome-trader"                   → someuser/genome-trader
+ *   "someuser/monorepo/genomes/trader"         → sparse checkout someuser/monorepo at genomes/trader
+ *   "https://github.com/someuser/cool-mind"    → full URL used directly
  */
-export function parseGenomeSource(source: string): { cloneUrl: string; name: string } {
+export function parseGenomeSource(source: string): { cloneUrl: string; name: string; subdir?: string } {
   if (source.startsWith("https://") || source.startsWith("git@")) {
     const clean = source.replace(/\.git$/, "");
     const name = clean.split("/").pop()!.replace(/^genome-/, "");
     return { cloneUrl: clean + ".git", name };
   }
-  if (source.includes("/")) {
-    const name = source.split("/").pop()!.replace(/^genome-/, "");
+
+  const parts = source.split("/");
+
+  // 3+ parts: owner/repo/path/to/genome (subdirectory within a repo)
+  if (parts.length >= 3) {
+    const owner = parts[0];
+    const repo = parts[1];
+    const subdir = parts.slice(2).join("/");
+    const name = parts[parts.length - 1].replace(/^genome-/, "");
+    return { cloneUrl: `https://github.com/${owner}/${repo}.git`, name, subdir };
+  }
+
+  // 2 parts: owner/repo (whole repo is the genome)
+  if (parts.length === 2) {
+    const name = parts[1].replace(/^genome-/, "");
     return { cloneUrl: `https://github.com/${source}.git`, name };
   }
+
+  // 1 part: shorthand name
   return { cloneUrl: `https://github.com/openseed-dev/genome-${source}.git`, name: source };
 }
 
@@ -53,18 +69,35 @@ export function resolveGenomeDir(genome = "dreamer"): string | null {
 
 /** Try to auto-install a genome from GitHub. Returns the installed path or null. */
 export function autoInstallGenome(genome: string): string | null {
-  const { cloneUrl, name } = parseGenomeSource(genome);
+  const { cloneUrl, name, subdir } = parseGenomeSource(genome);
   const dest = installedGenomeDir(name);
 
-  console.log(`genome "${genome}" not found locally, installing from ${cloneUrl}...`);
+  console.log(`genome "${genome}" not found locally, installing from ${cloneUrl}${subdir ? ` (subdir: ${subdir})` : ""}...`);
   try {
     fs.mkdirSync(GENOMES_DIR, { recursive: true });
-    execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: "pipe" });
+
+    if (subdir) {
+      // Sparse checkout: clone only the subdirectory
+      const tmpDir = dest + ".tmp";
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      execSync(`git clone --depth 1 --filter=blob:none --sparse ${cloneUrl} ${tmpDir}`, { stdio: "pipe" });
+      execSync(`git sparse-checkout set ${subdir}`, { cwd: tmpDir, stdio: "pipe" });
+      const extracted = path.join(tmpDir, subdir);
+      if (!fs.existsSync(path.join(extracted, "genome.json"))) {
+        throw new Error(`no genome.json found at ${subdir}`);
+      }
+      fs.renameSync(extracted, dest);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } else {
+      execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: "pipe" });
+    }
+
     console.log(`installed genome "${name}" to ${dest}`);
     return dest;
-  } catch {
-    console.error(`failed to clone ${cloneUrl}`);
+  } catch (err: any) {
+    console.error(`failed to install genome from ${cloneUrl}: ${err.message || err}`);
     try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(dest + ".tmp", { recursive: true, force: true }); } catch {}
     return null;
   }
 }

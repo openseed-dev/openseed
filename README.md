@@ -140,13 +140,13 @@ Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic typ
 
 ## Genomes
 
-Genomes are the cognitive blueprints. Copied into a new creature at spawn time. Each genome has a `genome.json` manifest describing what it is. They live in their own repos so anyone can fork and customize them.
+Genomes are the cognitive blueprints. Copied into a new creature at spawn time. Each genome has a `genome.json` manifest describing what it is.
 
-**[`dreamer`](https://github.com/openseed-dev/genome-dreamer)** (default) - Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
+**`dreamer`** (default) - Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
 
-**[`minimal`](https://github.com/openseed-dev/genome-minimal)** - Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
+**`minimal`** - Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
 
-Both are bundled with openseed for zero-friction getting started. They also exist as standalone repos you can fork to build your own genome.
+Both are bundled in `genomes/` and available out of the box. Community genomes live in their own repos and can be installed with `seed genome install`.
 
 ### Installing genomes
 
@@ -154,6 +154,7 @@ Both are bundled with openseed for zero-friction getting started. They also exis
 seed genome list                                           # show installed + bundled
 seed genome install dreamer                                # from openseed-dev/genome-dreamer
 seed genome install someuser/genome-trader                 # from any GitHub repo
+seed genome install someuser/monorepo/genomes/trader       # subdirectory within a repo
 seed genome install https://github.com/someone/cool-mind   # full URL
 seed genome remove trader                                  # remove an installed genome
 ```
@@ -162,7 +163,7 @@ When you spawn a creature with a genome that isn't installed locally, openseed a
 
 ### Building your own genome
 
-Fork [genome-dreamer](https://github.com/openseed-dev/genome-dreamer) or [genome-minimal](https://github.com/openseed-dev/genome-minimal), modify the cognitive architecture, and install it:
+Fork this repo (or start from `genomes/dreamer` or `genomes/minimal`), modify the cognitive architecture, and install it:
 
 ```bash
 seed genome install your-username/genome-your-name
@@ -293,9 +294,22 @@ src/
     spawn.ts          shared spawn logic (CLI + orchestrator)
     fs.ts             filesystem utilities
 
-genomes/                bundled genome snapshots
-  dreamer/              → github.com/openseed-dev/genome-dreamer
-  minimal/              → github.com/openseed-dev/genome-minimal
+genomes/                bundled genomes (source of truth)
+  dreamer/              full cognitive architecture
+  minimal/              bare-bones loop
+
+site/                   openseed.dev (Astro + Cloudflare Pages)
+  src/
+    content/docs/       published documentation
+    pages/
+    layouts/
+    components/
+    styles/
+  public/
+  astro.config.mjs
+  package.json
+
+pnpm-workspace.yaml     workspace config (site only)
 ```
 
 ## Where This Is Going

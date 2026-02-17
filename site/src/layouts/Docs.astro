@@ -1,0 +1,226 @@
+---
+import Base from "./Base.astro";
+import { getCollection } from "astro:content";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+
+const allDocs = await getCollection("docs");
+const sortedDocs = allDocs.sort((a, b) => a.data.order - b.data.order);
+const coreDocs = sortedDocs.filter((d) => d.data.section === "core");
+const dreamerDocs = sortedDocs.filter((d) => d.data.section === "dreamer");
+const currentPath = Astro.url.pathname.replace(/\/$/, "");
+
+function linkClass(href: string) {
+  return currentPath === href
+    ? "block text-sm px-3 py-1.5 rounded-md text-text bg-surface transition-colors"
+    : "block text-sm px-3 py-1.5 rounded-md text-text-secondary hover:text-text transition-colors";
+}
+---
+
+<Base title={`${title} - OpenSeed Docs`} description={description}>
+  <div class="max-w-6xl mx-auto px-6 py-12">
+    <div class="lg:grid lg:grid-cols-[220px_1fr] lg:gap-12">
+
+      <!-- Sidebar -->
+      <aside class="hidden lg:block">
+        <nav class="sticky top-20 space-y-1">
+          {coreDocs.map((doc) => (
+            <a href={`/docs/${doc.id}`} class={linkClass(`/docs/${doc.id}`)}>
+              {doc.data.title}
+            </a>
+          ))}
+
+          {dreamerDocs.length > 0 && (
+            <>
+              <div class="pt-4 pb-1 px-3 text-xs uppercase tracking-wider text-text-tertiary">
+                Dreamer Genome
+              </div>
+              {dreamerDocs.map((doc) => (
+                <a href={`/docs/${doc.id}`} class={linkClass(`/docs/${doc.id}`)}>
+                  {doc.data.title}
+                </a>
+              ))}
+            </>
+          )}
+        </nav>
+      </aside>
+
+      <!-- Mobile nav -->
+      <details class="lg:hidden mb-8 border border-border rounded-md">
+        <summary class="px-4 py-3 text-sm text-text-secondary cursor-pointer">
+          Documentation menu
+        </summary>
+        <nav class="px-4 pb-3 space-y-1">
+          {coreDocs.map((doc) => (
+            <a href={`/docs/${doc.id}`} class="block text-sm py-1 text-text-secondary hover:text-text">
+              {doc.data.title}
+            </a>
+          ))}
+          <div class="pt-2 pb-1 text-xs uppercase tracking-wider text-text-tertiary">Dreamer Genome</div>
+          {dreamerDocs.map((doc) => (
+            <a href={`/docs/${doc.id}`} class="block text-sm py-1 text-text-secondary hover:text-text">
+              {doc.data.title}
+            </a>
+          ))}
+        </nav>
+      </details>
+
+      <!-- Content -->
+      <article class="prose-openseed">
+        <slot />
+      </article>
+
+    </div>
+  </div>
+</Base>
+
+<style is:global>
+  .prose-openseed {
+    max-width: 65ch;
+  }
+  .prose-openseed h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+  }
+  .prose-openseed h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+  }
+  .prose-openseed h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+  }
+  .prose-openseed p {
+    color: var(--color-text-secondary);
+    line-height: 1.75;
+    margin-bottom: 1rem;
+  }
+  .prose-openseed a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .prose-openseed a:hover {
+    text-decoration: underline;
+  }
+  .prose-openseed ul, .prose-openseed ol {
+    color: var(--color-text-secondary);
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    line-height: 1.75;
+  }
+  .prose-openseed li {
+    margin-bottom: 0.25rem;
+  }
+  .prose-openseed strong {
+    color: var(--color-text);
+    font-weight: 600;
+  }
+  .prose-openseed code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--color-surface);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25rem;
+    color: var(--color-text);
+  }
+  .prose-openseed pre {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    position: relative;
+  }
+  .prose-openseed pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+  }
+  .prose-openseed table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+  }
+  .prose-openseed th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border-accent);
+    color: var(--color-text);
+    font-weight: 600;
+  }
+  .prose-openseed td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  .prose-openseed blockquote {
+    border-left: 3px solid var(--color-border-accent);
+    padding-left: 1rem;
+    margin: 1.5rem 0;
+    color: var(--color-text-tertiary);
+  }
+  .prose-openseed hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 2rem 0;
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-tertiary);
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .prose-openseed pre:hover .copy-btn {
+    opacity: 1;
+  }
+  .copy-btn:hover {
+    color: var(--color-text);
+  }
+</style>
+
+<script>
+  function initCopyButtons() {
+    document.querySelectorAll('.prose-openseed pre').forEach((pre) => {
+      if (pre.querySelector('.copy-btn')) return;
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'copy';
+      btn.addEventListener('click', async () => {
+        const code = pre.querySelector('code');
+        if (!code) return;
+        await navigator.clipboard.writeText(code.textContent || '');
+        btn.textContent = 'copied';
+        setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+      });
+      pre.appendChild(btn);
+    });
+  }
+  initCopyButtons();
+  document.addEventListener('astro:after-swap', initCopyButtons);
+</script>

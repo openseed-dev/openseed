@@ -1,0 +1,39 @@
+---
+const links = [
+  { href: "/docs", label: "Docs" },
+  { href: "https://github.com/openseed-dev/openseed", label: "GitHub", external: true },
+];
+---
+
+<nav class="border-b border-border">
+  <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2.5 group">
+      <span class="w-2.5 h-2.5 rounded-full bg-alive group-hover:shadow-[0_0_8px_var(--color-alive)] transition-shadow duration-300"></span>
+      <span class="font-semibold text-text tracking-tight">OpenSeed</span>
+    </a>
+
+    <div class="flex items-center gap-6">
+      {links.map((link) => (
+        <a
+          href={link.href}
+          class="text-sm text-text-secondary hover:text-text transition-colors"
+          {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >
+          {link.label}
+        </a>
+      ))}
+
+      <a
+        href="https://github.com/openseed-dev/openseed"
+        class="hidden sm:inline-flex items-center gap-2 text-sm px-3.5 py-1.5 rounded-md bg-surface border border-border hover:border-border-accent transition-colors"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 .2C3.6.2 0 3.8 0 8.2c0 3.5 2.3 6.5 5.5 7.6.4.1.5-.2.5-.4v-1.4c-2.2.5-2.7-1.1-2.7-1.1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.9.9 2.3.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.8-2.2-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8.6-.2 1.3-.3 2-.3s1.4.1 2 .3c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.2c0 .2.1.5.6.4C13.7 14.7 16 11.7 16 8.2 16 3.8 12.4.2 8 .2z" />
+        </svg>
+        Star
+      </a>
+    </div>
+  </div>
+</nav>

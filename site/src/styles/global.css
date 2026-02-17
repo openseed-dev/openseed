@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  /* Background */
+  --color-bg: #09090b;
+  --color-surface: #111113;
+  --color-surface-elevated: #18181b;
+
+  /* Borders */
+  --color-border: #27272a;
+  --color-border-accent: #3f3f46;
+
+  /* Text */
+  --color-text: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+
+  /* Brand */
+  --color-alive: #22c55e;
+  --color-alive-muted: #166534;
+  --color-dormant: #f59e0b;
+  --color-error: #ef4444;
+  --color-accent: #3b82f6;
+
+  /* Fonts */
+  --font-sans: "General Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-alive) 30%, transparent);
+}
+
+/* Scroll reveal */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+[data-reveal].revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
