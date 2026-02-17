@@ -150,6 +150,17 @@ You can install more — they persist across restarts.`;
           const errMsg = err?.message || String(err);
           console.error(`[mind] LLM error: ${errMsg}`);
           if (onError) await onError(errMsg.slice(0, 300), retryDelay, retryCount);
+
+          if ((err?.status === 400) && this.messages.length > 2) {
+            console.error(`[mind] 400 error with ${this.messages.length} messages — resetting conversation`);
+            break;
+          }
+
+          if (retryCount >= 5) {
+            console.error(`[mind] ${retryCount} consecutive failures — resetting conversation`);
+            break;
+          }
+
           await new Promise(r => setTimeout(r, retryDelay));
           retryDelay = Math.min(retryDelay * 2, 60000);
           continue;

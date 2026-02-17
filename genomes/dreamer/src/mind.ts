@@ -585,6 +585,12 @@ export class Mind {
           }
           continue;
         }
+
+        if (retryCount >= 5) {
+          console.error(`[mind] ${retryCount} consecutive failures — resetting conversation`);
+          break;
+        }
+
         console.error(`[mind] LLM call failed, retrying in ${retryDelay}ms:`, err);
         if (onError) await onError(errMsg.slice(0, 300), retryDelay, retryCount);
         await new Promise((r) => setTimeout(r, retryDelay));

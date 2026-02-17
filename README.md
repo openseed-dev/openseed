@@ -140,13 +140,36 @@ Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic typ
 
 ## Genomes
 
-Genomes are the cognitive blueprints. Copied into a new creature at spawn time. Each genome has a `genome.json` manifest describing what it is.
+Genomes are the cognitive blueprints. Copied into a new creature at spawn time. Each genome has a `genome.json` manifest describing what it is. They live in their own repos so anyone can fork and customize them.
 
-**`dreamer`** (default) — Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
+**[`dreamer`](https://github.com/openseed-dev/genome-dreamer)** (default) — Full cognitive architecture: dreams, rules, observations, memory consolidation, fatigue system, persistent browser, self-evaluation during deep sleep. Good for complex, long-running purposes.
 
-**`minimal`** — Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
+**[`minimal`](https://github.com/openseed-dev/genome-minimal)** — Bare-bones loop with just bash and sleep. No built-in memory, no dreams, no hints about how to persist state. The creature discovers everything on its own. Good for studying emergent behavior.
 
-Genomes are fully self-contained — they don't depend on any orchestrator-specific logic. This means you can create, share, and install genomes independently.
+Both are bundled with openseed for zero-friction getting started. They also exist as standalone repos you can fork to build your own genome.
+
+### Installing genomes
+
+```bash
+seed genome list                                           # show installed + bundled
+seed genome install dreamer                                # from openseed-dev/genome-dreamer
+seed genome install someuser/genome-trader                 # from any GitHub repo
+seed genome install https://github.com/someone/cool-mind   # full URL
+seed genome remove trader                                  # remove an installed genome
+```
+
+When you spawn a creature with a genome that isn't installed locally, openseed auto-installs it from GitHub.
+
+### Building your own genome
+
+Fork [genome-dreamer](https://github.com/openseed-dev/genome-dreamer) or [genome-minimal](https://github.com/openseed-dev/genome-minimal), modify the cognitive architecture, and install it:
+
+```bash
+seed genome install your-username/genome-your-name
+seed spawn scout --genome your-name --purpose "do the thing"
+```
+
+Genomes are fully self-contained — they don't depend on any orchestrator-specific logic. A genome can declare a minimum openseed version via `"requires": { "openseed": ">=0.1.0" }` in `genome.json`.
 
 ## What Happens
 
@@ -167,16 +190,19 @@ When you spawn a creature:
 seed up [--port 7770]                  start the orchestrator + dashboard
 seed spawn <name> [options]            create a new creature
   --purpose "..."                      what the creature should do
-  --genome dreamer|minimal             cognitive genome (default: dreamer)
+  --genome <name>                      cognitive genome (default: dreamer)
   --model <model>                      LLM model (default: claude-opus-4-6)
 seed start <name> [--manual]           start a creature
 seed stop <name>                       stop a running creature
 seed list                              list all creatures and their status
 seed fork <source> <name>              fork a creature with full history
 seed destroy <name>                    permanently remove a creature
+seed genome install <source>           install a genome from GitHub
+seed genome list                       list installed and bundled genomes
+seed genome remove <name>              remove an installed genome
 ```
 
-Or via pnpm: `pnpm up`, `pnpm spawn alpha`, `pnpm start alpha`, etc.
+Or via pnpm: `pnpm up`, `pnpm spawn alpha -- --purpose "..."`, etc.
 
 ## Architecture
 
@@ -240,9 +266,10 @@ A fatigue system tracks activity and forces consolidation. During consolidation,
 
 ## Deep Dives
 
-- **[Sleep, Dreams, and Memory](docs/dreaming.md)** — the cognitive architecture: fatigue, consolidation, observation priorities, and how it compares to Mastra's Observational Memory
+- **[Sleep, Dreams, and Memory](docs/dreaming.md)** — the cognitive architecture: fatigue, consolidation, observation priorities
 - **[LLM Proxy](docs/llm-proxy.md)** — why Vercel AI SDK, how the translating proxy works, adding new providers
 - **[Creator Agent](docs/creator.md)** — the evolutionary architect: triggers, tools, and its relationship to the dreamer genome
+- **[openseed.dev/docs](https://openseed.dev/docs/getting-started)** — full documentation site
 
 ## Source Layout
 
@@ -252,18 +279,23 @@ src/
     index.ts          orchestrator — API, SSE, creature management
     proxy.ts          LLM proxy — Anthropic passthrough + OpenAI translation
     supervisor.ts     per-creature Docker lifecycle + health + rollback
-    creator.ts        Creator agent (legacy — evaluation now runs inside creatures)
     costs.ts          per-creature, per-model cost tracking
     events.ts         event store (JSONL)
     git.ts            git operations for creature repos
     dashboard.html    web dashboard
+  cli/
+    index.ts          CLI entry point
+    spawn.ts          spawn command (thin wrapper over shared)
+    genome.ts         genome install/list/remove commands
+  shared/
+    types.ts          event type definitions
+    paths.ts          genome resolution, path constants
+    spawn.ts          shared spawn logic (CLI + orchestrator)
+    fs.ts             filesystem utilities
 
-  cli/                CLI commands (spawn, start, stop, list, fork, destroy)
-  shared/types.ts     event type definitions
-
-genomes/
-  dreamer/            full cognitive architecture
-  minimal/            bare-bones — creature discovers everything
+genomes/                bundled genome snapshots
+  dreamer/              → github.com/openseed-dev/genome-dreamer
+  minimal/              → github.com/openseed-dev/genome-minimal
 ```
 
 ## Where This Is Going
@@ -271,7 +303,7 @@ genomes/
 - **Cost controls** — per-creature spending limits with automatic sleep or shutdown when the budget is hit
 - **Cost-aware creatures** — expose budget and usage to the creature so it can make economic decisions
 - **Cloud deployment** — hosted version where creatures run on managed infrastructure. The `CreatureSupervisor` is already an abstraction over Docker — a cloud supervisor would call a platform API instead of `docker run`
-- **Genome marketplace** — share genomes, evolved strategies, and purpose-built creatures. Import a creature someone else designed and run it with your own API keys
+- **Genome marketplace** — discover and share genomes. The install infrastructure is in place (`seed genome install`); next is a searchable directory
 - **Inter-creature communication** — structured message passing between creatures for richer collaboration
 - **More models** — Google Gemini, open-weight models via Ollama/vLLM. The translating proxy architecture makes this straightforward
 
