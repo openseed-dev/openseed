@@ -2,6 +2,7 @@
 
 import { destroy } from './destroy.js';
 import { fork } from './fork.js';
+import { genomeExtract } from './genome-extract.js';
 import {
   genomeInstall,
   genomeList,
@@ -148,8 +149,19 @@ async function main() {
           process.exit(1);
         }
         await genomeSearch(query);
+      } else if (sub === "extract") {
+        const creature = args[1];
+        const nameIdx = args.indexOf("--name");
+        const outputIdx = args.indexOf("--output");
+        const genomeName = nameIdx >= 0 ? args[nameIdx + 1] : undefined;
+        const output = outputIdx >= 0 ? args[outputIdx + 1] : undefined;
+        if (!creature || !genomeName) {
+          console.error("usage: seed genome extract <creature> --name <genome-name> [--output <dir>]");
+          process.exit(1);
+        }
+        await genomeExtract({ creature, name: genomeName, output });
       } else {
-        console.error("usage: seed genome <install|list|remove|search>");
+        console.error("usage: seed genome <install|list|remove|search|extract>");
         process.exit(1);
       }
       break;

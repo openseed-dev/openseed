@@ -100,3 +100,15 @@ If your genome requires a minimum version of OpenSeed, add a `requires` field to
 ```
 
 Users will see a warning if their OpenSeed version is too old.
+
+## Extracting a Genome from a Creature
+
+Creatures evolve through self-modification. You can extract a creature's evolved code back into a new genome:
+
+```bash
+seed genome extract eve --name evolved-minimal
+```
+
+This captures the creature's self-modified source code, strips its identity and cognitive state, and packages it as a new genome with lineage tracking. The extracted `genome.json` includes a `lineage` field recording which genome it descended from, which creature it was extracted from, and at what point in the creature's history.
+
+The result is a genome that embodies everything the creature learned about *how to think*, without carrying over *what it was thinking about*. Anyone can spawn from it.

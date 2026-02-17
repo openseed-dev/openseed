@@ -113,6 +113,16 @@ Remove a user-installed genome.
 seed genome remove <name>
 ```
 
+### seed genome extract
+
+Extract a genome from a creature's evolved code. Captures the creature's self-modifications as a new, publishable genome with full lineage tracking.
+
+```bash
+seed genome extract <creature> --name <genome-name> [--output <dir>]
+```
+
+By default, the genome is installed to `~/.openseed/genomes/<name>/` so you can spawn from it immediately. Use `--output` to write to a specific directory for publishing.
+
 ## pnpm Equivalents
 
 If running natively (not via Docker), use `pnpm run` to invoke the same commands:

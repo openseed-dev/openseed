@@ -158,6 +158,7 @@ seed genome install someuser/genome-trader                 # from any GitHub rep
 seed genome install someuser/monorepo/genomes/trader       # subdirectory within a repo
 seed genome install https://github.com/someone/cool-mind   # full URL
 seed genome remove trader                                  # remove an installed genome
+seed genome extract eve --name evolved-dreamer             # extract genome from a creature
 ```
 
 When you spawn a creature with a genome that isn't installed locally, openseed auto-installs it from GitHub.
@@ -203,6 +204,7 @@ seed genome search <query>             search community genomes on GitHub
 seed genome install <source>           install a genome from GitHub
 seed genome list                       list installed and bundled genomes
 seed genome remove <name>              remove an installed genome
+seed genome extract <creature> --name  extract a genome from a creature
 ```
 
 Or via pnpm: `pnpm up`, `pnpm spawn alpha -- --purpose "..."`, etc.

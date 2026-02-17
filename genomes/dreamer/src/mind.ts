@@ -712,13 +712,8 @@ export class Mind {
         } else {
           checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nWhat have you accomplished? If genuinely stuck, try a different approach to the SAME goal. Switching tasks entirely should be a last resort.`;
         }
-        // Append progress check as additional text in tool results
-        toolResults.push({
-          type: "tool-result",
-          toolCallId: result.toolCalls[result.toolCalls.length - 1].toolCallId,
-          toolName: result.toolCalls[result.toolCalls.length - 1].toolName,
-          output: { type: 'text', value: checkMsg },
-        } as any);
+        const last = toolResults[toolResults.length - 1] as any;
+        last.output = { type: 'text', value: last.output.value + '\n\n' + checkMsg };
         if (onProgressCheck) await onProgressCheck(this.actionsSinceProgressCheck);
         console.log(`[mind] progress check #${this.progressCheckCount} at ${this.actionsSinceProgressCheck} actions`);
         this.actionsSinceProgressCheck = 0;
