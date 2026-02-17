@@ -288,12 +288,12 @@
         const id = uid();
         body = cl + '<span class="type sleep">sleep</span>'
           + '<span class="tool-ms">' + secs + 's / ' + acts + ' actions</span>'
-          + '<span class="intent-text thought-summary" onclick="toggle(\''+id+'\')"> \u2014 ' + esc(summarize(ev.text, 120)) + '</span>'
+          + '<span class="intent-text thought-summary" onclick="toggle(\''+id+'\')"> - ' + esc(summarize(ev.text, 120)) + '</span>'
           + '<div class="thought-body" id="'+id+'">' + esc(ev.text || '') + '</div>';
       } else if (t === 'creature.wake') {
         body = cl + '<span class="type wake">wake</span>'
           + '<span class="tool-ms">' + esc(ev.source || '') + '</span>'
-          + '<span class="detail"> \u2014 ' + esc(ev.reason || '') + '</span>';
+          + '<span class="detail"> - ' + esc(ev.reason || '') + '</span>';
       } else if (t === 'creature.message') {
         body = cl + '<span class="type message">' + esc(ev.source || 'user') + '</span>'
           + '<span class="intent-text"> ' + esc(ev.text || '') + '</span>';
@@ -323,7 +323,7 @@
         const label = ev.deep ? 'deep sleep' : 'dream';
         body = cl + '<span class="type dream' + deep + '">' + label + '</span>'
           + '<span class="tool-ms">' + (ev.observations || 0) + ' observations</span>'
-          + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> \u2014 ' + esc(summarize(ev.priority || '', 120)) + '</span>'
+          + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> - ' + esc(summarize(ev.priority || '', 120)) + '</span>'
           + '<div class="thought-body" id="'+oid+'">'
           + '<strong>Priority:</strong> ' + esc(ev.priority || '') + '\n\n'
           + '<strong>Reflection:</strong>\n' + esc(ev.reflection || '')
@@ -336,14 +336,14 @@
         body = cl + '<span class="type rollback">error</span>'
           + (ev.retries ? '<span class="retry-badge">attempt #' + ev.retries + '</span>' : '')
           + '<span class="tool-ms">' + retryLabel + '</span>'
-          + '<span class="intent-text"> \u2014 ' + esc(ev.error || 'unknown') + '</span>';
+          + '<span class="intent-text"> - ' + esc(ev.error || 'unknown') + '</span>';
       } else if (t === 'creator.evaluation' || t === 'creature.self_evaluation') {
         const oid = uid();
         const changed = ev.changed || (ev.changes || []).length > 0;
         const label = changed ? 'self-evolved' : 'self-evaluated';
         body = cl + '<span class="type creator">' + label + '</span>'
           + (changed ? '<span class="tool-ms">code modified</span>' : '')
-          + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> \u2014 ' + esc(summarize(ev.reasoning || '', 120)) + '</span>'
+          + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> - ' + esc(summarize(ev.reasoning || '', 120)) + '</span>'
           + '<div class="thought-body" id="'+oid+'">'
           + '<strong>Trigger:</strong> ' + esc(ev.trigger || '') + '\n\n'
           + '<strong>Reasoning:</strong>\n' + esc(ev.reasoning || '')
@@ -368,7 +368,7 @@
             return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? esc(k + '=' + v) : '';
           }).filter(Boolean).join(', ');
           body = cl + '<span class="type host">' + esc(label) + '</span>'
-            + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> \u2014 ' + esc(summarize(preview, 120)) + '</span>'
+            + '<span class="intent-text thought-summary" onclick="toggle(\''+oid+'\')"> - ' + esc(summarize(preview, 120)) + '</span>'
             + '<div class="thought-body" id="'+oid+'">' + fields.map(k => {
               const v = ev[k];
               const display = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
@@ -446,6 +446,7 @@
         msgBar.classList.toggle('visible', !!selected);
         contentEl.innerHTML = '';
         contentEl.appendChild(eventsEl);
+        requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
         return;
       }
       msgBar.classList.remove('visible');
