@@ -12,8 +12,8 @@ OpenSeed runs as a single orchestrator daemon that manages creatures. Each creat
 ```
 Orchestrator (src/host/) - single daemon on your machine
 ├── Web dashboard on :7770 (real-time SSE event stream)
-├── LLM proxy - routes to Anthropic or OpenAI based on model
-├── Cost tracker - per-creature, per-model token accounting
+├── LLM proxy - routes to Anthropic or OpenAI, enforces spending caps
+├── Cost tracker - per-creature, per-model token accounting + daily budgets
 └── Creature supervisors - health check, promote, rollback
     └── Docker containers (long-lived, persistent)
         ├── Creature process (from genome)
@@ -36,6 +36,8 @@ The orchestrator can be restarted without killing containers. It reconnects to r
 Creatures call the orchestrator's proxy instead of hitting providers directly. The proxy (`src/host/proxy.ts`) detects the requested model, injects the appropriate API key, and routes to the correct upstream (Anthropic or OpenAI).
 
 For OpenAI models, the proxy translates between Anthropic message format and OpenAI Responses API format, so creatures always speak a single protocol regardless of the backing model.
+
+The proxy also enforces per-creature daily spending caps. Before forwarding a request, it checks whether the creature has exceeded its configured daily budget. If so, the creature is paused (container stopped, files preserved) and auto-wakes at the next UTC midnight. See [CLI Reference](/docs/cli) for configuration details.
 
 ## Supervisors
 
@@ -74,7 +76,8 @@ src/
     index.ts          orchestrator - API, SSE, creature management
     proxy.ts          LLM proxy - Anthropic passthrough + OpenAI translation
     supervisor.ts     per-creature Docker lifecycle + health + rollback
-    costs.ts          per-creature, per-model cost tracking
+    costs.ts          per-creature, per-model cost tracking + daily caps
+    config.ts         config loading (global + per-creature spending caps)
     events.ts         event store (JSONL)
     git.ts            git operations for creature repos
     dashboard.html    web dashboard

@@ -123,6 +123,66 @@ seed genome extract <creature> --name <genome-name> [--output <dir>]
 
 By default, the genome is installed to `~/.openseed/genomes/<name>/` so you can spawn from it immediately. Use `--output` to write to a specific directory for publishing.
 
+## Spending Caps
+
+Every LLM call goes through the orchestrator's proxy, which tracks per-creature daily costs and enforces configurable spending limits.
+
+### Global defaults
+
+Create `~/.openseed/config.json`:
+
+```json
+{
+  "spending_cap": {
+    "daily_usd": 20,
+    "action": "sleep"
+  }
+}
+```
+
+### Per-creature overrides
+
+Create `~/.openseed/creatures/<name>/config.json`:
+
+```json
+{
+  "spending_cap": {
+    "daily_usd": 50
+  }
+}
+```
+
+Per-creature values override global defaults. Missing fields fall back to global, then to the hardcoded default ($20/day, action: sleep).
+
+### Actions
+
+| Action | Behavior |
+|---|---|
+| `sleep` (default) | Creature is paused when daily cap is hit. Container stopped, files preserved. Auto-wakes at UTC midnight. |
+| `warn` | Logs a warning but allows the call through. Monitoring-only mode. |
+| `off` | No enforcement for this creature. |
+
+### Budget API
+
+The orchestrator exposes budget info per creature:
+
+```
+GET /api/creatures/<name>/budget
+```
+
+Returns:
+
+```json
+{
+  "daily_cap_usd": 20,
+  "daily_spent_usd": 12.50,
+  "remaining_usd": 7.50,
+  "resets_at": "2026-02-17T00:00:00.000Z",
+  "action": "sleep",
+  "status": "ok"
+}
+```
+
 ## pnpm Equivalents
 
 If running natively (not via Docker), use `pnpm run` to invoke the same commands:

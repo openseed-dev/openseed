@@ -36,11 +36,14 @@ export interface SupervisorConfig {
   model?: string;
 }
 
+export type SleepReason = 'budget' | 'fatigue' | 'user' | null;
+
 export class CreatureSupervisor {
   readonly name: string;
   readonly dir: string;
   readonly port: number;
   status: CreatureStatus = 'stopped';
+  sleepReason: SleepReason = null;
 
   private creature: ChildProcess | null = null;
   private currentSHA = '';
@@ -66,6 +69,7 @@ export class CreatureSupervisor {
   }
 
   async start(): Promise<void> {
+    this.sleepReason = null;
     this.currentSHA = getCurrentSHA(this.dir);
     this.lastGoodSHA = await getLastGoodSHA(this.dir);
     this.status = 'starting';
@@ -77,6 +81,16 @@ export class CreatureSupervisor {
     this.clearTimers();
     try { execSync(`docker stop ${this.containerName()}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
     this.status = 'stopped';
+    this.sleepReason = 'user';
+    this.creature = null;
+  }
+
+  async budgetPause(): Promise<void> {
+    this.expectingExit = true;
+    this.clearTimers();
+    try { execSync(`docker stop ${this.containerName()}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
+    this.status = 'sleeping';
+    this.sleepReason = 'budget';
     this.creature = null;
   }
 
@@ -112,10 +126,16 @@ export class CreatureSupervisor {
 
   updateFromEvent(event: Event) {
     if (this.status === 'stopped') return;
-    if (event.type === 'creature.sleep') this.status = 'sleeping';
-    else if (event.type === 'creature.error') this.status = 'error';
-    else if (event.type === 'creature.tool_call' || event.type === 'creature.thought') {
-      if (this.status === 'sleeping' || this.status === 'error') this.status = 'running';
+    if (event.type === 'creature.sleep') {
+      this.status = 'sleeping';
+      if (this.sleepReason !== 'budget') this.sleepReason = 'fatigue';
+    } else if (event.type === 'creature.error') {
+      this.status = 'error';
+    } else if (event.type === 'creature.tool_call' || event.type === 'creature.thought') {
+      if (this.status === 'sleeping' || this.status === 'error') {
+        this.status = 'running';
+        this.sleepReason = null;
+      }
     }
   }
 
@@ -123,6 +143,7 @@ export class CreatureSupervisor {
     return {
       name: this.name,
       status: this.status,
+      sleepReason: this.sleepReason,
       sha: this.currentSHA || null,
       last_good_sha: this.lastGoodSHA || null,
       healthy: this.healthyAt !== null,

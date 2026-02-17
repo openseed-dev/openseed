@@ -63,6 +63,22 @@
     @keyframes pulse-error { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .creature-cost { color: #f80; font-size: 10px; margin-left: 4px; flex-shrink: 0; }
+    .creature-cost.over { color: #f33; }
+    .budget-bar { margin-top: 2px; height: 3px; background: #222; border-radius: 2px; overflow: hidden; }
+    .budget-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+    .budget-bar-fill.ok { background: #0f0; }
+    .budget-bar-fill.warn { background: #f80; }
+    .budget-bar-fill.over { background: #f33; }
+    .budget-info {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 10px; background: #111; border: 1px solid #222;
+      border-radius: 4px; font-size: 11px; color: #888;
+    }
+    .budget-info .budget-label { color: #666; }
+    .budget-info .budget-value { color: #f80; }
+    .budget-info .budget-value.over { color: #f33; }
+    .budget-info .budget-value.ok { color: #0f0; }
+    .sleep-reason { font-size: 10px; color: #f33; margin-left: 4px; }
     .btn {
       background: #222; border: 1px solid #333; color: #aaa;
       padding: 2px 6px; border-radius: 3px; cursor: pointer;
@@ -126,6 +142,8 @@
     .event.creature-error { border-left-color: #f33; background: #1a0808; }
     .event.creature-error .retry-badge { color: #f55; font-size: 11px; margin-left: 6px; }
     .event.creator-evaluation { border-left-color: #0d4; background: #081a0a; }
+    .event.budget-exceeded { border-left-color: #f33; background: #1a0808; }
+    .event.budget-reset { border-left-color: #0f0; background: #081a08; }
 
     .event .type.host { color: #666; }
     .event .type.promote { color: #0f0; }
@@ -352,6 +370,12 @@
         body = cl + '<span class="type promote">promoted</span><span class="detail"><span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'host.rollback') {
         body = cl + '<span class="type rollback">rollback</span><span class="detail">' + esc(ev.reason||'') + ' <span class="sha">' + (ev.from||'').slice(0,7) + '</span> \u2192 <span class="sha">' + (ev.to||'').slice(0,7) + '</span></span>';
+      } else if (t === 'budget.exceeded') {
+        body = cl + '<span class="type rollback">budget exceeded</span>'
+          + '<span class="detail">$' + ((ev.daily_spent||0).toFixed(2)) + ' / $' + ((ev.daily_cap||0).toFixed(2)) + ' daily cap</span>';
+      } else if (t === 'budget.reset') {
+        body = cl + '<span class="type promote">budget reset</span>'
+          + '<span class="detail">daily budget renewed</span>';
       } else if (t === 'host.spawn') {
         body = cl + '<span class="type boot">spawn</span><span class="detail">pid ' + (ev.pid||'?') + ' <span class="sha">' + (ev.sha||'').slice(0,7) + '</span></span>';
       } else if (t === 'creature.boot') {
@@ -483,17 +507,23 @@
       selectedTab = 'log';
       if (name) {
         headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
+          + '<div class="budget-info" id="budgetInfo"></div>'
           + '<button class="btn" onclick="wakeC(\'' + name + '\')">wake</button>'
           + '<button class="btn" onclick="restartC(\'' + name + '\')">restart</button>'
           + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\'' + name + '\')">rebuild</button>'
           + '<button class="btn" style="color:#f80;border-color:#f80" onclick="archiveC(\'' + name + '\')">archive</button>';
         try {
-          const res = await fetch('/api/creatures/' + name + '/events');
-          const events = await res.json();
+          const [evRes, budgetRes] = await Promise.all([
+            fetch('/api/creatures/' + name + '/events'),
+            fetch('/api/creatures/' + name + '/budget'),
+          ]);
+          const events = await evRes.json();
           for (const ev of events) {
             eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, false));
           }
           window.scrollTo(0, document.body.scrollHeight);
+          const budget = await budgetRes.json();
+          renderBudgetInfo(budget);
         } catch {}
         loadMind().then(() => { renderTabs(); });
       } else {
@@ -502,6 +532,22 @@
       renderTabs();
       renderContent();
       renderSidebar();
+    }
+
+    function renderBudgetInfo(budget) {
+      const el = document.getElementById('budgetInfo');
+      if (!el || !budget) return;
+      if (budget.action === 'off') {
+        el.innerHTML = '<span class="budget-label">cap off</span>';
+        return;
+      }
+      const pct = budget.daily_cap_usd > 0 ? Math.min(100, (budget.daily_spent_usd / budget.daily_cap_usd) * 100) : 0;
+      const cls = budget.status === 'exceeded' ? 'over' : pct >= 80 ? 'warn' : 'ok';
+      el.innerHTML = '<span class="budget-label">today</span>'
+        + '<span class="budget-value ' + cls + '">' + fmtCost(budget.daily_spent_usd) + '</span>'
+        + '<span class="budget-label">/ ' + fmtCost(budget.daily_cap_usd) + '</span>'
+        + '<div class="budget-bar" style="width:60px"><div class="budget-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div>'
+        + (budget.status === 'exceeded' ? '<span class="budget-value over">exceeded</span>' : '');
     }
 
     async function loadMind() {
@@ -520,6 +566,15 @@
       }
       return total;
     }
+    function creatureDailyCost(n) {
+      const today = new Date().toISOString().slice(0, 10);
+      for (const [key, val] of Object.entries(usageData)) {
+        if ((key === n || key.endsWith(':' + n)) && val.daily_date === today) {
+          return val.daily_cost_usd || 0;
+        }
+      }
+      return 0;
+    }
 
     function renderSidebar() {
       const names = Object.keys(creatures).sort();
@@ -529,16 +584,20 @@
         const c = creatures[n];
         const sel = selected === n ? ' selected' : '';
         const dot = '<span class="dot ' + c.status + '"></span>';
-        const cost = creatureCost(n);
-        const costLabel = cost > 0 ? '<span class="creature-cost">' + fmtCost(cost) + '</span>' : '';
+        const daily = creatureDailyCost(n);
+        const total = creatureCost(n);
+        const costLabel = daily > 0
+          ? '<span class="creature-cost">' + fmtCost(daily) + '/d</span>'
+          : total > 0 ? '<span class="creature-cost">' + fmtCost(total) + '</span>' : '';
+        const budgetLabel = c.sleepReason === 'budget' ? '<span class="sleep-reason">$cap</span>' : '';
         let act = '';
-        if (c.status === 'stopped') {
+        if (c.status === 'stopped' || c.sleepReason === 'budget') {
           act = '<button class="btn" onclick="event.stopPropagation();startC(\'' + n + '\')">start</button>';
         } else {
           act = '<button class="btn" onclick="event.stopPropagation();stopC(\'' + n + '\')">stop</button>';
         }
         html += '<div class="creature-item' + sel + '" onclick="select(\'' + n + '\')">'
-          + dot + '<span class="cname">' + esc(n) + '</span>' + costLabel + act + '</div>';
+          + dot + '<span class="cname">' + esc(n) + '</span>' + budgetLabel + costLabel + act + '</div>';
       }
       if (totalCost > 0) {
         html += '<div style="padding:12px;border-top:1px solid #222;color:#666;font-size:11px;text-align:right;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>';
@@ -609,7 +668,9 @@
 
     async function refresh() {
       try {
-        const [crRes, usRes] = await Promise.all([fetch('/api/creatures'), fetch('/api/usage')]);
+        const fetches = [fetch('/api/creatures'), fetch('/api/usage')];
+        if (selected) fetches.push(fetch('/api/creatures/' + selected + '/budget'));
+        const [crRes, usRes, budgetRes] = await Promise.all(fetches);
         creatures = {};
         for (const c of await crRes.json()) creatures[c.name] = c;
         const ud = await usRes.json();
@@ -620,7 +681,11 @@
           const el = document.getElementById('cinfo');
           if (el) {
             const c = creatures[selected];
-            el.innerHTML = '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status;
+            const sr = c.sleepReason === 'budget' ? ' (budget cap)' : '';
+            el.innerHTML = '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status + sr;
+          }
+          if (budgetRes) {
+            try { renderBudgetInfo(await budgetRes.json()); } catch {}
           }
         }
       } catch {}

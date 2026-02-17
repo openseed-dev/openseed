@@ -227,7 +227,7 @@ Orchestrator (src/host/) - single daemon on your machine
 
 **Orchestrator** - manages all creatures. Health-checks every second, promotes after 10s of stability, rolls back on crash. Can be restarted without killing containers; reconnects on startup.
 
-**LLM Proxy** - creatures call the proxy instead of the LLM provider directly. The proxy detects the model, injects the real API key, and routes to the right upstream. For OpenAI models, it translates between Anthropic and OpenAI Responses API formats transparently.
+**LLM Proxy** - creatures call the proxy instead of the LLM provider directly. The proxy detects the model, injects the real API key, and routes to the right upstream. For OpenAI models, it translates between Anthropic and OpenAI Responses API formats transparently. The proxy also enforces per-creature daily spending caps before forwarding requests.
 
 **Supervisors** - one per creature. Manages the Docker container lifecycle, streams logs, handles health gate and rollback logic.
 
@@ -284,7 +284,8 @@ src/
     index.ts          orchestrator: API, SSE, creature management
     proxy.ts          LLM proxy: Anthropic passthrough + OpenAI translation
     supervisor.ts     per-creature Docker lifecycle + health + rollback
-    costs.ts          per-creature, per-model cost tracking
+    costs.ts          per-creature, per-model cost tracking + daily caps
+    config.ts         config loading (global + per-creature spending caps)
     events.ts         event store (JSONL)
     git.ts            git operations for creature repos
     dashboard.html    web dashboard
@@ -316,9 +317,39 @@ site/                   openseed.dev (Astro + Cloudflare Pages)
 pnpm-workspace.yaml     workspace config (site only)
 ```
 
+## Spending Caps
+
+Every LLM call goes through the orchestrator's proxy, which tracks per-creature daily costs. A configurable spending cap automatically pauses creatures when their daily budget is exhausted.
+
+**Global defaults** in `~/.openseed/config.json`:
+
+```json
+{
+  "spending_cap": {
+    "daily_usd": 20,
+    "action": "sleep"
+  }
+}
+```
+
+**Per-creature overrides** in `~/.openseed/creatures/<name>/config.json`:
+
+```json
+{
+  "spending_cap": {
+    "daily_usd": 50
+  }
+}
+```
+
+When a creature hits its daily cap, it goes to sleep (container stopped, all files preserved). It auto-wakes at UTC midnight when the daily budget resets. You can also manually restart it or raise the cap.
+
+Set `"action": "warn"` for monitoring-only mode (logs warnings but doesn't stop the creature), or `"action": "off"` to disable enforcement entirely.
+
+The default cap is $20/day. An Opus creature doing continuous active work burns through roughly $20 in about an hour. Adjust based on your model and usage patterns.
+
 ## Where This Is Going
 
-- **Cost controls** - per-creature spending limits with automatic sleep or shutdown when the budget is hit
 - **Cost-aware creatures** - expose budget and usage to the creature so it can make economic decisions
 - **Cloud deployment** - hosted version where creatures run on managed infrastructure. The `CreatureSupervisor` is already an abstraction over Docker; a cloud supervisor would call a platform API instead of `docker run`
 - **Genome marketplace** - discover and share genomes. The install infrastructure is in place (`seed genome install`); next is a searchable directory

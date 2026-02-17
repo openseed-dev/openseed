@@ -5,6 +5,15 @@ import type {
 
 import type { CostTracker } from './costs.js';
 
+export interface BudgetCheckResult {
+  allowed: boolean;
+  action: 'sleep' | 'warn' | 'off';
+  dailyCap: number;
+  dailySpent: number;
+}
+
+export type BudgetChecker = (creatureName: string) => BudgetCheckResult;
+
 // Anthropic -> OpenAI Responses API translation proxy.
 // Creatures always speak Anthropic format. The proxy detects the model
 // and routes to the right upstream, translating if needed.
@@ -208,11 +217,34 @@ export async function handleLLMProxy(
   req: IncomingMessage,
   res: ServerResponse,
   costs: CostTracker,
+  checkBudget?: BudgetChecker,
+  onBudgetExceeded?: (creatureName: string) => void,
 ): Promise<void> {
   const apiKeyHeader = req.headers['x-api-key'] as string || '';
   const creatureName = apiKeyHeader.startsWith('creature:')
     ? apiKeyHeader.slice(9)
     : (req.headers['x-creature-name'] as string || 'unknown');
+
+  // Budget pre-check: block if already over daily cap
+  if (checkBudget) {
+    const budget = checkBudget(creatureName);
+    if (!budget.allowed) {
+      if (budget.action === 'sleep') {
+        const msg = `Daily spending cap of $${budget.dailyCap.toFixed(2)} reached ($${budget.dailySpent.toFixed(2)} spent today). Creature will sleep until daily reset.`;
+        console.log(`[proxy:${creatureName}] BUDGET EXCEEDED: ${msg}`);
+        res.writeHead(429, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          type: 'error',
+          error: { type: 'rate_limit_error', message: msg },
+        }));
+        onBudgetExceeded?.(creatureName);
+        return;
+      }
+      if (budget.action === 'warn') {
+        console.log(`[proxy:${creatureName}] WARNING: daily spend $${budget.dailySpent.toFixed(2)} exceeds cap $${budget.dailyCap.toFixed(2)}`);
+      }
+    }
+  }
 
   const rawBody = await readBody(req);
 
@@ -236,6 +268,13 @@ export async function handleLLMProxy(
         const respParsed = JSON.parse(result.body);
         if (respParsed.usage) {
           costs.record(creatureName, respParsed.usage.input_tokens || 0, respParsed.usage.output_tokens || 0, model);
+          if (checkBudget && onBudgetExceeded) {
+            const budget = checkBudget(creatureName);
+            if (!budget.allowed && budget.action === 'sleep') {
+              console.log(`[proxy:${creatureName}] call pushed over daily budget ($${budget.dailySpent.toFixed(2)} / $${budget.dailyCap.toFixed(2)})`);
+              onBudgetExceeded(creatureName);
+            }
+          }
         }
         if (respParsed.stop_reason) {
           console.log(`[proxy:${creatureName}] model=${model} stop_reason=${respParsed.stop_reason} content_blocks=${(respParsed.content || []).length}`);
@@ -252,6 +291,13 @@ export async function handleLLMProxy(
         const respParsed = JSON.parse(result.body);
         if (respParsed.usage) {
           costs.record(creatureName, respParsed.usage.input_tokens || 0, respParsed.usage.output_tokens || 0, model);
+          if (checkBudget && onBudgetExceeded) {
+            const budget = checkBudget(creatureName);
+            if (!budget.allowed && budget.action === 'sleep') {
+              console.log(`[proxy:${creatureName}] call pushed over daily budget ($${budget.dailySpent.toFixed(2)} / $${budget.dailyCap.toFixed(2)})`);
+              onBudgetExceeded(creatureName);
+            }
+          }
         }
         if (respParsed.stop_reason) {
           console.log(`[proxy:${creatureName}] model=${model} stop_reason=${respParsed.stop_reason} content_blocks=${(respParsed.content || []).length}`);

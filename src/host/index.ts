@@ -18,8 +18,10 @@ import {
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
+import { getSpendingCap } from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
+import type { BudgetCheckResult } from './proxy.js';
 import { handleLLMProxy } from './proxy.js';
 import {
   CreatureSupervisor,
@@ -51,6 +53,7 @@ export class Orchestrator {
   private globalListeners: Set<(name: string, event: Event) => void> = new Set();
   private costs = new CostTracker();
   private dashboardHtml: string;
+  private budgetResetInterval: NodeJS.Timeout | null = null;
 
   constructor(port: number) {
     this.port = port;
@@ -64,6 +67,7 @@ export class Orchestrator {
     this.setupCleanup();
     this.createServer();
     await this.autoReconnect();
+    this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
     console.log(`[orchestrator] ready at http://localhost:${this.port}`);
   }
 
@@ -80,6 +84,7 @@ export class Orchestrator {
 
   private setupCleanup() {
     const cleanup = async () => {
+      if (this.budgetResetInterval) clearInterval(this.budgetResetInterval);
       try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
@@ -161,7 +166,13 @@ export class Orchestrator {
   // --- Creature management ---
 
   async startCreature(name: string, opts?: { manual?: boolean }): Promise<void> {
-    if (this.supervisors.has(name)) throw new Error(`creature "${name}" is already running`);
+    const existing = this.supervisors.get(name);
+    if (existing && existing.sleepReason === 'budget') {
+      console.log(`[${name}] restarting from budget pause`);
+      await existing.start();
+      return;
+    }
+    if (existing) throw new Error(`creature "${name}" is already running`);
 
     const dir = path.join(CREATURES_DIR, name);
     try { await fs.access(path.join(dir, 'BIRTH.json')); }
@@ -347,16 +358,54 @@ export class Orchestrator {
     console.log(`[${name}] message (${source}): ${text.slice(0, 80)}`);
   }
 
-  async listCreatures(): Promise<Array<{ name: string; status: string; sha: string | null; port: number | null }>> {
+  async listCreatures(): Promise<Array<{ name: string; status: string; sha: string | null; port: number | null; sleepReason: string | null }>> {
     const all = await this.discoverCreatures();
     return all.map(({ name }) => {
       const sup = this.supervisors.get(name);
       if (sup) {
         const info = sup.getInfo();
-        return { name, status: info.status, sha: info.sha, port: info.port };
+        return { name, status: info.status, sha: info.sha, port: info.port, sleepReason: info.sleepReason };
       }
-      return { name, status: 'stopped', sha: null, port: null };
+      return { name, status: 'stopped', sha: null, port: null, sleepReason: null };
     });
+  }
+
+  // --- Budget enforcement ---
+
+  private checkCreatureBudget(name: string): BudgetCheckResult {
+    const cap = getSpendingCap(name);
+    if (cap.action === 'off') return { allowed: true, action: 'off', dailyCap: cap.daily_usd, dailySpent: 0 };
+    const dailySpent = this.costs.getCreatureDailyCost(name);
+    return { allowed: dailySpent < cap.daily_usd, action: cap.action, dailyCap: cap.daily_usd, dailySpent };
+  }
+
+  private async handleBudgetExceeded(name: string): Promise<void> {
+    const supervisor = this.supervisors.get(name);
+    if (!supervisor || supervisor.sleepReason === 'budget') return;
+    console.log(`[${name}] budget exceeded, pausing creature`);
+    await supervisor.budgetPause();
+    await this.emitEvent(name, {
+      t: new Date().toISOString(),
+      type: 'budget.exceeded',
+      daily_spent: this.costs.getCreatureDailyCost(name),
+      daily_cap: getSpendingCap(name).daily_usd,
+    } as any);
+  }
+
+  private async checkBudgetResets() {
+    for (const [name, supervisor] of this.supervisors) {
+      if (supervisor.sleepReason !== 'budget') continue;
+      const dailySpent = this.costs.getCreatureDailyCost(name);
+      if (dailySpent === 0) {
+        console.log(`[${name}] daily budget reset, waking creature`);
+        try {
+          await supervisor.start();
+          await this.emitEvent(name, { t: new Date().toISOString(), type: 'budget.reset' } as any);
+        } catch (err: any) {
+          console.error(`[${name}] failed to wake after budget reset:`, err.message);
+        }
+      }
+    }
   }
 
   // --- HTTP Server ---
@@ -375,7 +424,11 @@ export class Orchestrator {
       // LLM proxy: creatures call this instead of api.anthropic.com
       // Detects model from request body, routes to Anthropic or OpenAI (with translation)
       if (p === '/v1/messages' && req.method === 'POST') {
-        await handleLLMProxy(req, res, this.costs);
+        await handleLLMProxy(
+          req, res, this.costs,
+          (name) => this.checkCreatureBudget(name),
+          (name) => { this.handleBudgetExceeded(name).catch(err => console.error(`[${name}] budget pause error:`, err)); },
+        );
         return;
       }
 
@@ -587,6 +640,24 @@ export class Orchestrator {
             await this.archiveCreature(name);
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'budget' && req.method === 'GET') {
+          const cap = getSpendingCap(name);
+          const dailySpent = this.costs.getCreatureDailyCost(name);
+          const remaining = Math.max(0, cap.daily_usd - dailySpent);
+          const now = new Date();
+          const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            daily_cap_usd: cap.daily_usd,
+            daily_spent_usd: Math.round(dailySpent * 100) / 100,
+            remaining_usd: Math.round(remaining * 100) / 100,
+            resets_at: tomorrow.toISOString(),
+            action: cap.action,
+            status: dailySpent >= cap.daily_usd ? 'exceeded' : 'ok',
+          }));
           return;
         }
 

@@ -37,6 +37,8 @@ export interface UsageEntry {
   output_tokens: number;
   cost_usd: number;
   calls: number;
+  daily_cost_usd: number;
+  daily_date: string | null;
 }
 
 export class CostTracker {
@@ -53,18 +55,34 @@ export class CostTracker {
   }
 
   record(name: string, inputTokens: number, outputTokens: number, model?: string) {
-    const entry = this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0 };
+    const entry = this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0, daily_cost_usd: 0, daily_date: null };
     const p = (model && PRICING[model]) || DEFAULT_PRICING;
+    const callCost = inputTokens * p.input + outputTokens * p.output;
     entry.input_tokens += inputTokens;
     entry.output_tokens += outputTokens;
-    entry.cost_usd += inputTokens * p.input + outputTokens * p.output;
+    entry.cost_usd += callCost;
     entry.calls += 1;
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (entry.daily_date !== today) {
+      entry.daily_cost_usd = 0;
+      entry.daily_date = today;
+    }
+    entry.daily_cost_usd += callCost;
+
     this.usage.set(name, entry);
     this.dirty = true;
   }
 
   get(name: string): UsageEntry {
-    return this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0 };
+    return this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0, daily_cost_usd: 0, daily_date: null };
+  }
+
+  getCreatureDailyCost(name: string): number {
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = this.usage.get(name);
+    if (!entry || entry.daily_date !== today) return 0;
+    return entry.daily_cost_usd;
   }
 
   getAll(): Record<string, UsageEntry> {
