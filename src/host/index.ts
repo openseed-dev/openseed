@@ -18,7 +18,7 @@ import {
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
-import { getSpendingCap, saveCreatureSpendingCap } from './config.js';
+import { getSpendingCap, saveCreatureSpendingCap, loadGlobalConfig, saveGlobalSpendingCap } from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
 import type { BudgetCheckResult } from './proxy.js';
@@ -436,6 +436,31 @@ export class Orchestrator {
       if (p === '/api/usage' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ usage: this.costs.getAll(), total: this.costs.getTotal() }));
+        return;
+      }
+
+      if (p === '/api/budget' && req.method === 'GET') {
+        const cap = loadGlobalConfig().spending_cap;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
+        return;
+      }
+
+      if (p === '/api/budget' && req.method === 'PUT') {
+        try {
+          const body = await new Promise<string>((resolve) => {
+            let data = ''; req.on('data', (c) => data += c); req.on('end', () => resolve(data));
+          });
+          const update = JSON.parse(body);
+          const patch: Record<string, any> = {};
+          if (typeof update.daily_usd === 'number' && update.daily_usd >= 0) patch.daily_usd = update.daily_usd;
+          if (['sleep', 'warn', 'off'].includes(update.action)) patch.action = update.action;
+          if (Object.keys(patch).length === 0) { res.writeHead(400); res.end('nothing to update'); return; }
+          saveGlobalSpendingCap(patch);
+          const cap = loadGlobalConfig().spending_cap;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
+        } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }
 

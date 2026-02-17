@@ -624,6 +624,62 @@
       if (lastBudget) renderBudgetInfo(lastBudget);
     }
 
+    let globalBudgetData = null;
+
+    async function loadGlobalBudget() {
+      try {
+        const res = await fetch('/api/budget');
+        globalBudgetData = await res.json();
+      } catch {}
+    }
+
+    function renderGlobalBudget() {
+      const el = document.getElementById('globalBudget');
+      if (!el || !globalBudgetData) return;
+      const b = globalBudgetData;
+      const label = b.action === 'off' ? 'no cap' : '$' + b.daily_usd + '/day \u00b7 ' + b.action;
+      el.innerHTML = '<span style="color:#555">global cap:</span> '
+        + '<span style="color:#f80;cursor:pointer" onclick="openGlobalBudgetEditor()" title="click to edit">' + esc(label) + ' \u270e</span>';
+    }
+
+    function openGlobalBudgetEditor() {
+      const el = document.getElementById('globalBudget');
+      if (!el) return;
+      const cap = globalBudgetData ? globalBudgetData.daily_usd : 20;
+      const action = globalBudgetData ? globalBudgetData.action : 'sleep';
+      el.innerHTML = '<div class="budget-editor" style="display:inline-flex;margin:0;">'
+        + '<span class="budget-label">$/day</span>'
+        + '<input id="gbCap" type="number" min="0" step="1" value="' + cap + '" />'
+        + '<select id="gbAction">'
+        + '<option value="sleep"' + (action==='sleep'?' selected':'') + '>sleep</option>'
+        + '<option value="warn"' + (action==='warn'?' selected':'') + '>warn</option>'
+        + '<option value="off"' + (action==='off'?' selected':'') + '>off</option>'
+        + '</select>'
+        + '<button class="be-save" onclick="saveGlobalBudget()">save</button>'
+        + '<button class="be-cancel" onclick="renderGlobalBudget()">x</button>'
+        + '</div>';
+      const inp = document.getElementById('gbCap');
+      inp.focus();
+      inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') saveGlobalBudget();
+        if (e.key === 'Escape') renderGlobalBudget();
+      });
+    }
+
+    async function saveGlobalBudget() {
+      const capVal = parseFloat(document.getElementById('gbCap').value);
+      const actionVal = document.getElementById('gbAction').value;
+      try {
+        await fetch('/api/budget', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ daily_usd: capVal, action: actionVal }),
+        });
+        await loadGlobalBudget();
+        renderGlobalBudget();
+      } catch { renderGlobalBudget(); }
+    }
+
     async function loadMind() {
       if (!selected) return;
       try {
@@ -673,10 +729,14 @@
         html += '<div class="creature-item' + sel + '" onclick="select(\'' + n + '\')">'
           + dot + '<span class="cname">' + esc(n) + '</span>' + budgetLabel + costLabel + act + '</div>';
       }
+      html += '<div style="padding:12px;border-top:1px solid #222;font-size:11px;">';
       if (totalCost > 0) {
-        html += '<div style="padding:12px;border-top:1px solid #222;color:#666;font-size:11px;text-align:right;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>';
+        html += '<div style="color:#666;text-align:right;margin-bottom:8px;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>';
       }
+      html += '<div id="globalBudget" style="color:#666;"></div>';
+      html += '</div>';
       document.getElementById('creatures').innerHTML = html;
+      renderGlobalBudget();
     }
 
     async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
@@ -776,6 +836,7 @@
 
     refresh();
     loadGenomes();
+    loadGlobalBudget().then(renderGlobalBudget);
     setInterval(refresh, 2000);
   </script>
 </body>
