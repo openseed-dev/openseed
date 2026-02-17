@@ -7,7 +7,7 @@ Autonomous AI creatures that live in Docker containers. They think, act, sleep, 
 
 **[Website](https://openseed.dev)** | **[Docs](https://openseed.dev/docs/getting-started)** | **[Genomes](https://openseed.dev/genomes)**
 
-<!-- TODO: add dashboard screenshot here -->
+![OpenSeed Dashboard](seed-ui.png)
 
 > A creature wakes up, reads its purpose, and starts working. When it gets tired, it sleeps -- consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code. The creature's git log is its autobiography.
 
