@@ -273,6 +273,10 @@
       <div class="spawn-error" id="spawnError"></div>
     </div>
     <div class="creature-list" id="creatures"></div>
+    <div id="sidebarFooter" style="border-top:1px solid #222;padding:12px;font-size:11px;flex-shrink:0;">
+      <div id="totalCostDisplay"></div>
+      <div id="globalBudget" style="color:#666;"></div>
+    </div>
   </div>
   <div class="main">
     <div class="main-header" id="header">
@@ -647,9 +651,9 @@
       if (!el) return;
       const cap = globalBudgetData ? globalBudgetData.daily_usd : 20;
       const action = globalBudgetData ? globalBudgetData.action : 'sleep';
-      el.innerHTML = '<div class="budget-editor" style="display:inline-flex;margin:0;">'
-        + '<span class="budget-label">$/day</span>'
-        + '<input id="gbCap" type="number" min="0" step="1" value="' + cap + '" />'
+      el.innerHTML = '<div class="budget-editor" style="display:flex;flex-wrap:wrap;margin:0;gap:4px;">'
+        + '<span class="budget-label" style="font-size:10px;">$/day</span>'
+        + '<input id="gbCap" type="number" min="0" step="1" value="' + cap + '" style="width:50px;" />'
         + '<select id="gbAction">'
         + '<option value="sleep"' + (action==='sleep'?' selected':'') + '>sleep</option>'
         + '<option value="warn"' + (action==='warn'?' selected':'') + '>warn</option>'
@@ -729,14 +733,12 @@
         html += '<div class="creature-item' + sel + '" onclick="select(\'' + n + '\')">'
           + dot + '<span class="cname">' + esc(n) + '</span>' + budgetLabel + costLabel + act + '</div>';
       }
-      html += '<div style="padding:12px;border-top:1px solid #222;font-size:11px;">';
-      if (totalCost > 0) {
-        html += '<div style="color:#666;text-align:right;margin-bottom:8px;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>';
-      }
-      html += '<div id="globalBudget" style="color:#666;"></div>';
-      html += '</div>';
       document.getElementById('creatures').innerHTML = html;
-      renderGlobalBudget();
+      const tcd = document.getElementById('totalCostDisplay');
+      if (tcd) tcd.innerHTML = totalCost > 0
+        ? '<div style="color:#666;text-align:right;margin-bottom:8px;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>'
+        : '';
+      if (!document.getElementById('gbCap')) renderGlobalBudget();
     }
 
     async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
@@ -818,7 +820,7 @@
             const sr = c.sleepReason === 'budget' ? ' (budget cap)' : '';
             el.innerHTML = '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status + sr;
           }
-          if (budgetRes) {
+          if (budgetRes && !document.getElementById('beCap')) {
             try { renderBudgetInfo(await budgetRes.json()); } catch {}
           }
         }

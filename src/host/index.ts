@@ -18,7 +18,12 @@ import {
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
-import { getSpendingCap, saveCreatureSpendingCap, loadGlobalConfig, saveGlobalSpendingCap } from './config.js';
+import {
+  getSpendingCap,
+  loadGlobalConfig,
+  saveCreatureSpendingCap,
+  saveGlobalSpendingCap,
+} from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
 import type { BudgetCheckResult } from './proxy.js';
