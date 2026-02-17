@@ -564,7 +564,13 @@ export class Mind {
         result = await generateText({
           model: provider(MODEL),
           maxOutputTokens: 16384,
-          system: this.systemPrompt,
+          system: [{
+            type: 'text' as const,
+            text: this.systemPrompt,
+            providerOptions: {
+              anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+          }],
           tools,
           messages: this.messages,
         });
@@ -1129,7 +1135,13 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
         result = await generateText({
           model: provider(MODEL),
           maxOutputTokens: 4096,
-          system,
+          system: [{
+            type: 'text' as const,
+            text: system,
+            providerOptions: {
+              anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+          }],
           tools: evalTools,
           messages: evalMessages,
         });
