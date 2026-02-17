@@ -1,0 +1,147 @@
+---
+import Base from "./Base.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  date: string;
+  author: string;
+}
+
+const { title, description, date, author } = Astro.props;
+const formatted = new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  timeZone: "UTC",
+});
+---
+
+<Base title={`${title} - OpenSeed Blog`} description={description}>
+  <article class="max-w-3xl mx-auto px-6 py-16">
+    <header class="mb-12">
+      <a href="/blog" class="text-sm text-text-tertiary hover:text-text-secondary transition-colors">&larr; All posts</a>
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mt-4 leading-tight">{title}</h1>
+      <div class="mt-4 flex items-center gap-3 text-sm text-text-tertiary">
+        <span>{author}</span>
+        <span class="w-1 h-1 rounded-full bg-border"></span>
+        <time datetime={date}>{formatted}</time>
+      </div>
+    </header>
+
+    <div class="prose-openseed">
+      <slot />
+    </div>
+
+    <footer class="mt-16 pt-8 border-t border-border">
+      <a href="/blog" class="text-sm text-text-tertiary hover:text-text-secondary transition-colors">&larr; All posts</a>
+    </footer>
+  </article>
+</Base>
+
+<style is:global>
+  .prose-openseed {
+    max-width: 65ch;
+  }
+  .prose-openseed h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+  }
+  .prose-openseed h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+  }
+  .prose-openseed h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+  }
+  .prose-openseed p {
+    color: var(--color-text-secondary);
+    line-height: 1.75;
+    margin-bottom: 1rem;
+  }
+  .prose-openseed a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .prose-openseed a:hover {
+    text-decoration: underline;
+  }
+  .prose-openseed ul, .prose-openseed ol {
+    color: var(--color-text-secondary);
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    line-height: 1.75;
+  }
+  .prose-openseed li {
+    margin-bottom: 0.25rem;
+  }
+  .prose-openseed strong {
+    color: var(--color-text);
+    font-weight: 600;
+  }
+  .prose-openseed em {
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .prose-openseed code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--color-surface);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25rem;
+    color: var(--color-text);
+  }
+  .prose-openseed pre {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+  }
+  .prose-openseed pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+  }
+  .prose-openseed blockquote {
+    border-left: 3px solid var(--color-alive);
+    padding-left: 1rem;
+    margin: 1.5rem 0;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .prose-openseed hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 2.5rem 0;
+  }
+  .prose-openseed table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+  }
+  .prose-openseed th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border-accent);
+    color: var(--color-text);
+    font-weight: 600;
+  }
+  .prose-openseed td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+</style>

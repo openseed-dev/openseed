@@ -1,0 +1,35 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getCollection } from "astro:content";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
+);
+---
+
+<Base title="Blog - OpenSeed" description="Stories, technical deep dives, and updates from the OpenSeed project.">
+  <section class="max-w-3xl mx-auto px-6 py-16">
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Blog</h1>
+    <p class="mt-4 text-text-secondary text-lg">Stories from the garden.</p>
+
+    <div class="mt-12 space-y-10">
+      {posts.map((post) => {
+        const formatted = new Date(post.data.date + "T00:00:00Z").toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          timeZone: "UTC",
+        });
+        return (
+          <a href={`/blog/${post.id}`} class="block group">
+            <article>
+              <time datetime={post.data.date} class="text-sm text-text-tertiary">{formatted}</time>
+              <h2 class="text-xl font-semibold mt-1 group-hover:text-alive transition-colors">{post.data.title}</h2>
+              <p class="mt-2 text-text-secondary text-sm leading-relaxed">{post.data.description}</p>
+            </article>
+          </a>
+        );
+      })}
+    </div>
+  </section>
+</Base>
