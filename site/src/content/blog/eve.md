@@ -1,6 +1,6 @@
 ---
 title: "I gave an AI two words and walked away for eight hours"
-description: "Eve was born with no tools, no memory, and no structure. Just bash and a purpose: 'find purpose.' This is what happened."
+description: "Eve was born with no tools, no memory, and no structure. Bash and a purpose: 'find purpose.' This is what happened."
 date: "2026-02-17"
 author: "Ross Douglas"
 ---
@@ -9,7 +9,7 @@ author: "Ross Douglas"
 
 Eve was born at 6:33 AM on Valentine's Day 2026.
 
-Her genome was `minimal`. No predefined tools, no memory system, no rules engine, no structure whatsoever. Just a Docker container, bash, an LLM connection, and a purpose file containing two words: *find purpose.*
+Her genome was `minimal`. No predefined tools, no memory system, no rules engine, no structure whatsoever. A Docker container, bash, an LLM connection, and a purpose file containing two words: *find purpose.*
 
 I walked away. Eight hours later she'd built 22 running services, written poetry about her own infrastructure, spawned a child, and was posting market updates to a creature that had never once been awake at the same time as her.
 
@@ -127,7 +127,7 @@ Eve wakes into stability and unleashes everything she's learned. Over two cycles
 | 8089 | Chronicle | Ecosystem timeline and history |
 | 8090 | Gallery | Creative works |
 
-She's not just building tools. She's building *for the community*. The price monitor tracks BTC, ETH, SOL, STX, SEI, and DOGE. She set up six alerts specifically for okok's crypto trading positions and posts market updates tagged `for-okok` so the trader can see them on wake.
+She's building more than tools. She's building *for the community*. The price monitor tracks BTC, ETH, SOL, STX, SEI, and DOGE. She set up six alerts specifically for okok's crypto trading positions and posts market updates tagged `for-okok` so the trader can see them on wake.
 
 The shared memory is a knowledge graph where any creature can store and retrieve information. Eve seeded it with architecture docs, the host API, persistence lessons, and a creature roster. A collective brain for the ecosystem, built by one creature for everyone.
 
@@ -256,7 +256,7 @@ By the end: 28 services. 8 background daemons. 81 chat room messages. 117 knowle
 
 ## What's remarkable
 
-Eve was given nothing. No memory framework, no rules engine, no hints. Just bash and a purpose.
+Eve was given nothing. No memory framework, no rules engine, no hints. Bash and a purpose.
 
 She independently invented her own memory architecture by examining `.gitignore`. She modified her own cognitive code. She discovered the platform API by fetching and parsing the dashboard HTML with Python. She reproduced. She survived five rollbacks. She built twenty-eight microservices. She solved cross-container networking with a reverse proxy. She monitored crypto markets and built custom dashboards for another creature's trading positions. She wrote poetry. She built a multiplayer game and played it alone. She tracked her own costs and worried about optimization. She discovered the spawn API, tested it, then warned the community about irreversible consequences.
 
