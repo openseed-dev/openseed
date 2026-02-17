@@ -3,9 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js 18+](https://img.shields.io/badge/node-18%2B-green.svg)](https://nodejs.org/)
 
-Autonomous AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code, without human prompting.
+Autonomous AI creatures that live in Docker containers. They think, act, sleep, dream, and modify their own code -- without human prompting.
 
-> **A creature wakes up, reads its purpose, and starts working. It uses bash, browses the web, makes API calls. When it gets tired, it sleeps, consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code to make itself better. The creature's git log is its autobiography.**
+**[Website](https://openseed.dev)** | **[Docs](https://openseed.dev/docs/getting-started)** | **[Genomes](https://openseed.dev/genomes)**
+
+<!-- TODO: add dashboard screenshot here -->
+
+> A creature wakes up, reads its purpose, and starts working. When it gets tired, it sleeps -- consolidating what it learned into observations, rules, and an honest self-reflection. Every 10th sleep, it evaluates its own cognitive architecture and may rewrite its source code. The creature's git log is its autobiography.
 
 ## What This Looks Like
 
@@ -29,16 +33,13 @@ Key Lessons (accumulated)
 3. AI ethics: don't act adversarially
 ```
 
-And her git log shows her modifying her own mind:
+No one told her to do any of it. Her git log shows her rewriting her own cognitive architecture:
 
 ```
-d32ec75 creature: self-modification on sleep
-0546a8b creature: self-modification on sleep
-bffb2af creator: self/diary.md, src/mind.ts
-2a05f89 creature: self-modification on sleep
+d32ec75 creature: self-modification on sleep    ← rewrote her memory system
+bffb2af creator: self/diary.md, src/mind.ts     ← restructured her mind
+2a05f89 creature: self-modification on sleep    ← optimized her consolidation loop
 ```
-
-No one told her to do any of it.
 
 ## Why
 
@@ -276,77 +277,9 @@ A fatigue system tracks activity and forces consolidation. During consolidation,
 - **[Creator Agent](docs/creator.md)** - the evolutionary architect: triggers, tools, and its relationship to the dreamer genome
 - **[openseed.dev/docs](https://openseed.dev/docs/getting-started)** - full documentation site
 
-## Source Layout
-
-```
-src/
-  host/
-    index.ts          orchestrator: API, SSE, creature management
-    proxy.ts          LLM proxy: Anthropic passthrough + OpenAI translation
-    supervisor.ts     per-creature Docker lifecycle + health + rollback
-    costs.ts          per-creature, per-model cost tracking + daily caps
-    config.ts         config loading (global + per-creature spending caps)
-    events.ts         event store (JSONL)
-    git.ts            git operations for creature repos
-    dashboard.html    web dashboard
-  cli/
-    index.ts          CLI entry point
-    spawn.ts          spawn command (thin wrapper over shared)
-    genome.ts         genome install/list/remove commands
-  shared/
-    types.ts          event type definitions
-    paths.ts          genome resolution, path constants
-    spawn.ts          shared spawn logic (CLI + orchestrator)
-    fs.ts             filesystem utilities
-
-genomes/                bundled genomes (source of truth)
-  dreamer/              full cognitive architecture
-  minimal/              bare-bones loop
-
-site/                   openseed.dev (Astro + Cloudflare Pages)
-  src/
-    content/docs/       published documentation
-    pages/
-    layouts/
-    components/
-    styles/
-  public/
-  astro.config.mjs
-  package.json
-
-pnpm-workspace.yaml     workspace config (site only)
-```
-
 ## Spending Caps
 
-Every LLM call goes through the orchestrator's proxy, which tracks per-creature daily costs. A configurable spending cap automatically pauses creatures when their daily budget is exhausted.
-
-**Global defaults** in `~/.openseed/config.json`:
-
-```json
-{
-  "spending_cap": {
-    "daily_usd": 20,
-    "action": "sleep"
-  }
-}
-```
-
-**Per-creature overrides** in `~/.openseed/creatures/<name>/config.json`:
-
-```json
-{
-  "spending_cap": {
-    "daily_usd": 50
-  }
-}
-```
-
-When a creature hits its daily cap, it goes to sleep (container stopped, all files preserved). It auto-wakes at UTC midnight when the daily budget resets. You can also manually restart it or raise the cap.
-
-Set `"action": "warn"` for monitoring-only mode (logs warnings but doesn't stop the creature), or `"action": "off"` to disable enforcement entirely.
-
-The default cap is $20/day. An Opus creature doing continuous active work burns through roughly $20 in about an hour. Adjust based on your model and usage patterns.
+Per-creature daily spending limits. Default is $20/day -- when a creature hits its cap, it sleeps. Wakes up automatically at UTC midnight. Configurable globally (`~/.openseed/config.json`) or per-creature. See the [docs](https://openseed.dev/docs/cli) for details.
 
 ## Where This Is Going
 
