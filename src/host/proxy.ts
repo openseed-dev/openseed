@@ -4,6 +4,7 @@ import type {
 } from 'node:http';
 
 import type { CostTracker } from './costs.js';
+import { getJaneeClient } from './janee.js';
 
 export interface BudgetCheckResult {
   allowed: boolean;
@@ -141,9 +142,13 @@ function translateResponseToAnthropic(openaiResp: any): any {
   };
 }
 
-async function forwardToOpenAI(body: any): Promise<{ status: number; body: string }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return { status: 500, body: 'no OPENAI_API_KEY configured' };
+async function forwardToOpenAI(body: any, creatureName?: string): Promise<{ status: number; body: string }> {
+  // Try Janee first for audited credential access, fall back to env var
+  const janee = getJaneeClient();
+  const apiKey = (janee.enabled && creatureName)
+    ? (await janee.getCredential('openai', creatureName) || process.env.OPENAI_API_KEY)
+    : process.env.OPENAI_API_KEY;
+  if (!apiKey) return { status: 500, body: 'no OPENAI_API_KEY configured (set env var or configure Janee)' };
 
   const { instructions, input } = translateMessagesToOpenAI(body.messages, body.system);
   const tools = translateToolsToOpenAI(body.tools);
@@ -182,9 +187,13 @@ async function forwardToOpenAI(body: any): Promise<{ status: number; body: strin
   return { status: 200, body: JSON.stringify(translated) };
 }
 
-async function forwardToAnthropic(body: string, anthropicVersion: string): Promise<{ status: number; body: string; contentType: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { status: 500, body: 'no ANTHROPIC_API_KEY configured', contentType: 'text/plain' };
+async function forwardToAnthropic(body: string, anthropicVersion: string, creatureName?: string): Promise<{ status: number; body: string; contentType: string }> {
+  // Try Janee first for audited credential access, fall back to env var
+  const janee = getJaneeClient();
+  const apiKey = (janee.enabled && creatureName)
+    ? (await janee.getCredential('anthropic', creatureName) || process.env.ANTHROPIC_API_KEY)
+    : process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { status: 500, body: 'no ANTHROPIC_API_KEY configured (set env var or configure Janee)', contentType: 'text/plain' };
 
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -262,7 +271,7 @@ export async function handleLLMProxy(
 
   try {
     if (provider === 'openai') {
-      const result = await forwardToOpenAI(parsed);
+      const result = await forwardToOpenAI(parsed, creatureName);
 
       try {
         const respParsed = JSON.parse(result.body);
@@ -285,7 +294,7 @@ export async function handleLLMProxy(
       res.end(result.body);
     } else {
       const anthropicVersion = req.headers['anthropic-version'] as string || '2023-06-01';
-      const result = await forwardToAnthropic(rawBody, anthropicVersion);
+      const result = await forwardToAnthropic(rawBody, anthropicVersion, creatureName);
 
       try {
         const respParsed = JSON.parse(result.body);

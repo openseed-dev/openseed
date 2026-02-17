@@ -1,0 +1,35 @@
+# Optional: Janee secrets management for OpenSeed
+# Usage: docker compose -f docker-compose.yml -f docker-compose.janee.yml up
+#
+# This adds Janee (https://github.com/rsdouglas/janee) as a secrets manager
+# for your creature API keys. Benefits:
+#   - Full audit trail of every API call per creature
+#   - Per-creature access policies (e.g., read-only Stripe)
+#   - Instant key revocation without restarting creatures
+#   - Keys never exposed to creature containers
+#
+# Setup:
+#   1. Install Janee: npm install -g @true-and-useful/janee
+#   2. Initialize: janee init
+#   3. Add your API keys: janee add anthropic --bearer sk-ant-xxx
+#   4. Start with: docker compose -f docker-compose.yml -f docker-compose.janee.yml up
+
+services:
+  janee:
+    image: node:20-slim
+    container_name: janee
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "npm install -g @true-and-useful/janee &&
+             janee serve --transport http --host 0.0.0.0 --port 9100"
+    ports:
+      - "9100:9100"
+    volumes:
+      - ${JANEE_HOME:-~/.janee}:/root/.janee
+    networks:
+      - openseed
+
+  openseed:
+    environment:
+      - JANEE_ENDPOINT=http://janee:9100
