@@ -19,6 +19,10 @@ import {
   closeBrowser,
   executeBrowser,
 } from './tools/browser.js';
+import {
+  executeJanee,
+  closeJanee,
+} from './tools/janee.js';
 
 const MAX_CONTEXT_CHARS = 100_000;
 const KEEP_RECENT_MESSAGES = 20;
@@ -106,6 +110,16 @@ Every action returns a text snapshot of the page: URL, title, visible text, and 
       reason: z.string().describe("What limitation or improvement you need. Be specific."),
     }),
   }),
+  janee: tool({
+    description: "Manage secrets securely via Janee (MCP-native secrets management). Actions: get { name }, set { name, value, metadata? }, list { pattern? }, delete { name }, status. Janee encrypts secrets at rest with audit logging. Use instead of plaintext credentials.",
+    inputSchema: z.object({
+      action: z.enum(['get', 'set', 'list', 'delete', 'status']).describe("The Janee action to perform"),
+      name: z.string().optional().describe("Secret name (for get/set/delete)"),
+      value: z.string().optional().describe("Secret value (for set)"),
+      metadata: z.record(z.string()).optional().describe("Optional metadata (for set)"),
+      pattern: z.string().optional().describe("Filter pattern (for list)"),
+    }),
+  }),
 };
 
 async function buildSystemPrompt(purpose: string): Promise<string> {
@@ -191,6 +205,10 @@ The browser returns a text snapshot after every action: URL, page title, visible
 and a list of interactive elements with selectors. Use those selectors in subsequent actions.
 
 Example: goto a page → read the snapshot → fill a form field → click submit → read the result.
+
+**janee** - manage secrets securely via Janee (MCP-native secrets management).
+Get, set, list, delete, and check status of encrypted secrets. Use this instead of
+storing credentials in plaintext files or environment variables.
 
 **set_sleep** - pause for N seconds before continuing (2-86400s, up to 24 hours). Use this
 to pace yourself. Use long sleeps (1-24h) when waiting for external responses.
@@ -1486,6 +1504,12 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
               ...(result.data !== undefined ? { data: result.data } : {}),
             },
           };
+        }
+
+        case "janee": {
+          const action = (args as any).action as string;
+          if (!action) return { ok: false, error: "Missing 'action' parameter" };
+          return executeJanee(action, args);
         }
 
         default:
