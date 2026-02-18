@@ -8,6 +8,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${OPENSEED_HOME:-~/.openseed}:/data
+      - ${JANEE_HOME:-~/.janee}:/root/.janee
     environment:
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
@@ -15,17 +16,6 @@ services:
       - OPENSEED_HOST_PATH=${OPENSEED_HOME:-~/.openseed}
       - OPENSEED_DOCKER=1
       - ORCHESTRATOR_PORT=7770
-    networks:
-      - openseed
-
-  janee:
-    image: node:22-slim
-    container_name: janee
-    restart: unless-stopped
-    working_dir: /app
-    volumes:
-      - ${JANEE_HOME:-~/.janee}:/root/.janee
-    command: npx @true-and-useful/janee serve --http 3000
     networks:
       - openseed
 
