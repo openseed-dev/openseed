@@ -328,6 +328,11 @@ export class Orchestrator {
             validate = genome.validate;
           } catch {}
           if (validate) {
+            // Security: only allow safe TypeScript validation commands
+            const allowedCommands = ['npx tsx --check src/index.ts', 'node --check src/index.js'];
+            if (!allowedCommands.includes(validate)) {
+              throw new Error(`Genome validation command not in allowlist: ${validate}`);
+            }
             await execAsync(validate, { cwd: dir, timeout: 30_000 });
           }
           await execAsync(`git add -A && git commit -m "creature: self-modification, ${reason.slice(0, 60)}" --allow-empty`, {

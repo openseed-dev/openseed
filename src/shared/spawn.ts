@@ -68,6 +68,11 @@ function isDockerAvailable(): boolean {
  * installs deps, inits git, and builds the Docker image.
  */
 export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
+  // Validate creature name to prevent command injection
+  if (!opts.name || !/^[a-z0-9][a-z0-9-]*$/.test(opts.name)) {
+    throw new Error('invalid creature name (must be lowercase alphanumeric with hyphens, starting with alphanumeric)');
+  }
+
   const genomeName = opts.genome || 'dreamer';
   const tpl = requireGenomeDir(genomeName);
   if (!tpl) throw new Error(`genome "${genomeName}" not found (checked ~/.openseed/genomes/ and bundled genomes)`);
