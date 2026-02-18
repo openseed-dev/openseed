@@ -222,6 +222,7 @@ export class CreatureSupervisor {
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
       '-e', `HOST_URL=${orchestratorUrl}`,
       '-e', `CREATURE_NAME=${name}`,
+      '-e', 'JANEE_URL=http://janee:3000',
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
