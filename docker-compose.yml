@@ -24,10 +24,8 @@ services:
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - ${OPENSEED_HOME:-~/.openseed}/janee:/app/config
-    environment:
-      - JANEE_CONFIG=/app/config/config.yaml
-    command: npx @true-and-useful/janee
+      - ${JANEE_HOME:-~/.janee}:/root/.janee
+    command: npx @true-and-useful/janee serve --http 3000
     networks:
       - openseed
 
