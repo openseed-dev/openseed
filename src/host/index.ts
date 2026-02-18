@@ -75,10 +75,7 @@ export class Orchestrator {
     await this.writeRunFile();
     this.setupCleanup();
     this.createServer();
-    // Start local Janee instance in native mode (Docker mode uses a separate container)
-    if (!IS_DOCKER) {
-      await startJanee();
-    }
+    await startJanee();
     await this.autoReconnect();
     this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
 

@@ -226,7 +226,7 @@ export class CreatureSupervisor {
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
       '-e', `HOST_URL=${orchestratorUrl}`,
       '-e', `CREATURE_NAME=${name}`,
-      ...((() => { const url = IS_DOCKER ? 'http://janee:3000' : getJaneeUrl(); return url ? ['-e', `JANEE_URL=${url}`] : []; })()),
+      ...(getJaneeUrl() ? ['-e', `JANEE_URL=${getJaneeUrl()}`] : []),
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
