@@ -1,0 +1,41 @@
+# Janee configuration for openseed
+# Place this at ~/.openseed/janee/config.yaml
+
+# Services that creatures can access through Janee's proxy
+services:
+  github:
+    base_url: https://api.github.com
+    auth:
+      type: bearer
+      token_env: GITHUB_TOKEN
+    capabilities:
+      read: ["GET /repos/**", "GET /users/**", "GET /search/**"]
+      write: ["POST /repos/**", "PUT /repos/**", "PATCH /repos/**"]
+      admin: ["DELETE /repos/**"]
+
+  npm:
+    base_url: https://registry.npmjs.org
+    auth:
+      type: bearer
+      token_env: NPM_TOKEN
+    capabilities:
+      read: ["GET /**"]
+      publish: ["PUT /**"]
+
+# Per-creature access policies
+# Each creature gets a subset of service capabilities
+policies:
+  # Default policy for all creatures
+  default:
+    github: [read]
+
+  # Override for specific creatures
+  # creature-alpha:
+  #   github: [read, write]
+  #   npm: [read, publish]
+
+# Audit logging
+audit:
+  enabled: true
+  # Log file inside the Janee data directory
+  file: audit.jsonl

@@ -75,3 +75,37 @@ export function saveCreatureSpendingCap(name: string, cap: Partial<SpendingCapCo
   mkdirSync(path.dirname(configPath), { recursive: true });
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
 }
+
+// Janee secrets policy
+
+export interface JaneePolicy {
+  services: Record<string, string[]>;
+}
+
+export interface JaneeConfig {
+  url?: string;
+  policies: Record<string, JaneePolicy>;
+  default_policy: JaneePolicy;
+}
+
+const JANEE_DEFAULTS: JaneeConfig = {
+  policies: {},
+  default_policy: {
+    services: {},
+  },
+};
+
+export function loadJaneeConfig(): JaneeConfig {
+  const configPath = path.join(OPENSEED_HOME, 'janee.json');
+  const raw = loadJsonSafe(configPath);
+  return {
+    url: raw.url ?? process.env.JANEE_URL,
+    policies: raw.policies ?? JANEE_DEFAULTS.policies,
+    default_policy: raw.default_policy ?? JANEE_DEFAULTS.default_policy,
+  };
+}
+
+export function getCreatureJaneePolicy(name: string): JaneePolicy {
+  const config = loadJaneeConfig();
+  return config.policies[name] ?? config.default_policy;
+}

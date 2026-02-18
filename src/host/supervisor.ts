@@ -13,6 +13,7 @@ import {
   resetToSHA,
   setLastGoodSHA,
 } from './git.js';
+import { loadJaneeConfig } from './config.js';
 
 const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 30_000;
@@ -210,6 +211,8 @@ export class CreatureSupervisor {
       ? `http://openseed:${orchestratorPort}`
       : `http://host.docker.internal:${orchestratorPort}`;
 
+    const janeeUrl = loadJaneeConfig().url;
+
     const args = [
       'run', '--init',
       '--name', cname,
@@ -225,6 +228,7 @@ export class CreatureSupervisor {
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
+      ...(janeeUrl ? ['-e', `JANEE_URL=${janeeUrl}`] : []),
       ...(IS_DOCKER ? ['--network', 'openseed'] : []),
       `creature-${name}`,
     ];

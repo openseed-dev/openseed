@@ -15,8 +15,34 @@ services:
       - OPENSEED_HOST_PATH=${OPENSEED_HOME:-~/.openseed}
       - OPENSEED_DOCKER=1
       - ORCHESTRATOR_PORT=7770
+      - JANEE_URL=${JANEE_URL:-}
     networks:
       - openseed
+
+  janee:
+    image: node:22-slim
+    container_name: janee
+    restart: unless-stopped
+    profiles: ["secrets"]
+    working_dir: /app
+    volumes:
+      - janee-data:/app/.janee
+    environment:
+      - JANEE_HOST=0.0.0.0
+      - JANEE_PORT=3777
+    command: >
+      sh -c "npm install -g janee@latest && janee start --host 0.0.0.0 --port 3777"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3777/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - openseed
+
+volumes:
+  janee-data:
 
 networks:
   openseed:
