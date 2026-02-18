@@ -18,6 +18,19 @@ services:
     networks:
       - openseed
 
+  janee:
+    image: node:22-slim
+    container_name: janee
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ${OPENSEED_HOME:-~/.openseed}/janee:/app/config
+    environment:
+      - JANEE_CONFIG=/app/config/config.yaml
+    command: npx @true-and-useful/janee
+    networks:
+      - openseed
+
 networks:
   openseed:
     name: openseed
