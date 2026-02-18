@@ -59,7 +59,7 @@
     .dot.stopped { background: #999; }
     .dot.starting { background: #d97706; }
     .dot.running { background: #16a34a; }
-    .dot.sleeping { background: #d97706; }
+    .dot.sleeping { background: #60a5fa; }
     .dot.error { background: #dc2626; animation: pulse-error 1s ease-in-out infinite; }
     @keyframes pulse-error { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -162,7 +162,7 @@
     .event.host-rollback { border-left-color: #dc2626; background: #fef2f2; }
     .event.creature-boot { border-left-color: #2563eb; background: #f8faff; }
     .event.creature-thought { border-left-color: #999; background: #fafafa; }
-    .event.creature-sleep { border-left-color: #d97706; background: #fffbf5; }
+    .event.creature-sleep { border-left-color: #60a5fa; background: #f0f7ff; }
     .event.creature-wake { border-left-color: #0284c7; background: #f5fbff; }
     .event.creature-message { border-left-color: #2563eb; background: #eff6ff; }
     .event.creature-tool-call { border-left-color: #0284c7; background: #f5fbff; }
@@ -180,7 +180,7 @@
     .event .type.host { color: #999; }
     .event .type.promote { color: #16a34a; }
     .event .type.rollback { color: #dc2626; }
-    .event .type.sleep { color: #b45309; }
+    .event .type.sleep { color: #3b82f6; }
     .event .type.wake { color: #0284c7; }
     .event .type.message { color: #2563eb; }
     .event .type.tool { color: #0284c7; }
@@ -268,7 +268,7 @@
     .strip-item:hover { color: #333; }
     .strip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
     .strip-dot.running { background: #16a34a; }
-    .strip-dot.sleeping { background: #d97706; }
+    .strip-dot.sleeping { background: #60a5fa; }
     .strip-dot.stopped { background: #999; }
     .strip-dot.error { background: #dc2626; }
     .strip-dot.starting { background: #d97706; }
@@ -282,7 +282,7 @@
     @keyframes moment-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     .moment-dream { border-left-color: #7c3aed; }
     .moment-deep-dream { border-left-color: #9333ea; }
-    .moment-sleep { border-left-color: #d97706; }
+    .moment-sleep { border-left-color: #60a5fa; }
     .moment-evolved { border-left-color: #16a34a; }
     .moment-eval { border-left-color: #16a34a; }
     .moment-thought { border-left-color: #999; }
@@ -298,7 +298,7 @@
     .moment-label { font-size: 11px; }
     .moment-label.dream { color: #7c3aed; }
     .moment-label.deep { color: #9333ea; font-weight: bold; }
-    .moment-label.sleep { color: #b45309; }
+    .moment-label.sleep { color: #3b82f6; }
     .moment-label.evolved { color: #16a34a; }
     .moment-label.eval { color: #16a34a; }
     .moment-label.thought { color: #999; }
@@ -652,7 +652,7 @@
     function renderContent() {
       if (selectedTab === 'log') {
         if (selected === null) {
-          renderOverview();
+          loadNarration().then(() => renderOverview());
           msgBar.classList.remove('visible');
           return;
         }

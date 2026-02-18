@@ -33,7 +33,7 @@ const DEFAULTS: OpenSeedConfig = {
   },
   narrator: {
     enabled: true,
-    model: 'claude-haiku-4-5',
+    model: 'claude-sonnet-4-6',
     interval_minutes: 5,
   },
 };
