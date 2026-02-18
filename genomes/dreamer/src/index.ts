@@ -237,7 +237,7 @@ class Creature {
           console.log(`[creature] ${tool}: ${reason.slice(0, 80)}`);
         },
 
-        // onWake: emit wake event (only for natural timer expiry; manual/watcher wakes are emitted by orchestrator)
+        // onWake: emit wake event (only for natural timer expiry; manual wakes are emitted by orchestrator)
         async (reason, source) => {
           await this.emit({ type: "creature.wake", reason, source });
           console.log(`[creature] wake (${source}): ${reason}`);

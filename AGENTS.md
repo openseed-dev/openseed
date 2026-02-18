@@ -4,3 +4,4 @@
 - No em dashes anywhere. Rephrase the content. Don't use double hyphens as a workaround.
 - When changing behavior, update the corresponding docs in `site/src/content/docs/` and `README.md` in the same change.
 - Minimal comments. Don't state the obvious. No docstrings with args/returns.
+- If you make changes to the host/orchestrator and its running somewhere, you should probably restart it.

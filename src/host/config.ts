@@ -14,8 +14,15 @@ export interface SpendingCapConfig {
   creature_aware?: boolean;
 }
 
+export interface NarratorConfig {
+  enabled: boolean;
+  model: string;
+  interval_minutes: number;
+}
+
 export interface OpenSeedConfig {
   spending_cap: SpendingCapConfig;
+  narrator: NarratorConfig;
 }
 
 const DEFAULTS: OpenSeedConfig = {
@@ -23,6 +30,11 @@ const DEFAULTS: OpenSeedConfig = {
     daily_usd: 20,
     action: 'sleep',
     creature_aware: false,
+  },
+  narrator: {
+    enabled: true,
+    model: 'claude-haiku-4-5',
+    interval_minutes: 5,
   },
 };
 
@@ -36,11 +48,17 @@ function loadJsonSafe(filePath: string): Record<string, any> {
 
 function mergeConfig(base: OpenSeedConfig, override: Record<string, any>): OpenSeedConfig {
   const cap = override.spending_cap || {};
+  const nar = override.narrator || {};
   return {
     spending_cap: {
       daily_usd: cap.daily_usd ?? base.spending_cap.daily_usd,
       action: cap.action ?? base.spending_cap.action,
       creature_aware: cap.creature_aware ?? base.spending_cap.creature_aware,
+    },
+    narrator: {
+      enabled: nar.enabled ?? base.narrator.enabled,
+      model: nar.model ?? base.narrator.model,
+      interval_minutes: nar.interval_minutes ?? base.narrator.interval_minutes,
     },
   };
 }

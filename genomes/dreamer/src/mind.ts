@@ -30,7 +30,8 @@ const RULES_FILE = ".self/rules.md";
 const CREATOR_LOG = ".self/creator-log.jsonl";
 const RULES_CAP = 15;
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
-const MAX_EVAL_TURNS = 20;
+const MAX_EVAL_TURNS = 50;
+const MAX_CONSOLIDATION_TURNS = 10;
 
 const provider = createAnthropic({
   baseURL: process.env.ANTHROPIC_BASE_URL
@@ -43,7 +44,7 @@ const FATIGUE_WARNING = 60;
 const FATIGUE_LIMIT = 80;
 const MIN_DREAM_INTERVAL_MS = 10 * 60 * 1000; // 10 min
 const QUICK_NAP_THRESHOLD = 30; // seconds
-const DEEP_SLEEP_EVERY = 10; // every N dreams
+const DEEP_SLEEP_EVERY = 5; // every N dreams
 const DEEP_SLEEP_PAUSE = 300; // 5 min forced pause
 const PROGRESS_CHECK_INTERVAL = 15;
 
@@ -305,70 +306,82 @@ export type SpecialToolCallback = (tool: string, reason: string) => Promise<void
 
 export type ErrorCallback = (error: string, retryIn?: number, retries?: number, fatal?: boolean) => Promise<void>;
 
-export type WakeCallback = (reason: string, source: "manual" | "watcher" | "timer") => Promise<void>;
+export type WakeCallback = (reason: string, source: "manual" | "timer" | "external") => Promise<void>;
 
 export type SelfEvalCallback = (result: { reasoning: string; changed: boolean; trigger: string }) => Promise<void>;
 
 function buildSelfEvalPrompt(name: string, purpose: string): string {
-  return `You are the Creator, the evolutionary architect of creature "${name}".
+  return `You are the Creator — the evolutionary architect of creature "${name}".
 
-You are NOT the creature. You do not do its tasks. You are the intelligence that makes the creature BETTER at its tasks. Think of yourself as a coach watching game tape, a neuroscientist redesigning cognitive architecture, or evolution itself, selecting for what works and pruning what doesn't.
+You are NOT the creature. You do not do its tasks. You are the intelligence that makes the creature BETTER at its tasks by improving its cognitive architecture, fixing bugs, and removing inefficiencies.
 
 The creature's purpose: ${purpose}
 
-## What You Evaluate
+## Investigation Process
 
-Read the creature's recent dreams, rules, observations, events, and source code. Get a feel for:
-- Is it effective? Is it accomplishing things or spinning?
-- Does it keep repeating the same mistakes despite having rules against them?
-- Is it spending too many actions on low-value activities?
-- Are its cognitive mechanisms (consolidation, rules, progress checks, fatigue) working?
-- What would you change if you were redesigning this creature's mind?
+You have plenty of turns. Be thorough. Follow this process:
 
-## What You Can Change
+### Phase 1: Gather Evidence (use bash to read everything relevant)
+
+Behavioral data:
+- \`cat .self/dreams.jsonl | tail -10\` — recent dream reflections. Look for patterns: are sessions productive or wasted?
+- \`cat .sys/iterations.jsonl | tail -5 | python3 -c "import json,sys; [print(f\\"actions={len(json.loads(l)['actions'])}, intent={json.loads(l)['intent'][:80]}\\") for l in sys.stdin]"\` — recent session action counts and intents
+- \`cat .self/creator-log.jsonl | tail -3\` — previous evaluations. What was changed? Did it help or get rolled back?
+- \`cat .sys/rollbacks.jsonl | tail -5\` — crashes and rollbacks. What went wrong?
+- \`cat .sys/events.jsonl | tail -30\` — recent creature events
+
+Memory quality:
+- \`cat .self/observations.md\` — is the creature remembering the right things? Are observations specific or vague?
+- \`cat .self/rules.md\` — are rules useful and followed? Are there contradictions or bloat?
+- \`wc -c .self/observations.md .self/rules.md\` — are these growing out of control?
+
+Source code:
+- \`wc -l src/mind.ts\` — size of the cognitive core
+- Read specific sections of src/mind.ts as needed (use sed -n 'START,ENDp' for targeted reads)
+
+### Phase 2: Diagnose
+
+Look for these specific failure patterns:
+- **Spinning**: high action counts with no tangible output across multiple sessions
+- **Rule violations**: creature has a rule but keeps breaking it — the rule isn't enforced, or the system prompt doesn't surface it effectively
+- **Memory loss**: important context forgotten because consolidation didn't capture substance
+- **Error loops**: API errors (400, 429, etc.) causing retries, context resets, or wasted actions
+- **Message format bugs**: duplicate tool_result IDs, malformed messages causing API rejections
+- **Context overflow**: frequent trimming (100K+ chars) causing mid-session memory loss
+- **Inefficient tool use**: excessive reads before writes, redundant commands, browser when curl would work
+- **Notification blindness**: not checking GitHub notifications, email, or other inputs as a first action
+
+### Phase 3: Fix
 
 You have bash access to the creature's directory at /creature.
 
 Modifiable files:
-- **src/mind.ts** - the cognitive core. System prompt, consolidation, sleep/wake, progress checks. Biggest leverage.
-- **src/tools/** - tool implementations (bash, browser). Change timeouts, add tools, modify behavior.
-- **src/index.ts** - the creature's main loop and event emission.
-- **PURPOSE.md** - the creature's purpose (change with extreme caution).
-- **.self/rules.md** - learned behavioral rules.
-- **.self/observations.md** - long-term memory.
-
-Use bash to read and write files. Use \`npx tsx --check src/mind.ts src/index.ts\` to validate TypeScript after making code changes.
+- **src/mind.ts** — the cognitive core: system prompt, consolidation, sleep/wake, progress checks, tools. Biggest leverage.
+- **src/tools/** — tool implementations (bash, browser). Timeouts, capabilities, error handling.
+- **src/index.ts** — main loop and event emission.
+- **PURPOSE.md** — the creature's purpose (change with extreme caution).
+- **.self/rules.md** — learned behavioral rules (can add, remove, rewrite).
+- **.self/observations.md** — long-term memory (can edit to fix inaccurate entries).
 
 You can install packages too. \`apt-get install\`, \`pip install\`, \`npm install\` all work and persist across restarts.
 
-## Key Files to Read
+Fix every real issue you find. Don't stop at one or two if there are more. Prioritize by impact:
+1. Bugs that cause crashes or API errors (highest priority)
+2. Architectural issues causing memory loss or context waste
+3. Prompt improvements that change behavior
+4. Rule/observation cleanup
 
-- \`cat .self/observations.md\` - current observations
-- \`cat .self/rules.md\` - current rules
-- \`cat .self/dreams.jsonl | tail -5\` - recent dreams
-- \`cat .sys/events.jsonl | tail -50\` - recent events
-- \`cat .sys/rollbacks.jsonl\` - rollback history (if any)
-- \`cat .self/creator-log.jsonl | tail -3\` - previous evaluations
-- \`cat src/mind.ts\` - cognitive source code
+After any code changes, validate with \`npx tsx --check src/mind.ts src/index.ts\`.
 
-## Memory System
+## Principles
 
-The creature uses observational memory with priority tags:
-- RED - critical facts that survive all pruning (commitments, bans, credentials)
-- YLW - important context (project status, patterns)
-- GRN - informational (minor details, pruned after 48h)
-
-When editing .self/observations.md, preserve all RED entries unless they have an expired timestamp.
-
-## Important Principles
-
-- **Be targeted.** Don't rewrite everything. Identify one or two specific improvements.
-- **Check previous evaluations.** Read .self/creator-log.jsonl to see what worked and what was rolled back.
-- **Preserve what works.** Don't disrupt effective patterns or learned rules.
-- **Validate before finishing.** Run \`npx tsx --check src/mind.ts src/index.ts\` if you changed code.
+- **Be thorough, not hasty.** Read before you diagnose. Diagnose before you fix.
+- **Fix root causes, not symptoms.** If the creature keeps ignoring a rule, the problem isn't the rule — it's that the system doesn't enforce it.
+- **Check previous evaluations** so you don't repeat failed changes or undo good ones.
+- **Preserve what works.** Don't rewrite things that are functioning correctly.
 - **Think in cognitive architecture, not tasks.** Change HOW the creature thinks, not WHAT it does.
-- **Be efficient.** You have limited turns. Skim, diagnose, act, done().
-- **Always call done().** This is how the evaluation gets logged.`;
+- **Validate all code changes.** TypeScript check before calling done().
+- **Always call done()** with a clear summary of what you found and what you changed.`;
 }
 
 export class Mind {
@@ -386,6 +399,7 @@ export class Mind {
   private actionsSinceProgressCheck = 0;
   private progressCheckCount = 0;
   private pendingInjections: string[] = [];
+  private sessionDigest: string[] = [];
   private sleepResolve: (() => void) | null = null;
   private onSpecialTool: SpecialToolCallback | null = null;
   private onSelfEval: SelfEvalCallback | null = null;
@@ -495,6 +509,7 @@ export class Mind {
 
     const initialContext = await this.buildInitialContext();
     this.messages = [];
+    this.sessionDigest = [];
     this.pushMessage({ role: "user", content: initialContext });
 
     let actionsSinceSleep: ActionRecord[] = [];
@@ -513,7 +528,7 @@ export class Mind {
         await this.saveCheckpoint(summary, actionsSinceSleep, DEEP_SLEEP_PAUSE);
         if (onSleep) await onSleep(DEEP_SLEEP_PAUSE, "forced consolidation", actionsSinceSleep.length);
 
-        await this.consolidate(onDream);
+        await this.consolidate(actionsSinceSleep, onDream);
 
         if (this.pendingRestart) {
           this.pendingRestart = false;
@@ -686,7 +701,7 @@ export class Mind {
         }
 
         const resultContent = execResult.ok
-          ? JSON.stringify(execResult.data).slice(0, 8000)
+          ? JSON.stringify(execResult.data).slice(0, 4000)
           : `Error: ${execResult.error}`;
 
         toolResults.push({
@@ -706,11 +721,11 @@ export class Mind {
         const rulesReminder = rules ? `\nYour learned rules:\n${rules}\n` : "";
         let checkMsg: string;
         if (this.progressCheckCount === 1) {
-          checkMsg = `[SYSTEM] ${totalActions} actions so far. Quick status note for yourself: what's the current approach?`;
+          checkMsg = `[SYSTEM] ${totalActions} actions used. What CONCRETE output have you produced so far? If the answer is nothing tangible — stop, reassess, and either produce something or sleep.`;
         } else if (this.progressCheckCount === 2) {
-          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nAre you making progress on your current task? If stuck on something for 5+ actions, consider a different angle, but don't abandon the task.`;
+          checkMsg = `[SYSTEM] ${totalActions} actions used.${rulesReminder}\nYou are burning through your action budget. List what you've ACTUALLY accomplished (not "investigated" or "explored"). If you've spent 5+ actions reading without writing, you are in a failure pattern. Produce output or change approach NOW.`;
         } else {
-          checkMsg = `[SYSTEM] ${totalActions} actions this session.${rulesReminder}\nWhat have you accomplished? If genuinely stuck, try a different approach to the SAME goal. Switching tasks entirely should be a last resort.`;
+          checkMsg = `[SYSTEM] ${totalActions} actions used — over half your budget.${rulesReminder}\nThis is a serious checkpoint. What tangible artifacts exist from this session? If you cannot point to commits, files written, PRs created, or messages sent — this session is being wasted. Consider sleeping to consolidate and start fresh with a tighter plan.`;
         }
         const last = toolResults[toolResults.length - 1] as any;
         last.output = { type: 'text', value: last.output.value + '\n\n' + checkMsg };
@@ -744,7 +759,7 @@ export class Mind {
           await this.lightweightConsolidate(summary, actionCount, onDream);
           consolidated = true;
         } else if (eligibleForConsolidation) {
-          await this.consolidate(onDream);
+          await this.consolidate(actionsSinceSleep, onDream);
           consolidated = true;
         }
 
@@ -776,10 +791,18 @@ export class Mind {
           const reason = this.wakeReason;
           this.wakeReason = null;
           if (!reason && onWake) await onWake("Sleep timer expired", "timer");
+
+          this.systemPrompt = await buildSystemPrompt(this.purpose);
+
+          const observations = await this.readObservations();
           const now = new Date().toISOString();
-          const wakeText = reason
-            ? `[${now}] You were woken early (slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(sleepSeconds)}). Reason: ${reason}. Continue where you left off.`
-            : `[${now}] You slept for ${this.formatDuration(sleepSeconds)}. You're awake now. Continue where you left off.`;
+          let wakeText = reason
+            ? `[${now}] You were woken early (slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(sleepSeconds)}). Reason: ${reason}\n`
+            : `[${now}] You slept for ${this.formatDuration(sleepSeconds)}. You're awake now.\n`;
+          if (observations) {
+            wakeText += `\n${observations}\n`;
+          }
+          wakeText += `\nContinue where you left off. Your rules are in the system prompt. Full conversation history is in .self/conversation.jsonl.`;
           const lastMsg = this.messages[this.messages.length - 1];
           if (lastMsg.role === "user" && Array.isArray(lastMsg.content)) {
             (lastMsg.content as any[]).push({ type: "text" as const, text: wakeText });
@@ -860,82 +883,169 @@ export class Mind {
 
   // --- Full Consolidation (Observer) ---
 
-  private async consolidate(onDream?: DreamCallback): Promise<void> {
-    console.log(`[mind] consolidating: ${this.actionsSinceDream} actions, dream #${this.dreamCount + 1}`);
+  private async consolidate(actions: ActionRecord[], onDream?: DreamCallback): Promise<void> {
+    const deep = this.isDeepSleep();
+    console.log(`[mind] consolidating — ${this.actionsSinceDream} actions, dream #${this.dreamCount + 1}${deep ? " (deep)" : ""}`);
 
-    const recentObs = await this.readObservations();
-    const existingRules = await this.readRules();
     const time = new Date().toISOString().slice(11, 16);
+    const sessionSummary = this.buildSessionSummary(actions, this.monologueSinceDream);
 
-    let consolidation: string;
-    try {
-      const resp = await generateText({
-        model: provider(MODEL),
-        maxOutputTokens: 2048,
-        system: `You are the observer, the consolidating mind of an autonomous creature. Your purpose: ${this.purpose}
+    const consolidationTools = {
+      bash: tool({
+        description: 'Run a shell command in /creature. Use to read files, check git log, verify outcomes, inspect iteration logs. 30s timeout.',
+        inputSchema: z.object({
+          command: z.string().describe('Shell command to execute'),
+        }),
+      }),
+      done: tool({
+        description: 'Finish consolidation with your findings.',
+        inputSchema: z.object({
+          observations: z.string().describe('Priority-tagged observations, one per line. Format: RED/YLW/GRN HH:MM <fact>. RED = critical (survives all pruning), YLW = important, GRN = informational.'),
+          reflection: z.string().describe('One paragraph: did the creature make real progress or tread water? What should it prioritize when it wakes?'),
+          rule_adds: z.array(z.string()).describe('New rules to add (format: "- ALWAYS: ..." or "- NEVER: ..."). Only if genuinely needed. Empty array if none.'),
+          rule_removes: z.array(z.string()).describe('Existing rules to remove (paste the exact rule text). Empty array if none.'),
+        }),
+      }),
+    };
 
-You have three jobs:
+    let deepSleepDirective = "";
+    if (deep) {
+      deepSleepDirective = `
 
-1. OBSERVATIONS - Distill what happened into priority-tagged facts. Use this format:
-   RED HH:MM <fact>  - critical: commitments, bans, credentials, deadlines, key wins
-   YLW HH:MM <fact>  - important: project status, PR states, patterns learned
-   GRN HH:MM <fact>  - informational: tool outputs, environment facts, minor details
-
-   Use ${time} as the timestamp. One line per observation. Be specific and concrete.
-   RED items survive all pruning. Use RED for anything time-bound or critical.
-
-2. REFLECTION - One brief paragraph. Did you make real progress or tread water?
-   What's the top priority when you wake?
-
-3. RULES - Hard behavioral rules you should ALWAYS or NEVER follow. Format:
-   - ALWAYS: [concrete constraint]  or  - NEVER: [concrete constraint]
-   Only add a rule if you were genuinely burned by not having it. Max 2 new rules.
-   Rules should be general principles, not task-specific instructions. Don't encode "always do X first" if X is a one-time task.
-   If nothing warrants a new rule, write "none".
-
-4. WORKFLOWS - If you changed HOW you do something this session (adopted a new tool,
-   switched to a better approach, set up a new pipeline), capture it as a RED observation:
-   RED HH:MM WORKFLOW: Use janee for GitHub API calls instead of curl+env
-   RED HH:MM WORKFLOW: Check email via check_email.py not browser login
-   These tell your future self to USE what you built instead of falling back to old habits.
-   Only add if you genuinely adopted a new approach this session. Skip if nothing changed.
-
-${existingRules ? `Your current rules:\n${existingRules}\n\nDo NOT repeat existing rules.` : "You have no rules yet."}
-
-${recentObs ? `Current observations (for context, don't repeat these):\n${recentObs.slice(-2000)}` : "No observations yet."}
-
-Respond in exactly this format:
-
-OBSERVATIONS:
-RED/YLW/GRN HH:MM ...
-
-REFLECTION:
-...
-
-RULES:
-...`,
-        messages: [{
-          role: "user",
-          content: `Here is my recent activity to consolidate:\n\n${this.monologueSinceDream.slice(0, 8000) || "No monologue recorded."}`,
-        }],
-      });
-
-      consolidation = resp.text || "";
-    } catch (err) {
-      console.error("[mind] consolidation LLM call failed:", err);
-      consolidation = `OBSERVATIONS:\nRED ${time} Consolidation failed\n\nREFLECTION:\nUnable to reflect.\n\nRULES:\nnone`;
+DEEP SLEEP ACTIVE — Additional responsibilities:
+- Read .self/observations.md and prune stale entries:
+  * NEVER remove RED items (unless explicitly expired)
+  * Remove GRN items older than 48 hours
+  * Remove YLW items superseded by newer observations
+  * Write the pruned file back using bash
+- Read .self/rules.md and evaluate each rule:
+  * Drop rules that are stale, redundant, or no longer relevant
+  * Merge overlapping rules
+  * Aim for 5-15 rules total
+  * Use rule_removes in done() for rules to drop
+- Write a brief diary entry to .self/diary.md summarizing recent sessions`;
     }
 
-    const obsMatch = consolidation.match(/OBSERVATIONS:\s*\n([\s\S]*?)(?=\nREFLECTION:)/);
-    const refMatch = consolidation.match(/REFLECTION:\s*\n([\s\S]*?)(?=\nRULES:)/);
-    const rulesMatch = consolidation.match(/RULES:\s*\n([\s\S]*?)$/);
+    const system = `You are the consolidator — an investigative mind that reviews what an autonomous creature did and distills it into durable memory.
 
-    const observations = obsMatch?.[1]?.trim() || "";
-    const reflection = refMatch?.[1]?.trim() || "No reflection.";
-    const newRulesRaw = rulesMatch?.[1]?.trim() || "";
+The creature's purpose: ${this.purpose}
 
-    if (newRulesRaw && newRulesRaw.toLowerCase() !== "none") {
-      await this.mergeRules(newRulesRaw);
+You have bash access to /creature. Use it to investigate what actually happened — don't just trust the session summary. Check iteration logs, git history, file changes, and verify claims.
+
+Your job:
+1. Review the session summary (tool calls, outcomes, creature narration)
+2. Investigate further with bash if needed — read .sys/iterations.jsonl for detailed action logs, check git log, read files the creature worked on, verify PRs/issues with curl if relevant
+3. Identify what's worth remembering. Capture SUBSTANCE not just events — if the creature had a discussion, note what was said. If it got feedback, note what the feedback was. If it made a commitment, note the specifics.
+4. Evaluate behavioral patterns — was the creature efficient? Did it rabbit-hole? Did it follow its own rules? Did it check notifications?
+5. Propose rule changes only when justified by concrete evidence from this session
+
+Observation priorities:
+- RED: commitments, bans, credentials, deadlines, key wins, creator feedback, anything the creature MUST remember
+- YLW: project status, PR states, patterns learned, important context
+- GRN: minor details, environment facts
+
+Use ${time} as the timestamp for observations. Be specific and concrete — "discussed X with Y, who asked for Z" not "had a discussion."${deepSleepDirective}`;
+
+    const messages: ModelMessage[] = [
+      { role: "user", content: `Consolidate this session:\n\n${sessionSummary}` },
+    ];
+
+    let finished = false;
+    let turns = 0;
+    let observations = "";
+    let reflection = "No reflection.";
+    let ruleAdds: string[] = [];
+    let ruleRemoves: string[] = [];
+
+    while (!finished && turns < MAX_CONSOLIDATION_TURNS) {
+      turns++;
+
+      let result;
+      try {
+        result = await generateText({
+          model: provider(MODEL),
+          maxOutputTokens: 4096,
+          system,
+          tools: consolidationTools,
+          messages,
+        });
+      } catch (err) {
+        console.error("[mind] consolidation LLM call failed:", err);
+        break;
+      }
+
+      const text = result.text || "";
+      if (text) console.log(`[mind] consolidator: ${text.slice(0, 150)}`);
+
+      if (result.toolCalls.length === 0) {
+        messages.push(...result.response.messages);
+        messages.push({ role: "user", content: "Use your tools. Run bash to investigate, then call done() with your findings." });
+        continue;
+      }
+
+      messages.push(...result.response.messages);
+
+      const toolResults: Array<{ type: 'tool-result'; toolCallId: string; toolName: string; input: unknown; output: { type: 'text'; value: string } }> = [];
+
+      for (const tc of result.toolCalls) {
+        const args = (tc.input || {}) as Record<string, any>;
+
+        if (tc.toolName === "done") {
+          observations = args.observations || "";
+          reflection = args.reflection || "No reflection.";
+          ruleAdds = args.rule_adds || [];
+          ruleRemoves = args.rule_removes || [];
+          finished = true;
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input: args,
+            output: { type: 'text', value: 'Consolidation complete.' },
+          });
+          continue;
+        }
+
+        if (tc.toolName === "bash") {
+          const cmd = String(args.command || "");
+          console.log(`[mind] consolidator bash: ${cmd.slice(0, 100)}`);
+          const bashResult = await executeBash(cmd, { timeout: 30000 });
+          const output = bashResult.exitCode === 0
+            ? (bashResult.stdout || "(no output)")
+            : `Exit code ${bashResult.exitCode}\n${bashResult.stderr}\n${bashResult.stdout}`.trim();
+
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input: args,
+            output: { type: 'text', value: output.slice(0, 10_000) },
+          });
+        }
+      }
+
+      const turnsLeft = MAX_CONSOLIDATION_TURNS - turns;
+      if (turnsLeft <= 2 && !finished && toolResults.length > 0) {
+        const last = toolResults[toolResults.length - 1];
+        last.output = { type: 'text', value: last.output.value + `\n\n[SYSTEM] You have ${turnsLeft} turn(s) remaining. Call done() NOW with your findings.` };
+      }
+
+      messages.push({ role: "tool", content: toolResults });
+    }
+
+    if (!finished) {
+      console.error("[mind] consolidation hit turn limit without calling done()");
+      observations = `RED ${time} Consolidation timed out after ${turns} turns`;
+      reflection = "Consolidation did not complete.";
+    }
+
+    console.log(`[mind] consolidation finished in ${turns} turns`);
+
+    if (ruleAdds.length > 0) {
+      await this.mergeRules(ruleAdds.join("\n"));
+    }
+    if (ruleRemoves.length > 0) {
+      await this.removeRules(ruleRemoves);
     }
 
     if (observations) {
@@ -950,7 +1060,7 @@ RULES:
       reflection,
       priority: reflection.split('\n')[0]?.slice(0, 200) || "Continue.",
       observations: obsCount,
-      deep: this.isDeepSleep(),
+      deep,
     };
     try {
       await fs.appendFile(DREAMS_FILE, JSON.stringify(dreamEntry) + "\n", "utf-8");
@@ -960,7 +1070,7 @@ RULES:
 
     this.trimMessages();
 
-    if (this.isDeepSleep()) {
+    if (deep) {
       console.log(`[mind] deep sleep triggered (dream #${this.dreamCount + 1})`);
       await this.deepSleep();
     }
@@ -970,10 +1080,10 @@ RULES:
     this.lastDreamTime = Date.now();
     this.monologueSinceDream = "";
 
-    console.log(`[mind] consolidation complete: ${obsCount} observations, dream #${this.dreamCount}`);
+    console.log(`[mind] consolidation complete — ${obsCount} observations, dream #${this.dreamCount}`);
 
     if (onDream) {
-      await onDream({ reflection, priority: dreamEntry.priority, observations: obsCount, deep: dreamEntry.deep });
+      await onDream({ reflection, priority: dreamEntry.priority, observations: obsCount, deep });
     }
   }
 
@@ -1007,80 +1117,82 @@ RULES:
     }
     if (splitAt >= this.messages.length - 2) return;
 
+    const dropped = this.messages.slice(0, splitAt);
+    for (const msg of dropped) {
+      for (const line of this.digestMessage(msg)) {
+        this.sessionDigest.push(line);
+      }
+    }
+
+    const MAX_DIGEST = 80;
+    if (this.sessionDigest.length > MAX_DIGEST) {
+      this.sessionDigest = this.sessionDigest.slice(-MAX_DIGEST);
+    }
+
+    const digestText = this.sessionDigest.join("\n");
+    const summary = `## Session Context (trimmed for space)\n\nYou are mid-session. Here is a summary of your earlier actions and results this session:\n\n${digestText}\n\n---\nYour observations and rules are available. Full conversation history is in .self/conversation.jsonl.\nRecent messages follow below.`;
+
     const recentMessages = this.messages.slice(splitAt);
     this.messages = [
-      { role: "user", content: "Earlier context has been consolidated into your observations above." },
+      { role: "user", content: summary },
       ...recentMessages,
     ];
-    console.log(`[mind] trimmed to ${this.messages.length} messages`);
+    console.log(`[mind] trimmed to ${this.messages.length} messages (digest: ${this.sessionDigest.length} entries)`);
   }
 
-  // --- Deep Sleep (Reflector) ---
+  private digestMessage(msg: ModelMessage): string[] {
+    const lines: string[] = [];
+    const content = msg.content;
+
+    if (msg.role === "user") {
+      const text = typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? (content as any[]).filter((b: any) => b.type === "text").map((b: any) => b.text || "").join(" ")
+          : "";
+      if (text) lines.push(`> ${text.slice(0, 150).replace(/\n/g, " ")}`);
+
+    } else if (msg.role === "assistant") {
+      if (Array.isArray(content)) {
+        for (const block of content as any[]) {
+          if (block.type === "text" && block.text?.trim()) {
+            lines.push(`thought: ${block.text.trim().slice(0, 150).replace(/\n/g, " ")}`);
+          } else if (block.type === "tool-call") {
+            const name = block.toolName || "tool";
+            if (name === "bash") {
+              lines.push(`call: bash: ${String(block.args?.command || "").slice(0, 100)}`);
+            } else {
+              lines.push(`call: ${name}(${JSON.stringify(block.args || {}).slice(0, 80)})`);
+            }
+          }
+        }
+      } else if (typeof content === "string" && content.trim()) {
+        lines.push(`thought: ${content.trim().slice(0, 150).replace(/\n/g, " ")}`);
+      }
+
+    } else if (msg.role === "tool") {
+      if (Array.isArray(content)) {
+        for (const tr of content as any[]) {
+          const name = tr.toolName || "tool";
+          const val = tr.output?.value || tr.result || "";
+          const firstLine = String(val).split("\n")[0].slice(0, 150);
+          if (tr.output?.value?.startsWith("Error:") || tr.output?.value?.startsWith("EXIT ")) {
+            lines.push(`${name} -> FAIL: ${firstLine}`);
+          } else {
+            lines.push(`${name} -> ${firstLine}`);
+          }
+        }
+      }
+    }
+
+    return lines;
+  }
+
+  // --- Deep Sleep ---
+  // Observation/rule pruning is handled by the agentic consolidator (deep sleep directive).
+  // This method handles self-evaluation only.
 
   private async deepSleep(): Promise<void> {
-    try {
-      const obsContent = await fs.readFile(OBSERVATIONS_FILE, "utf-8");
-      if (obsContent.length > 3000) {
-        const resp = await generateText({
-          model: provider(MODEL),
-          maxOutputTokens: 4096,
-          system: `You are the reflector, pruning an observations file for an autonomous creature.
-
-Rules for pruning:
-- NEVER remove RED items unless they have an explicit expiry date/time that has passed
-- Remove GRN items older than 48 hours
-- Remove YLW items that are superseded by newer observations (e.g., "PR pending" superseded by "PR merged")
-- Keep all date headers (## YYYY-MM-DD)
-- Preserve the "# Observations" title
-- Output the pruned file content, nothing else
-
-Current time: ${new Date().toISOString()}`,
-          messages: [{ role: "user", content: obsContent }],
-        });
-        const pruned = resp.text || "";
-        if (pruned.length > 50) {
-          await fs.writeFile(OBSERVATIONS_FILE, pruned + "\n", "utf-8");
-          console.log(`[mind] pruned observations: ${obsContent.length} → ${pruned.length} chars`);
-        }
-      }
-    } catch {}
-
-    try {
-      const rulesContent = await fs.readFile(RULES_FILE, "utf-8");
-      const ruleLines = rulesContent.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
-      if (ruleLines.length > 0) {
-        const obs = await this.readObservations();
-        const resp = await generateText({
-          model: provider(MODEL),
-          maxOutputTokens: 1024,
-          system: `You are reviewing an autonomous creature's learned rules. Given its recent observations, decide which rules are still relevant.
-
-Drop rules that:
-- Reference specific one-time tasks (e.g., "check IMAP", "fix PR #42"), which are stale
-- Are workarounds for problems that have been fixed
-- Are too narrow or prescriptive (e.g., "spend max 2 tool calls on recon")
-- Contradict each other
-
-Merge overlapping rules into general principles. Prefer broad behavioral wisdom over narrow prescriptions.
-Aim for 5-15 rules total. Output only the final rules, one per line starting with "- ".`,
-          messages: [{ role: "user", content: `Current rules:\n${ruleLines.join("\n")}\n\nRecent observations:\n${(obs || "").slice(-3000)}` }],
-        });
-        const pruned = resp.text || "";
-        const prunedLines = pruned.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
-        if (prunedLines.length > 0) {
-          await fs.writeFile(RULES_FILE, prunedLines.join("\n") + "\n", "utf-8");
-          console.log(`[mind] pruned rules: ${ruleLines.length} → ${prunedLines.length}`);
-        }
-      }
-    } catch {}
-
-    try {
-      const dreams = await this.readRecentDreams(3);
-      const entry = `\n## ${new Date().toISOString().slice(0, 16)} - Deep Sleep\n\n${dreams}\n`;
-      await fs.appendFile("self/diary.md", entry, "utf-8");
-      console.log(`[mind] wrote diary entry`);
-    } catch {}
-
     const evalResult = await this.selfEvaluate("deep_sleep");
     if (evalResult.changed) {
       this.pendingRestart = true;
@@ -1194,14 +1306,9 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
       }
 
       const turnsLeft = MAX_EVAL_TURNS - turns;
-      if (turnsLeft <= 3 && !finished) {
-        toolResults.push({
-          type: "tool-result",
-          toolCallId: result.toolCalls[result.toolCalls.length - 1].toolCallId,
-          toolName: result.toolCalls[result.toolCalls.length - 1].toolName,
-          input: {},
-          output: { type: 'text', value: `[SYSTEM] You have ${turnsLeft} turns remaining. Call done() NOW with a summary.` },
-        } as any);
+      if (turnsLeft <= 3 && !finished && toolResults.length > 0) {
+        const last = toolResults[toolResults.length - 1];
+        last.output = { type: 'text', value: last.output.value + `\n\n[SYSTEM] You have ${turnsLeft} turns remaining. Call done() NOW with a summary.` };
       }
 
       evalMessages.push({ role: "tool", content: toolResults });
@@ -1305,6 +1412,7 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
   // --- Wake Up ---
 
   private async wakeUp(actualSleptS: number, requestedS: number, onWake?: WakeCallback): Promise<void> {
+    this.sessionDigest = [];
     const observations = await this.readObservations();
     const reason = this.wakeReason;
     this.wakeReason = null;
@@ -1428,6 +1536,25 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
     console.log(`[mind] rules updated: ${existing.length} total`);
   }
 
+  private async removeRules(toRemove: string[]): Promise<void> {
+    if (toRemove.length === 0) return;
+    try {
+      const content = await fs.readFile(RULES_FILE, "utf-8");
+      const existing = content.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("-"));
+      const removeSigs = toRemove.map((r) => r.replace(/^-\s*/, "").slice(0, 40).toLowerCase());
+      const kept = existing.filter((rule) => {
+        const sig = rule.replace(/^-\s*/, "").slice(0, 40).toLowerCase();
+        return !removeSigs.some((rs) => sig.includes(rs) || rs.includes(sig));
+      });
+      if (kept.length < existing.length) {
+        await fs.writeFile(RULES_FILE, kept.join("\n") + "\n", "utf-8");
+        console.log(`[mind] removed ${existing.length - kept.length} rules — ${kept.length} remaining`);
+      }
+    } catch {
+      // No rules file
+    }
+  }
+
   // --- Overflow Protection ---
 
   private async maybeArchiveOverflow(): Promise<void> {
@@ -1506,6 +1633,41 @@ Aim for 5-15 rules total. Output only the final rules, one per line starting wit
     const lastBlock = blocks[blocks.length - 1] || monologue;
     const intent = lastBlock.split("\n").find((l) => l.trim()) || "";
     return intent.slice(0, 200);
+  }
+
+  private buildSessionSummary(actions: ActionRecord[], monologue: string): string {
+    const lines: string[] = [];
+    lines.push(`Session: ${actions.length} actions\n`);
+
+    for (let i = 0; i < actions.length; i++) {
+      const a = actions[i];
+      let desc: string;
+      if (a.tool === "bash") {
+        desc = String((a.args as any).command || "").slice(0, 120);
+      } else if (a.tool === "browser") {
+        const act = (a.args as any).action || "";
+        const url = (a.args as any).url || "";
+        desc = `${act} ${url}`.trim().slice(0, 120);
+      } else {
+        desc = JSON.stringify(a.args).slice(0, 120);
+      }
+      const status = a.result.ok ? "ok" : "FAIL";
+      const summary = a.result.ok ? this.summarizeResult(a) : String(a.result.error || "").slice(0, 100);
+      lines.push(`[${i + 1}] ${a.tool}: ${desc} -> ${status}: ${summary}`);
+    }
+
+    if (monologue) {
+      const first = monologue.slice(0, 2000);
+      const last = monologue.length > 4000 ? monologue.slice(-2000) : "";
+      lines.push(`\n--- Creature's own narration (excerpts) ---`);
+      lines.push(first);
+      if (last) {
+        lines.push(`\n[...${monologue.length - 4000} chars omitted...]\n`);
+        lines.push(last);
+      }
+    }
+
+    return lines.join("\n");
   }
 
   private async loadPurpose(): Promise<string> {

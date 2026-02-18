@@ -7,247 +7,352 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-      background: #0a0a0a; color: #ccc; font-size: 13px;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #fafafa; color: #1a1a1a; font-size: 13px;
       display: flex;
     }
 
     .sidebar {
       position: sticky; top: 0; height: 100vh;
-      width: 220px; border-right: 1px solid #222;
+      width: 260px; border-right: 1px solid #e5e5e5; background: #fff;
       display: flex; flex-direction: column; flex-shrink: 0;
-      overflow-y: auto;
+      overflow-y: auto; transition: width 0.2s, opacity 0.2s;
     }
+    .sidebar.hidden { width: 0; opacity: 0; overflow: hidden; border-right: none; }
     .sidebar-header {
-      padding: 16px; color: #0f0; font-size: 16px; font-weight: bold;
-      border-bottom: 1px solid #222;
+      padding: 16px; color: #16a34a; font-size: 16px; font-weight: bold;
+      border-bottom: 1px solid #e5e5e5;
       display: flex; align-items: center; justify-content: space-between;
     }
     .sidebar-header .spawn-btn {
-      background: none; border: 1px solid #333; color: #666;
+      background: none; border: 1px solid #d0d0d0; color: #999;
       width: 22px; height: 22px; border-radius: 3px; cursor: pointer;
       font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
     }
-    .sidebar-header .spawn-btn:hover { color: #0f0; border-color: #0f0; }
+    .sidebar-header .spawn-btn:hover { color: #16a34a; border-color: #16a34a; }
     .spawn-form {
-      display: none; padding: 12px; border-bottom: 1px solid #222; background: #111;
+      display: none; padding: 12px; border-bottom: 1px solid #e5e5e5; background: #f5f5f5;
     }
     .spawn-form.visible { display: flex; flex-direction: column; gap: 8px; }
     .spawn-form input, .spawn-form textarea, .spawn-form select {
-      background: #0a0a0a; border: 1px solid #333; color: #eee;
+      background: #fff; border: 1px solid #d0d0d0; color: #1a1a1a;
       padding: 6px 8px; border-radius: 3px; font-family: inherit; font-size: 12px;
     }
-    .spawn-form input:focus, .spawn-form textarea:focus, .spawn-form select:focus { outline: none; border-color: #58f; }
+    .spawn-form input:focus, .spawn-form textarea:focus, .spawn-form select:focus { outline: none; border-color: #2563eb; }
     .spawn-form textarea { resize: vertical; min-height: 48px; }
     .spawn-form button {
-      background: #1a2a1a; border: 1px solid #0f0; color: #0f0;
+      background: #f0fdf4; border: 1px solid #16a34a; color: #16a34a;
       padding: 6px 12px; border-radius: 3px; cursor: pointer;
       font-family: inherit; font-size: 12px;
     }
-    .spawn-form button:hover { background: #2a3a2a; }
+    .spawn-form button:hover { background: #dcfce7; }
     .spawn-form button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .spawn-form .spawn-error { color: #f55; font-size: 11px; }
+    .spawn-form .spawn-error { color: #dc2626; font-size: 11px; }
     .creature-list { padding: 8px; flex: 1; }
     .creature-item {
       padding: 8px 12px; border-radius: 4px; cursor: pointer;
       display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
     }
-    .creature-item:hover { background: #1a1a1a; }
-    .creature-item.selected { background: #1a1a2a; border-left: 2px solid #58f; }
+    .creature-item:hover { background: #f5f5f5; }
+    .creature-item.selected { background: #eff6ff; border-left: 2px solid #2563eb; }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot.stopped { background: #555; }
-    .dot.starting { background: #fa0; }
-    .dot.running { background: #0f0; }
-    .dot.sleeping { background: #f80; }
-    .dot.error { background: #f33; animation: pulse-error 1s ease-in-out infinite; }
+    .dot.stopped { background: #999; }
+    .dot.starting { background: #d97706; }
+    .dot.running { background: #16a34a; }
+    .dot.sleeping { background: #d97706; }
+    .dot.error { background: #dc2626; animation: pulse-error 1s ease-in-out infinite; }
     @keyframes pulse-error { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .cname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .creature-cost { color: #f80; font-size: 10px; margin-left: 4px; flex-shrink: 0; }
-    .creature-cost.over { color: #f33; }
-    .budget-bar { margin-top: 2px; height: 3px; background: #222; border-radius: 2px; overflow: hidden; }
+    .creature-cost { color: #999; font-size: 10px; margin-left: 4px; flex-shrink: 0; }
+    .creature-cost.warn { color: #b45309; }
+    .creature-cost.over { color: #dc2626; }
+    .budget-bar { margin-top: 2px; height: 3px; background: #e5e5e5; border-radius: 2px; overflow: hidden; }
     .budget-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
-    .budget-bar-fill.ok { background: #0f0; }
-    .budget-bar-fill.warn { background: #f80; }
-    .budget-bar-fill.over { background: #f33; }
+    .budget-bar-fill.ok { background: #16a34a; }
+    .budget-bar-fill.warn { background: #d97706; }
+    .budget-bar-fill.over { background: #dc2626; }
     .budget-info {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 4px 10px; background: #111; border: 1px solid #222;
-      border-radius: 4px; font-size: 11px; color: #888; cursor: pointer;
+      padding: 4px 10px; background: #fff; border: 1px solid #e5e5e5;
+      border-radius: 4px; font-size: 11px; color: #666; cursor: pointer;
     }
-    .budget-info:hover { border-color: #444; }
-    .budget-info .budget-label { color: #666; }
-    .budget-info .budget-value { color: #f80; }
-    .budget-info .budget-value.over { color: #f33; }
-    .budget-info .budget-value.ok { color: #0f0; }
+    .budget-info:hover { border-color: #d0d0d0; }
+    .budget-info .budget-label { color: #999; }
+    .budget-info .budget-value { color: #b45309; }
+    .budget-info .budget-value.over { color: #dc2626; }
+    .budget-info .budget-value.ok { color: #16a34a; }
     .budget-editor {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 4px 10px; background: #111; border: 1px solid #58f;
-      border-radius: 4px; font-size: 11px; color: #888;
+      padding: 4px 10px; background: #fff; border: 1px solid #2563eb;
+      border-radius: 4px; font-size: 11px; color: #666;
     }
     .budget-editor input {
-      width: 60px; background: #0a0a0a; border: 1px solid #333;
-      color: #f80; padding: 2px 6px; border-radius: 3px;
+      width: 60px; background: #fff; border: 1px solid #d0d0d0;
+      color: #b45309; padding: 2px 6px; border-radius: 3px;
       font-family: inherit; font-size: 11px; text-align: right;
     }
-    .budget-editor input:focus { outline: none; border-color: #58f; }
+    .budget-editor input:focus { outline: none; border-color: #2563eb; }
     .budget-editor select {
-      background: #0a0a0a; border: 1px solid #333; color: #ccc;
+      background: #fff; border: 1px solid #d0d0d0; color: #333;
       padding: 2px 4px; border-radius: 3px; font-family: inherit; font-size: 11px;
     }
-    .budget-editor select:focus { outline: none; border-color: #58f; }
+    .budget-editor select:focus { outline: none; border-color: #2563eb; }
     .budget-editor .be-save {
-      background: #1a2a1a; border: 1px solid #0f0; color: #0f0;
+      background: #f0fdf4; border: 1px solid #16a34a; color: #16a34a;
       padding: 1px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px;
     }
-    .budget-editor .be-save:hover { background: #2a3a2a; }
+    .budget-editor .be-save:hover { background: #dcfce7; }
     .budget-editor .be-cancel {
-      background: none; border: 1px solid #333; color: #666;
+      background: none; border: 1px solid #d0d0d0; color: #999;
       padding: 1px 6px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px;
     }
-    .budget-editor .be-cancel:hover { color: #aaa; border-color: #555; }
-    .sleep-reason { font-size: 10px; color: #f33; margin-left: 4px; }
+    .budget-editor .be-cancel:hover { color: #666; border-color: #999; }
+    .sleep-reason { font-size: 10px; color: #dc2626; margin-left: 4px; }
     .btn {
-      background: #222; border: 1px solid #333; color: #aaa;
+      background: #fff; border: 1px solid #d0d0d0; color: #666;
       padding: 2px 6px; border-radius: 3px; cursor: pointer;
       font-family: inherit; font-size: 11px;
     }
-    .btn:hover { background: #333; color: #fff; }
+    .btn:hover { background: #f5f5f5; color: #1a1a1a; }
 
     .main {
       flex: 1; min-width: 0; display: flex; flex-direction: column;
     }
     .main-header {
-      position: sticky; top: 0; z-index: 20; background: #0a0a0a;
-      padding: 12px 16px; border-bottom: 1px solid #222;
+      position: sticky; top: 0; z-index: 20; background: #fafafa;
+      padding: 12px 16px; border-bottom: 1px solid #e5e5e5;
       display: flex; align-items: center; gap: 12px;
     }
-    .main-header h2 { color: #eee; font-size: 14px; margin: 0; }
-    .main-header .info { color: #555; font-size: 12px; }
-    .main-header .sha { color: #58f; }
+    .main-header h2 { color: #1a1a1a; font-size: 14px; margin: 0; }
+    .main-header .info { color: #666; font-size: 12px; }
+    .main-header .sha { color: #2563eb; }
 
     .tab-bar {
-      position: sticky; top: 44px; z-index: 15; background: #0a0a0a;
-      display: none; border-bottom: 1px solid #222;
+      position: sticky; top: 44px; z-index: 15; background: #fafafa;
+      display: none; border-bottom: 1px solid #e5e5e5;
       padding: 0 16px;
     }
     .tab-bar.visible { display: flex; }
     .tab {
-      padding: 8px 16px; cursor: pointer; color: #666;
+      padding: 8px 16px; cursor: pointer; color: #999;
       font-size: 12px; border-bottom: 2px solid transparent;
     }
-    .tab:hover { color: #aaa; }
-    .tab.active { color: #58f; border-bottom-color: #58f; }
+    .tab:hover { color: #666; }
+    .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
     .tab-refresh {
       margin-left: auto; padding: 8px 12px; cursor: pointer;
-      color: #444; font-size: 12px;
+      color: #999; font-size: 12px;
     }
-    .tab-refresh:hover { color: #888; }
+    .tab-refresh:hover { color: #666; }
 
     .content { padding: 16px; flex: 1; }
-    .events { display: flex; flex-direction: column; gap: 2px; }
+    .events {
+      display: flex; flex-direction: column; gap: 4px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
 
-    .event { padding: 6px 12px; border-radius: 4px; border-left: 3px solid #333; background: #111; }
-    .event .time { color: #555; font-size: 11px; }
-    .event .clabel { color: #58f; font-size: 11px; margin-left: 4px; font-weight: bold; }
+    .event { padding: 7px 12px; border-radius: 4px; border-left: 3px solid #d0d0d0; background: #fff; }
+    .event .time { color: #999; font-size: 11px; }
+    .event .clabel { color: #2563eb; font-size: 11px; margin-left: 4px; font-weight: bold; }
     .event .type { font-weight: bold; margin-left: 8px; }
 
-    .event.host-boot { border-left-color: #666; }
-    .event.host-spawn { border-left-color: #58f; }
-    .event.host-promote { border-left-color: #0f0; }
-    .event.host-rollback { border-left-color: #f33; background: #1a0808; }
-    .event.creature-boot { border-left-color: #58f; }
-    .event.creature-thought { border-left-color: #888; }
-    .event.creature-sleep { border-left-color: #fa0; }
-    .event.creature-wake { border-left-color: #0af; }
-    .event.creature-message { border-left-color: #58f; background: #0a0a1a; }
-    .event.creature-tool-call { border-left-color: #0af; }
-    .event.creature-tool-call.browser { border-left-color: #a6e; }
-    .event.creature-tool-call.fail { border-left-color: #f55; }
-    .event.creature-dream { border-left-color: #a6e; background: #0f0a15; }
-    .event.creature-dream.deep { border-left-color: #c8f; background: #120a1a; }
-    .event.creature-progress-check { border-left-color: #f80; background: #1a1208; }
-    .event.creature-error { border-left-color: #f33; background: #1a0808; }
-    .event.creature-error .retry-badge { color: #f55; font-size: 11px; margin-left: 6px; }
-    .event.creator-evaluation { border-left-color: #0d4; background: #081a0a; }
-    .event.budget-exceeded { border-left-color: #f33; background: #1a0808; }
-    .event.budget-reset { border-left-color: #0f0; background: #081a08; }
+    .event.host-boot { border-left-color: #999; }
+    .event.host-spawn { border-left-color: #2563eb; }
+    .event.host-promote { border-left-color: #16a34a; }
+    .event.host-rollback { border-left-color: #dc2626; background: #fef2f2; }
+    .event.creature-boot { border-left-color: #2563eb; background: #f8faff; }
+    .event.creature-thought { border-left-color: #999; background: #fafafa; }
+    .event.creature-sleep { border-left-color: #d97706; background: #fffbf5; }
+    .event.creature-wake { border-left-color: #0284c7; background: #f5fbff; }
+    .event.creature-message { border-left-color: #2563eb; background: #eff6ff; }
+    .event.creature-tool-call { border-left-color: #0284c7; background: #f5fbff; }
+    .event.creature-tool-call.browser { border-left-color: #7c3aed; background: #faf5ff; }
+    .event.creature-tool-call.fail { border-left-color: #dc2626; background: #fef2f2; }
+    .event.creature-dream { border-left-color: #7c3aed; background: #faf5ff; }
+    .event.creature-dream.deep { border-left-color: #9333ea; background: #f5f3ff; }
+    .event.creature-progress-check { border-left-color: #d97706; background: #fffbf5; }
+    .event.creature-error { border-left-color: #dc2626; background: #fef2f2; }
+    .event.creature-error .retry-badge { color: #dc2626; font-size: 11px; margin-left: 6px; }
+    .event.creator-evaluation { border-left-color: #16a34a; background: #f0fdf4; }
+    .event.budget-exceeded { border-left-color: #dc2626; background: #fef2f2; }
+    .event.budget-reset { border-left-color: #16a34a; background: #f0fdf4; }
 
-    .event .type.host { color: #666; }
-    .event .type.promote { color: #0f0; }
-    .event .type.rollback { color: #f33; }
-    .event .type.sleep { color: #fa0; }
-    .event .type.wake { color: #0af; }
-    .event .type.message { color: #58f; }
-    .event .type.tool { color: #0af; }
-    .event .type.tool.browser { color: #a6e; }
-    .event .type.tool.fail { color: #f55; }
-    .event .type.thought { color: #aaa; }
-    .event .type.dream { color: #a6e; font-style: italic; }
-    .event .type.dream.deep { color: #c8f; font-weight: bold; }
-    .event .type.progress-check { color: #f80; }
-    .event .type.creator { color: #0d4; font-weight: bold; }
-    .event .type.boot { color: #58f; }
+    .event .type.host { color: #999; }
+    .event .type.promote { color: #16a34a; }
+    .event .type.rollback { color: #dc2626; }
+    .event .type.sleep { color: #b45309; }
+    .event .type.wake { color: #0284c7; }
+    .event .type.message { color: #2563eb; }
+    .event .type.tool { color: #0284c7; }
+    .event .type.tool.browser { color: #7c3aed; }
+    .event .type.tool.fail { color: #dc2626; }
+    .event .type.thought { color: #666; }
+    .event .type.dream { color: #7c3aed; font-style: italic; }
+    .event .type.dream.deep { color: #9333ea; font-weight: bold; }
+    .event .type.progress-check { color: #b45309; }
+    .event .type.creator { color: #16a34a; font-weight: bold; }
+    .event .type.boot { color: #2563eb; }
 
-    .intent-text { color: #eee; margin-left: 4px; white-space: pre-wrap; }
+    .intent-text { color: #333; margin-left: 4px; white-space: pre-wrap; }
     .thought-summary { cursor: pointer; }
     .thought-summary:hover { text-decoration: underline; }
-    .thought-body { display: none; margin-top: 6px; padding: 8px; background: #0d0d0d; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #aaa; font-size: 12px; }
+    .thought-body { display: none; margin-top: 6px; padding: 8px; background: #f5f5f5; border-radius: 4px; white-space: pre-wrap; word-break: break-word; color: #666; font-size: 12px; }
     .thought-body.open { display: block; }
-    .tool-cmd { color: #fff; background: #1a1a2a; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+    .tool-cmd { color: #1a1a1a; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin-left: 6px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
     .tool-status { margin-left: 6px; font-size: 11px; }
-    .tool-status.ok { color: #0f0; }
-    .tool-status.err { color: #f55; }
-    .tool-output { display: block; color: #888; margin-top: 4px; padding: 6px 8px; background: #0d0d0d; border-radius: 3px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
-    .tool-ms { color: #555; font-size: 11px; margin-left: 6px; }
-    .tool-detail { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #888; padding: 8px; background: #0d0d0d; border-radius: 4px; margin-top: 6px; }
+    .tool-status.ok { color: #16a34a; }
+    .tool-status.err { color: #dc2626; }
+    .tool-output { display: block; color: #666; margin-top: 4px; padding: 6px 8px; background: #f5f5f5; border-radius: 3px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+    .tool-ms { color: #999; font-size: 11px; margin-left: 6px; }
+    .tool-detail { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #666; padding: 8px; background: #f5f5f5; border-radius: 4px; margin-top: 6px; }
     .tool-detail-cmd { margin-bottom: 6px; }
-    .tool-detail-out { border-top: 1px solid #222; padding-top: 6px; }
-    .sha { color: #58f; }
-    .detail { color: #888; margin-left: 4px; }
+    .tool-detail-out { border-top: 1px solid #e5e5e5; padding-top: 6px; }
+    .sha { color: #2563eb; }
+    .detail { color: #666; margin-left: 4px; }
 
     .message-bar {
-      position: sticky; bottom: 0; background: #0a0a0a;
-      padding: 12px 16px; border-top: 1px solid #222;
+      position: sticky; bottom: 0; background: #fafafa;
+      padding: 12px 16px; border-top: 1px solid #e5e5e5;
       display: none; gap: 8px;
     }
     .message-bar.visible { display: flex; }
     .message-bar textarea {
-      flex: 1; background: #111; border: 1px solid #333;
-      color: #eee; padding: 8px 12px; border-radius: 4px;
+      flex: 1; background: #fff; border: 1px solid #d0d0d0;
+      color: #1a1a1a; padding: 8px 12px; border-radius: 4px;
       font-family: inherit; font-size: 13px;
       resize: vertical; min-height: 38px; max-height: 200px;
     }
-    .message-bar textarea:focus { outline: none; border-color: #58f; }
+    .message-bar textarea:focus { outline: none; border-color: #2563eb; }
     .message-bar button {
-      background: #1a1a2a; border: 1px solid #58f; color: #58f;
+      background: #eff6ff; border: 1px solid #2563eb; color: #2563eb;
       padding: 8px 16px; border-radius: 4px; cursor: pointer;
       font-family: inherit; font-size: 13px;
     }
-    .message-bar button:hover { background: #2a2a4a; }
+    .message-bar button:hover { background: #dbeafe; }
 
     .mind-content {
       word-break: break-word;
-      font-size: 12px; color: #bbb; line-height: 1.5;
+      font-size: 12px; color: #333; line-height: 1.5;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     }
     .mind-content.pre { white-space: pre-wrap; }
-    .mind-content .jsonl-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #1a1a1a; }
+    .mind-content .jsonl-entry { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e5e5; }
     .mind-content .jsonl-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .mind-content .jsonl-time { color: #666; font-size: 11px; }
-    .mind-content .jsonl-summary { color: #ccc; margin-top: 4px; }
-    .mind-content h1 { color: #fff; font-size: 15px; margin: 16px 0 8px; }
-    .mind-content h2 { color: #eee; font-size: 14px; margin: 14px 0 6px; }
-    .mind-content h3 { color: #ddd; font-size: 13px; margin: 12px 0 4px; }
+    .mind-content .jsonl-time { color: #999; font-size: 11px; }
+    .mind-content .jsonl-summary { color: #333; margin-top: 4px; }
+    .mind-content h1 { color: #1a1a1a; font-size: 15px; margin: 16px 0 8px; }
+    .mind-content h2 { color: #1a1a1a; font-size: 14px; margin: 14px 0 6px; }
+    .mind-content h3 { color: #333; font-size: 13px; margin: 12px 0 4px; }
     .mind-content p { margin: 4px 0; }
     .mind-content li { margin: 2px 0; }
-    .mind-content a { color: #58f; }
-    .mind-content code { background: #1a1a2a; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
-    .mind-content pre { background: #0d0d0d; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 8px 0; }
+    .mind-content a { color: #2563eb; }
+    .mind-content code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+    .mind-content pre { background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 8px 0; }
     .mind-content pre code { background: none; padding: 0; }
     .mind-content ul, .mind-content ol { padding-left: 20px; margin: 6px 0; }
-    .mind-content blockquote { border-left: 3px solid #333; padding-left: 12px; color: #999; margin: 8px 0; }
+    .mind-content blockquote { border-left: 3px solid #d0d0d0; padding-left: 12px; color: #666; margin: 8px 0; }
     .mind-content table { border-collapse: collapse; margin: 8px 0; }
-    .mind-content th, .mind-content td { border: 1px solid #333; padding: 4px 8px; font-size: 12px; }
-    .mind-content th { background: #1a1a1a; color: #ddd; }
+    .mind-content th, .mind-content td { border: 1px solid #e5e5e5; padding: 4px 8px; font-size: 12px; }
+    .mind-content th { background: #f5f5f5; color: #1a1a1a; }
+
+    .overview { padding: 20px 32px; max-width: 800px; margin: 0 auto; }
+    .status-strip {
+      display: flex; flex-wrap: wrap; gap: 4px 14px;
+      padding-bottom: 20px; margin-bottom: 20px;
+      border-bottom: 1px solid #e5e5e5; font-size: 12px;
+    }
+    .strip-item {
+      display: inline-flex; align-items: center; gap: 6px;
+      cursor: pointer; color: #999; transition: color 0.15s;
+    }
+    .strip-item:hover { color: #333; }
+    .strip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .strip-dot.running { background: #16a34a; }
+    .strip-dot.sleeping { background: #d97706; }
+    .strip-dot.stopped { background: #999; }
+    .strip-dot.error { background: #dc2626; }
+    .strip-dot.starting { background: #d97706; }
+
+    .moments { display: flex; flex-direction: column; gap: 6px; }
+    .moment {
+      padding: 14px 18px; border-radius: 6px;
+      border-left: 3px solid #d0d0d0; background: #fff;
+      animation: moment-in 0.3s ease-out;
+    }
+    @keyframes moment-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .moment-dream { border-left-color: #7c3aed; }
+    .moment-deep-dream { border-left-color: #9333ea; }
+    .moment-sleep { border-left-color: #d97706; }
+    .moment-evolved { border-left-color: #16a34a; }
+    .moment-eval { border-left-color: #16a34a; }
+    .moment-thought { border-left-color: #999; }
+    .moment-wake { border-left-color: #0284c7; }
+    .moment-budget { border-left-color: #dc2626; }
+    .moment-budget-ok { border-left-color: #16a34a; }
+    .moment-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px; font-size: 12px;
+    }
+    .moment-creature { color: #1a1a1a; font-weight: bold; cursor: pointer; }
+    .moment-creature:hover { text-decoration: underline; }
+    .moment-label { font-size: 11px; }
+    .moment-label.dream { color: #7c3aed; }
+    .moment-label.deep { color: #9333ea; font-weight: bold; }
+    .moment-label.sleep { color: #b45309; }
+    .moment-label.evolved { color: #16a34a; }
+    .moment-label.eval { color: #16a34a; }
+    .moment-label.thought { color: #999; }
+    .moment-label.wake { color: #0284c7; }
+    .moment-label.budget { color: #dc2626; }
+    .moment-label.budget-ok { color: #16a34a; }
+    .moment-time { color: #999; margin-left: auto; font-size: 11px; }
+    .moment-text {
+      color: #333; font-size: 13px; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .moment-reflection {
+      color: #666; font-size: 12px; font-style: italic;
+      line-height: 1.5; margin-top: 8px;
+      border-left: 2px solid #e5e5e5; padding-left: 12px;
+    }
+    .moment-meta { color: #999; font-size: 11px; margin-top: 6px; }
+
+    .narration-feed { display: flex; flex-direction: column; gap: 12px; }
+    .narration-entry {
+      padding: 16px 20px; border-radius: 6px;
+      border-left: 3px solid #16a34a; background: #fff;
+      animation: moment-in 0.3s ease-out;
+    }
+    .narration-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px; font-size: 11px; color: #999;
+    }
+    .narration-label { color: #16a34a; font-weight: bold; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .narration-time { margin-left: auto; }
+    .narration-text {
+      color: #333; font-size: 15px; line-height: 1.75;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      word-break: break-word;
+    }
+    .narration-text p { margin: 0 0 10px; }
+    .narration-text p:last-child { margin-bottom: 0; }
+    .narration-text strong { color: #1a1a1a; }
+    .narration-text em { color: #666; }
+    .narration-text code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+    .narration-creatures { margin-top: 8px; font-size: 10px; color: #999; }
+    .narration-creatures span { color: #16a34a; cursor: pointer; }
+    .narration-creatures span:hover { text-decoration: underline; }
+
+    .moments-toggle {
+      margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e5e5;
+    }
+    .moments-toggle-btn {
+      background: none; border: 1px solid #d0d0d0; color: #999;
+      padding: 4px 12px; border-radius: 3px; cursor: pointer;
+      font-family: inherit; font-size: 11px;
+    }
+    .moments-toggle-btn:hover { color: #666; border-color: #999; }
+    .moments-toggle-btn.active { color: #666; border-color: #999; }
   </style>
 </head>
 <body>
@@ -273,9 +378,9 @@
       <div class="spawn-error" id="spawnError"></div>
     </div>
     <div class="creature-list" id="creatures"></div>
-    <div id="sidebarFooter" style="border-top:1px solid #222;padding:12px;font-size:11px;flex-shrink:0;">
+    <div id="sidebarFooter" style="border-top:1px solid #e5e5e5;padding:12px;font-size:11px;flex-shrink:0;">
       <div id="totalCostDisplay"></div>
-      <div id="globalBudget" style="color:#666;"></div>
+      <div id="globalBudget" style="color:#999;"></div>
     </div>
   </div>
   <div class="main">
@@ -297,6 +402,8 @@
     let creatures = {};
     let selectedTab = 'log';
     let mindData = null;
+    let lastIntentMap = {};
+    let showMoments = false;
     const eventsEl = document.getElementById('events');
     const headerEl = document.getElementById('header');
     const tabBar = document.getElementById('tabbar');
@@ -445,12 +552,59 @@
     const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {
       const ev = JSON.parse(e.data);
-      if (selectedTab !== 'log') return;
+
+      if (ev.creature) {
+        if (ev.type === 'creature.sleep' && ev.text) {
+          lastIntentMap[ev.creature] = ev.text.length > 100 ? ev.text.slice(0, 100) + '...' : ev.text;
+        } else if (ev.type === 'creature.thought' && ev.text) {
+          lastIntentMap[ev.creature] = ev.text.length > 100 ? ev.text.slice(0, 100) + '...' : ev.text;
+        } else if (ev.type === 'creature.dream') {
+          lastIntentMap[ev.creature] = (ev.deep ? 'deep sleep: ' : 'dreaming: ') + (ev.priority || '').slice(0, 80);
+        } else if (ev.type === 'creature.tool_call') {
+          const cmd = (ev.input || '').split('\n')[0];
+          lastIntentMap[ev.creature] = '\u25b6 ' + (cmd.length > 80 ? cmd.slice(0, 80) + '...' : cmd);
+        }
+      }
+
+      
+
       if (selected === null) {
-        if (ev.type === 'creature.tool_call') return;
-      } else if (ev.creature !== selected) return;
+        if (ev.type === 'narrator.entry') {
+          const entry = { t: ev.t, text: ev.text, creatures_mentioned: ev.creatures_mentioned || [] };
+          const html = renderNarrationEntry(entry);
+          const feed = document.getElementById('narrationFeed');
+          if (feed) {
+            const placeholder = feed.querySelector('div[style*="text-align:center"]');
+            if (placeholder) placeholder.remove();
+            feed.insertAdjacentHTML('afterbegin', html);
+            while (feed.children.length > 10) feed.lastChild.remove();
+          }
+          return;
+        }
+        if (isInterestingEvent(ev)) {
+          const momentHtml = renderMoment(ev);
+          if (momentHtml) {
+            const feed = document.getElementById('momentsFeed');
+            if (feed) {
+              const placeholder = feed.querySelector('div[style*="text-align:center"]');
+              if (placeholder) placeholder.remove();
+              feed.insertAdjacentHTML('afterbegin', momentHtml);
+              while (feed.children.length > 60) feed.lastChild.remove();
+            }
+            if (!showMoments) {
+              const btn = contentEl.querySelector('.moments-toggle-btn');
+              const count = document.getElementById('momentsFeed')?.children.length || 0;
+              if (btn) btn.textContent = '\u25b6 show raw events (' + count + ')';
+            }
+          }
+        }
+        return;
+      }
+
+      if (selectedTab !== 'log') return;
+      if (ev.creature !== selected) return;
       const wasNear = isNearBottom();
-      eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, selected === null));
+      eventsEl.insertAdjacentHTML('beforeend', renderEvent(ev, false));
       if (wasNear) window.scrollTo(0, document.body.scrollHeight);
     };
 
@@ -497,8 +651,13 @@
 
     function renderContent() {
       if (selectedTab === 'log') {
+        if (selected === null) {
+          renderOverview();
+          msgBar.classList.remove('visible');
+          return;
+        }
         eventsEl.style.display = '';
-        msgBar.classList.toggle('visible', !!selected);
+        msgBar.classList.add('visible');
         contentEl.innerHTML = '';
         contentEl.appendChild(eventsEl);
         requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
@@ -536,13 +695,14 @@
       eventsEl.innerHTML = '';
       mindData = null;
       selectedTab = 'log';
+      document.querySelector('.sidebar').classList.toggle('hidden', !name);
       if (name) {
         headerEl.innerHTML = '<h2>' + esc(name) + '</h2><div class="info" id="cinfo"></div>'
           + '<div class="budget-info" id="budgetInfo"></div>'
           + '<button class="btn" onclick="wakeC(\'' + name + '\')">wake</button>'
           + '<button class="btn" onclick="restartC(\'' + name + '\')">restart</button>'
-          + '<button class="btn" style="color:#f80;border-color:#f80" onclick="rebuildC(\'' + name + '\')">rebuild</button>'
-          + '<button class="btn" style="color:#f80;border-color:#f80" onclick="archiveC(\'' + name + '\')">archive</button>';
+          + '<button class="btn" style="color:#b45309;border-color:#d97706" onclick="rebuildC(\'' + name + '\')">rebuild</button>'
+          + '<button class="btn" style="color:#b45309;border-color:#d97706" onclick="archiveC(\'' + name + '\')">archive</button>';
         try {
           const [evRes, budgetRes] = await Promise.all([
             fetch('/api/creatures/' + name + '/events'),
@@ -557,8 +717,6 @@
           renderBudgetInfo(budget);
         } catch {}
         loadMind().then(() => { renderTabs(); });
-      } else {
-        headerEl.innerHTML = '<h2>all creatures</h2>';
       }
       renderTabs();
       renderContent();
@@ -574,7 +732,7 @@
       el.className = 'budget-info';
       el.onclick = () => openBudgetEditor();
       if (budget.action === 'off') {
-        el.innerHTML = '<span class="budget-label">cap off</span><span style="color:#444">click to edit</span>';
+        el.innerHTML = '<span class="budget-label">cap off</span><span style="color:#999">click to edit</span>';
         return;
       }
       const pct = budget.daily_cap_usd > 0 ? Math.min(100, (budget.daily_spent_usd / budget.daily_cap_usd) * 100) : 0;
@@ -642,8 +800,8 @@
       if (!el || !globalBudgetData) return;
       const b = globalBudgetData;
       const label = b.action === 'off' ? 'no cap' : '$' + b.daily_usd + '/day \u00b7 ' + b.action;
-      el.innerHTML = '<span style="color:#555">global cap:</span> '
-        + '<span style="color:#f80;cursor:pointer" onclick="openGlobalBudgetEditor()" title="click to edit">' + esc(label) + ' \u270e</span>';
+      el.innerHTML = '<span style="color:#999">global cap:</span> '
+        + '<span style="color:#b45309;cursor:pointer" onclick="openGlobalBudgetEditor()" title="click to edit">' + esc(label) + ' \u270e</span>';
     }
 
     function openGlobalBudgetEditor() {
@@ -713,17 +871,19 @@
     function renderSidebar() {
       const names = Object.keys(creatures).sort();
       let html = '<div class="creature-item' + (selected === null ? ' selected' : '') + '" onclick="select(null)">'
-        + '<span class="cname" style="color:#888">all</span></div>';
+        + '<span class="cname" style="color:#999">overview</span></div>';
       for (const n of names) {
         const c = creatures[n];
         const sel = selected === n ? ' selected' : '';
         const dot = '<span class="dot ' + c.status + '"></span>';
-        const daily = creatureDailyCost(n);
-        const total = creatureCost(n);
-        const costLabel = daily > 0
-          ? '<span class="creature-cost">' + fmtCost(daily) + '/d</span>'
-          : total > 0 ? '<span class="creature-cost">' + fmtCost(total) + '</span>' : '';
-        const budgetLabel = c.sleepReason === 'budget' ? '<span class="sleep-reason">$cap</span>' : '';
+        const b = creatureBudgets[n];
+        let costLabel = '';
+        if (b && b.action !== 'off' && b.daily_cap_usd > 0) {
+          const pct = Math.min(100, Math.round((b.daily_spent_usd / b.daily_cap_usd) * 100));
+          const cls = pct >= 100 ? 'creature-cost over' : pct >= 80 ? 'creature-cost warn' : 'creature-cost';
+          costLabel = '<span class="' + cls + '">' + pct + '%</span>';
+        }
+        const budgetLabel = c.sleepReason === 'budget' ? '<span class="sleep-reason">capped</span>' : '';
         let act = '';
         if (c.status === 'stopped' || c.sleepReason === 'budget') {
           act = '<button class="btn" onclick="event.stopPropagation();startC(\'' + n + '\')">start</button>';
@@ -735,10 +895,170 @@
       }
       document.getElementById('creatures').innerHTML = html;
       const tcd = document.getElementById('totalCostDisplay');
-      if (tcd) tcd.innerHTML = totalCost > 0
-        ? '<div style="color:#666;text-align:right;margin-bottom:8px;">total: <span style="color:#f80">' + fmtCost(totalCost) + '</span></div>'
-        : '';
+      if (tcd) tcd.innerHTML = '';
       if (!document.getElementById('gbCap')) renderGlobalBudget();
+    }
+
+    function isInterestingEvent(ev) {
+      const t = ev.type;
+      if (t === 'creature.dream') return true;
+      if (t === 'creature.sleep' && ev.text) return true;
+      if (t === 'creature.self_evaluation' || t === 'creator.evaluation') return true;
+      if (t === 'creature.thought' && ev.text && ev.text.length > 20) return true;
+      if (t === 'creature.wake') return true;
+      if (t === 'budget.exceeded' || t === 'budget.reset') return true;
+      return false;
+    }
+
+    function renderMoment(ev) {
+      const t = ev.type;
+      let cls = '', label = '', lcls = '', content = '';
+
+      if (t === 'creature.dream') {
+        cls = ev.deep ? 'moment-deep-dream' : 'moment-dream';
+        label = ev.deep ? 'deep sleep' : 'dream';
+        lcls = ev.deep ? 'deep' : 'dream';
+        if (ev.priority) content += '<div class="moment-text">' + esc(ev.priority) + '</div>';
+        if (ev.reflection) content += '<div class="moment-reflection">' + esc(ev.reflection.length > 400 ? ev.reflection.slice(0, 400) + '...' : ev.reflection) + '</div>';
+        if (ev.observations) content += '<div class="moment-meta">' + ev.observations + ' observations consolidated</div>';
+      } else if (t === 'creature.sleep') {
+        cls = 'moment-sleep'; label = 'sleeping'; lcls = 'sleep';
+        const secs = ev.seconds || 0;
+        const dur = secs >= 3600 ? Math.round(secs / 3600) + 'h' : Math.round(secs / 60) + 'm';
+        content = '<div class="moment-text">' + esc(ev.text || '') + '</div>';
+        content += '<div class="moment-meta">' + (ev.actions || 0) + ' actions this cycle' + (secs ? ' \u00b7 sleeping ' + dur : '') + '</div>';
+      } else if (t === 'creature.self_evaluation' || t === 'creator.evaluation') {
+        const changed = ev.changed || (ev.changes || []).length > 0;
+        cls = changed ? 'moment-evolved' : 'moment-eval';
+        label = changed ? 'self-evolved' : 'self-evaluated';
+        lcls = changed ? 'evolved' : 'eval';
+        content = '<div class="moment-text">' + esc((ev.reasoning || '').slice(0, 400)) + '</div>';
+      } else if (t === 'creature.thought') {
+        cls = 'moment-thought'; label = 'thought'; lcls = 'thought';
+        content = '<div class="moment-text">' + esc(ev.text || '') + '</div>';
+      } else if (t === 'creature.wake') {
+        cls = 'moment-wake'; label = 'woke'; lcls = 'wake';
+        content = '<div class="moment-meta">' + esc(ev.reason || ev.source || '') + '</div>';
+      } else if (t === 'budget.exceeded') {
+        cls = 'moment-budget'; label = 'budget exceeded'; lcls = 'budget';
+        content = '<div class="moment-meta">$' + (ev.daily_spent || 0).toFixed(2) + ' / $' + (ev.daily_cap || 0).toFixed(2) + ' daily cap</div>';
+      } else if (t === 'budget.reset') {
+        cls = 'moment-budget-ok'; label = 'budget reset'; lcls = 'budget-ok';
+      } else { return ''; }
+
+      const c = creatures[ev.creature];
+      const dotCls = c ? c.status : 'stopped';
+      return '<div class="moment ' + cls + '">'
+        + '<div class="moment-header">'
+        + '<span class="strip-dot ' + dotCls + '"></span>'
+        + '<span class="moment-creature" onclick="select(\'' + esc(ev.creature || '') + '\')">' + esc(ev.creature || '') + '</span>'
+        + '<span class="moment-label ' + lcls + '">' + label + '</span>'
+        + '<span class="moment-time">' + timeAgo(ev.t) + '</span>'
+        + '</div>' + content + '</div>';
+    }
+
+    let allMoments = [];
+    let narrationEntries = [];
+
+    async function loadNarration() {
+      try {
+        const res = await fetch('/api/narration?limit=10');
+        narrationEntries = await res.json();
+        narrationEntries.reverse();
+      } catch { narrationEntries = []; }
+    }
+
+    function renderNarrationEntry(entry) {
+      const html = renderMarkdown(entry.text);
+      const mentioned = (entry.creatures_mentioned || []).map(
+        n => '<span onclick="select(\'' + esc(n) + '\')">' + esc(n) + '</span>'
+      ).join(', ');
+      return '<div class="narration-entry">'
+        + '<div class="narration-header">'
+        + '<span class="narration-label">narrator</span>'
+        + '<span class="narration-time">' + timeAgo(entry.t) + '</span>'
+        + '</div>'
+        + '<div class="narration-text">' + html + '</div>'
+        + (mentioned ? '<div class="narration-creatures">' + mentioned + '</div>' : '')
+        + '</div>';
+    }
+
+    async function loadRecentEvents() {
+      const names = Object.keys(creatures);
+      try {
+        const results = await Promise.all(
+          names.map(n => fetch('/api/creatures/' + n + '/events').then(r => r.json()).catch(() => []))
+        );
+        allMoments = [];
+        results.forEach((events, i) => {
+          events.slice(-30).forEach(ev => {
+            ev.creature = ev.creature || names[i];
+            if (isInterestingEvent(ev)) allMoments.push(ev);
+          });
+        });
+        allMoments.sort((a, b) => (b.t || '').localeCompare(a.t || ''));
+        allMoments = allMoments.slice(0, 60);
+      } catch {}
+    }
+
+    function renderOverview() {
+      document.querySelector('.sidebar').classList.add('hidden');
+      const names = Object.keys(creatures).sort();
+
+      let strip = '';
+      for (const n of names) {
+        const c = creatures[n];
+        strip += '<span class="strip-item" onclick="select(\'' + n + '\')">'
+          + '<span class="strip-dot ' + c.status + '"></span>' + esc(n) + '</span>';
+      }
+
+      headerEl.innerHTML = '<div class="info" style="font-size:13px;display:flex;align-items:center;width:100%">'
+        + '<span style="color:#16a34a;font-weight:bold;margin-right:12px">openseed</span>'
+        + '<span style="color:#999">' + names.length + ' creatures</span>'
+        + '</div>';
+
+      const narrationHtml = narrationEntries.map(renderNarrationEntry).join('');
+      const momentsHtml = allMoments.map(renderMoment).filter(Boolean).join('');
+      const hasNarration = narrationHtml.length > 0;
+      contentEl.innerHTML = '<div class="overview">'
+        + '<div class="status-strip">' + strip + '</div>'
+        + '<div class="narration-feed" id="narrationFeed">'
+        + (narrationHtml || '<div style="color:#999;padding:20px;text-align:center">Narrator is warming up...</div>')
+        + '</div>'
+        + '<div class="moments-toggle">'
+        + '<button class="moments-toggle-btn" onclick="toggleMoments()">'
+        + (showMoments ? '\u25bc hide raw events' : '\u25b6 show raw events (' + allMoments.length + ')')
+        + '</button>'
+        + '</div>'
+        + '<div class="moments" id="momentsFeed" style="' + (showMoments ? '' : 'display:none;') + 'margin-top:12px">'
+        + (momentsHtml || '<div style="color:#999;padding:20px;text-align:center">No creature activity yet.</div>')
+        + '</div>'
+        + '</div>';
+    }
+
+    function updateOverviewStrip() {
+      if (selected !== null) return;
+      const strip = contentEl.querySelector('.status-strip');
+      if (!strip) return;
+      const names = Object.keys(creatures).sort();
+      let html = '';
+      for (const n of names) {
+        const c = creatures[n];
+        html += '<span class="strip-item" onclick="select(\'' + n + '\')">'
+          + '<span class="strip-dot ' + c.status + '"></span>' + esc(n) + '</span>';
+      }
+      strip.innerHTML = html;
+    }
+
+    function toggleMoments() {
+      showMoments = !showMoments;
+      const feed = document.getElementById('momentsFeed');
+      if (feed) feed.style.display = showMoments ? '' : 'none';
+      const btn = contentEl.querySelector('.moments-toggle-btn');
+      if (btn) {
+        btn.textContent = showMoments ? '\u25bc hide raw events' : '\u25b6 show raw events (' + allMoments.length + ')';
+        btn.className = 'moments-toggle-btn' + (showMoments ? ' active' : '');
+      }
     }
 
     async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
@@ -801,6 +1121,7 @@
 
     let usageData = {};
     let totalCost = 0;
+    let creatureBudgets = {};
 
     async function refresh() {
       try {
@@ -812,7 +1133,15 @@
         const ud = await usRes.json();
         usageData = ud.usage || {};
         totalCost = ud.total || 0;
+
+        const names = Object.keys(creatures);
+        const budgetResults = await Promise.all(
+          names.map(n => fetch('/api/creatures/' + n + '/budget').then(r => r.json()).catch(() => null))
+        );
+        names.forEach((n, i) => { if (budgetResults[i]) creatureBudgets[n] = budgetResults[i]; });
+
         renderSidebar();
+        if (selected === null) { updateOverviewStrip(); }
         if (selected && creatures[selected]) {
           const el = document.getElementById('cinfo');
           if (el) {
@@ -836,7 +1165,7 @@
       } catch {}
     }
 
-    refresh();
+    refresh().then(() => Promise.all([loadRecentEvents(), loadNarration()])).then(() => { if (selected === null) renderContent(); });
     loadGenomes();
     loadGlobalBudget().then(renderGlobalBudget);
     setInterval(refresh, 2000);

@@ -151,7 +151,7 @@ export async function genomeSearch(query: string): Promise<void> {
     try {
       const raw = await fetch(`https://raw.githubusercontent.com/${item.full_name}/${item.default_branch}/genome.json`, { headers: { 'User-Agent': 'openseed-cli' } });
       if (raw.ok) {
-        const gj = await raw.json();
+        const gj = await raw.json() as any;
         if (gj.name) gName = gj.name;
         if (gj.version) version = gj.version;
       }

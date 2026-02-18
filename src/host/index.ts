@@ -26,6 +26,7 @@ import {
 } from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
+import { Narrator } from './narrator.js';
 import type { BudgetCheckResult } from './proxy.js';
 import { handleLLMProxy } from './proxy.js';
 import {
@@ -57,6 +58,7 @@ export class Orchestrator {
   private stores: Map<string, EventStore> = new Map();
   private globalListeners: Set<(name: string, event: Event) => void> = new Set();
   private costs = new CostTracker();
+  private narrator: Narrator | null = null;
   private dashboardHtml: string;
   private budgetResetInterval: NodeJS.Timeout | null = null;
 
@@ -73,6 +75,17 @@ export class Orchestrator {
     this.createServer();
     await this.autoReconnect();
     this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
+
+    const narratorConfig = loadGlobalConfig().narrator;
+    this.narrator = new Narrator(
+      narratorConfig,
+      () => this.listCreatures(),
+      (name, event) => this.emitEvent(name, event),
+      this.costs,
+    );
+    this.globalListeners.add((name, event) => this.narrator?.onEvent(name, event));
+    this.narrator.start();
+
     console.log(`[orchestrator] ready at http://localhost:${this.port}`);
   }
 
@@ -90,6 +103,7 @@ export class Orchestrator {
   private setupCleanup() {
     const cleanup = async () => {
       if (this.budgetResetInterval) clearInterval(this.budgetResetInterval);
+      this.narrator?.stop();
       try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
@@ -466,6 +480,14 @@ export class Orchestrator {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
         } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        return;
+      }
+
+      if (p === '/api/narration' && req.method === 'GET') {
+        const limit = parseInt(url.searchParams.get('limit') || '20');
+        const entries = this.narrator ? await this.narrator.readRecent(Math.min(limit, 100)) : [];
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(entries));
         return;
       }
 
