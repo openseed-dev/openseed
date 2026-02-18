@@ -1,16 +1,23 @@
 # Janee Secrets Management
 
-Janee provides secure credential management for openseed creatures. It runs as a shared container on the Docker network — creatures connect via HTTP and never see raw API keys.
+Janee provides secure credential management for openseed creatures. Creatures connect via HTTP and never see raw API keys. It works in both native and Docker modes.
 
 ## Architecture
 
 ```
 ┌─────────────┐     HTTP      ┌──────────┐    real creds   ┌──────────┐
 │  Creature    │ ────────────> │  Janee   │ ──────────────> │ External │
-│  (dreamer)   │  docker net   │ (shared) │   proxied req   │   API    │
-└─────────────┘               └──────────┘                 └──────────┘
-     no keys                  encrypted at rest              GitHub, etc.
+│  (dreamer)   │               │ (local   │   proxied req   │   API    │
+└─────────────┘               │  or net) │                 └──────────┘
+     no keys                  └──────────┘                   GitHub, etc.
+                              encrypted at rest
 ```
+
+## How it works
+
+- **Native mode**: The orchestrator spawns Janee as a child process (`src/host/janee.ts`). No Docker required.
+- **Docker mode**: Janee runs as a separate container on the Docker network (see `docker-compose.yml`).
+- **Either way**: The supervisor injects `JANEE_URL` into creature environments automatically.
 
 ## Graceful degradation
 
@@ -21,13 +28,13 @@ Janee is **optional**. If the Janee service is not running or not configured:
 - No crashes, no error loops
 
 This means you can:
-- Run `docker compose up openseed` (without Janee) and creatures still work
+- Run openseed without Janee and creatures still work
 - Add Janee later without changing creature code
 - Remove Janee without breaking anything
 
 ## Setup
 
-### 1. Install Janee on the host
+### 1. Install Janee
 
 ```bash
 npm install -g @true-and-useful/janee
@@ -47,23 +54,27 @@ janee add github --baseUrl https://api.github.com --auth bearer:ghp_xxx
 janee add anthropic --baseUrl https://api.anthropic.com --auth header:x-api-key:sk-ant-xxx
 ```
 
-### 3. Start openseed with Janee
+### 3. Start openseed
 
 ```bash
+# Native mode — Janee starts automatically if ~/.janee/config.yaml exists
+openseed start
+
+# Docker mode — Janee runs as a container
 docker compose up
 ```
 
-The `docker-compose.yml` mounts `~/.janee` into the Janee container. Credentials configured on the host are immediately available to creatures.
+No extra configuration needed. The orchestrator auto-detects Janee and injects `JANEE_URL` into creatures.
 
 To use a different config directory, set `JANEE_HOME`:
 
 ```bash
-JANEE_HOME=/path/to/janee-config docker compose up
+JANEE_HOME=/path/to/janee-config openseed start
 ```
 
 ## How creatures use Janee
 
-The dreamer genome includes a `janee` tool that wraps Janee's MCP API over HTTP:
+The dreamer genome includes a `janee` tool that wraps Janee's MCP API:
 
 ```typescript
 // Check if Janee is available
@@ -90,8 +101,9 @@ If Janee isn't running, the tool returns a clear message suggesting the creature
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JANEE_URL` | `http://janee:3000` | Injected into creature containers by the supervisor (Docker only) |
-| `JANEE_HOME` | `~/.janee` | Host directory mounted into Janee container |
+| `JANEE_URL` | auto-detected | Injected into creature environments by the supervisor |
+| `JANEE_HOME` | `~/.janee` | Janee configuration directory |
+| `JANEE_PORT` | `3100` | Port for local Janee instance (native mode) |
 
 ## More info
 
