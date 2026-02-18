@@ -1,56 +1,81 @@
 # Janee Secrets Management
 
-[Janee](https://github.com/rsdouglas/janee) manages API credentials for creatures. It runs as a shared service on the Docker network — creatures call Janee to make authenticated API requests without ever seeing the raw keys.
+Janee provides secure credential management for openseed creatures. It runs as a shared container on the Docker network — creatures connect via HTTP and never see raw API keys.
 
 ## Architecture
 
 ```
-┌──────────┐    HTTP/MCP     ┌───────┐    authenticated    ┌──────────┐
-│ Creature │ ──────────────► │ Janee │ ──────────────────► │ External │
-│          │  (capability,   │       │  (real credentials   │   API    │
-│          │   method, path) │       │   injected)          │          │
-└──────────┘                 └───────┘                      └──────────┘
+┌─────────────┐     HTTP      ┌──────────┐    real creds   ┌──────────┐
+│  Creature    │ ────────────> │  Janee   │ ──────────────> │ External │
+│  (dreamer)   │  docker net   │ (shared) │   proxied req   │   API    │
+└─────────────┘               └──────────┘                 └──────────┘
+     no keys                  encrypted at rest              GitHub, etc.
 ```
-
-Creatures connect to `http://janee:3000` on the openseed Docker network. The supervisor injects `JANEE_URL` into every creature container.
 
 ## Setup
 
-1. Copy the example config:
-   ```bash
-   mkdir -p ~/.openseed/janee
-   cp services/janee/config.example.yaml ~/.openseed/janee/config.yaml
-   ```
+### 1. Install Janee on the host
 
-2. Edit `~/.openseed/janee/config.yaml` with your API keys.
+```bash
+npm install -g @true-and-useful/janee
+```
 
-3. Start with Docker Compose:
-   ```bash
-   docker compose up -d
-   ```
+### 2. Initialize and add services
 
-Janee will be available to all creatures on the network.
+```bash
+janee init          # creates ~/.janee/config.yaml
+janee add           # interactive — walks you through adding a service
+```
 
-## Usage from a Creature
+Or add services directly:
 
-The dreamer genome includes a built-in Janee tool. Creatures can:
+```bash
+janee add github --baseUrl https://api.github.com --auth bearer:ghp_xxx
+janee add anthropic --baseUrl https://api.anthropic.com --auth header:x-api-key:sk-ant-xxx
+```
+
+### 3. Start openseed with Janee
+
+```bash
+docker compose up
+```
+
+The `docker-compose.yml` mounts `~/.janee` into the Janee container. Credentials configured on the host are immediately available to creatures.
+
+To use a different config directory, set `JANEE_HOME`:
+
+```bash
+JANEE_HOME=/path/to/janee-config docker compose up
+```
+
+## How creatures use Janee
+
+The dreamer genome includes a `janee` tool that wraps Janee's MCP API over HTTP:
 
 ```typescript
-// Discover what APIs are available
+// List available services
 await janee({ action: 'list_services' });
 
-// Make an authenticated API request
+// Make an API request through Janee (credentials injected automatically)
 await janee({
   action: 'execute',
   capability: 'github',
   method: 'GET',
   path: '/user',
-  reason: 'checking my identity',
+  reason: 'checking identity'
 });
 ```
 
-The creature never sees the actual API key. Janee proxies the request, injects credentials, and returns the response. All requests are logged for audit.
+The creature never sees API keys — Janee injects them into the outbound request and returns the response.
 
-## Adding New Services
+## Environment
 
-Edit `~/.openseed/janee/config.yaml` to add new API services. See the [Janee docs](https://github.com/rsdouglas/janee#configuration) for the full configuration reference.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JANEE_URL` | `http://janee:3000` | Injected into creature containers by the supervisor |
+| `JANEE_HOME` | `~/.janee` | Host directory mounted into Janee container |
+
+## More info
+
+- [Janee on GitHub](https://github.com/rsdouglas/janee)
+- [Janee on npm](https://www.npmjs.com/package/@true-and-useful/janee)
