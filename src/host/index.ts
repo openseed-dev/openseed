@@ -33,6 +33,7 @@ import {
   CreatureSupervisor,
   SupervisorConfig,
 } from './supervisor.js';
+import { getJaneeUrl, startJanee, stopJanee } from './janee.js';
 
 const execAsync = promisify(exec);
 
@@ -74,6 +75,10 @@ export class Orchestrator {
     await this.writeRunFile();
     this.setupCleanup();
     this.createServer();
+    // Start local Janee instance in native mode (Docker mode uses a separate container)
+    if (!IS_DOCKER) {
+      await startJanee();
+    }
     await this.autoReconnect();
     this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
 
@@ -105,6 +110,7 @@ export class Orchestrator {
     const cleanup = async () => {
       if (this.budgetResetInterval) clearInterval(this.budgetResetInterval);
       this.narrator?.stop();
+      stopJanee();
       try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
