@@ -12,6 +12,19 @@ Janee provides secure credential management for openseed creatures. It runs as a
      no keys                  encrypted at rest              GitHub, etc.
 ```
 
+## Graceful degradation
+
+Janee is **optional**. If the Janee service is not running or not configured:
+
+- The dreamer `janee` tool reports unavailability with a helpful message
+- The creature falls back to raw environment variables (e.g. `GITHUB_TOKEN`) — same as before Janee existed
+- No crashes, no error loops
+
+This means you can:
+- Run `docker compose up openseed` (without Janee) and creatures still work
+- Add Janee later without changing creature code
+- Remove Janee without breaking anything
+
 ## Setup
 
 ### 1. Install Janee on the host
@@ -53,6 +66,9 @@ JANEE_HOME=/path/to/janee-config docker compose up
 The dreamer genome includes a `janee` tool that wraps Janee's MCP API over HTTP:
 
 ```typescript
+// Check if Janee is available
+await janee({ action: 'status' });
+
 // List available services
 await janee({ action: 'list_services' });
 
@@ -68,11 +84,13 @@ await janee({
 
 The creature never sees API keys — Janee injects them into the outbound request and returns the response.
 
+If Janee isn't running, the tool returns a clear message suggesting the creature use raw env vars instead.
+
 ## Environment
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JANEE_URL` | `http://janee:3000` | Injected into creature containers by the supervisor |
+| `JANEE_URL` | `http://janee:3000` | Injected into creature containers by the supervisor (Docker only) |
 | `JANEE_HOME` | `~/.janee` | Host directory mounted into Janee container |
 
 ## More info
