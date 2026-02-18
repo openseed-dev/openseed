@@ -1,8 +1,14 @@
 /**
  * Janee MCP secrets management tool for creatures.
  *
- * Connects to a Janee server via stdio (npx janee) or HTTP,
- * letting the creature manage secrets through MCP tool calls.
+ * In a typical OpenSeed deployment, Janee runs as a shared container
+ * alongside creature containers. Creatures connect to the central
+ * Janee instance via HTTP (set JANEE_HTTP_URL in the environment).
+ *
+ * Fallback: stdio mode spawns a local `npx janee --stdio` process,
+ * useful for development or single-creature setups.
+ *
+ * @see https://github.com/rsdouglas/janee
  */
 
 import { execSync, spawn, ChildProcess } from 'node:child_process';
@@ -21,9 +27,11 @@ const pendingRequests = new Map<number, { resolve: (v: any) => void; reject: (e:
 let outputBuffer = '';
 
 function getJaneeConfig(): { mode: 'stdio' | 'http'; httpUrl?: string; command?: string } {
-  // Check environment first
-  if (process.env.JANEE_HTTP_URL) {
-    return { mode: 'http', httpUrl: process.env.JANEE_HTTP_URL };
+  // Prefer HTTP — Janee typically runs as a shared container in the OpenSeed stack.
+  // The host sets JANEE_HTTP_URL (e.g., http://janee:3000/mcp) when launching creatures.
+  const httpUrl = process.env.JANEE_HTTP_URL || process.env.JANEE_URL;
+  if (httpUrl) {
+    return { mode: 'http', httpUrl };
   }
 
   // Check well-known config paths

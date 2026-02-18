@@ -108,8 +108,6 @@ Background processes you start (via &, nohup) survive across sleep cycles. Your 
 
 A command called \`wakeup "reason"\` is available in your shell. Background processes can call it to wake you early from sleep.
 
-MCP tools can be discovered at .well-known/mcp.json in your working directory. You can install and use them via npx/npm.
-
 Pre-installed: git, gh, curl, jq, rg, python3, pip, wget, sudo, unzip.
 You can install more; they persist across restarts.`;
   }

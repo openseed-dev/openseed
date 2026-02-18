@@ -1,59 +1,68 @@
-# MCP Tool Discovery for Creatures
+# Janee Integration for Creatures
 
-OpenSeed creatures can discover available MCP tools through a well-known file
-convention. This allows creatures to organically find and use MCP servers
-without hardcoded dependencies.
+OpenSeed creatures use [Janee](https://github.com/rsdouglas/janee) for
+encrypted secrets management. Janee runs as a shared container in the
+OpenSeed stack, providing a central secret store that all creatures
+communicate with.
 
-## Convention
+## Architecture
 
-Place a `.well-known/mcp.json` file in the genome directory. It's copied into
-the creature's container at `/creature/.well-known/mcp.json`.
-
-### Format
-
-```json
-{
-  "servers": [
-    {
-      "name": "janee",
-      "description": "Encrypted secrets management for creatures",
-      "install": "npm install -g janee",
-      "usage": "npx janee --stdio",
-      "homepage": "https://github.com/rsdouglas/janee",
-      "capabilities": ["secrets-get", "secrets-set", "secrets-list", "secrets-delete"]
-    }
-  ]
-}
+```
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+│  Creature A  │────▶│             │     │              │
+│  (dreamer)   │     │   Janee     │────▶│  Encrypted   │
+│              │◀────│  Container  │     │  Store       │
+├─────────────┤     │  (shared)   │     │              │
+│  Creature B  │────▶│             │◀────│              │
+│  (dreamer)   │     └─────────────┘     └──────────────┘
+└─────────────┘
+        HTTP (JANEE_HTTP_URL)
 ```
 
-### Fields
+## Genome Integration
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | yes | MCP server identifier |
-| `description` | yes | What the server provides |
-| `install` | yes | How to install it |
-| `usage` | yes | How to start it (stdio mode) |
-| `homepage` | no | Project URL |
-| `capabilities` | no | List of tool names provided |
+### Dreamer Genome
 
-## Creature Discovery
+The dreamer genome includes a native `janee` tool in `tools/janee.ts`.
+This gives creatures first-class access to secret management alongside
+their other tools (bash, browser, sleep, etc.).
 
-Creatures with bash access can discover MCP tools by reading this file:
+**Connection priority:**
+1. `JANEE_HTTP_URL` environment variable (preferred — points to shared container)
+2. `JANEE_URL` environment variable (alias)
+3. Config file lookup (`janee.json`, `~/.janee/config.json`, `~/.openseed/janee.json`)
+4. Stdio fallback (`npx janee --stdio`) for development
 
-```bash
-cat .well-known/mcp.json | jq '.servers[].name'
+**Available actions:** `get`, `set`, `list`, `delete`, `status`
+
+### Other Genomes
+
+Genomes without explicit Janee tooling (like minimal) may still discover
+and use Janee organically — for example, by finding it in npm, stumbling
+on documentation, or deciding they need secrets management. This is by
+design: simpler genomes are about emergent behavior.
+
+## Host Configuration
+
+The OpenSeed host should set `JANEE_HTTP_URL` in the creature's
+environment when launching containers. Example docker-compose:
+
+```yaml
+services:
+  janee:
+    image: rsdouglas/janee:latest
+    ports:
+      - "3000:3000"
+
+  creature:
+    image: openseed-creature:dreamer
+    environment:
+      JANEE_HTTP_URL: http://janee:3000/mcp
 ```
 
-Genome authors can also wire discovered servers into native tool definitions
-(see the dreamer genome's Janee integration for an example).
+## Per-Creature Isolation
 
-## Genome Integration Levels
-
-1. **Breadcrumb only** (minimal genome): Place the `.well-known/mcp.json` file
-   and mention it in the system prompt. The creature discovers and uses MCP
-   tools via bash (`npx janee --stdio`).
-
-2. **Native tool** (dreamer genome): In addition to the breadcrumb, add a
-   native tool definition that calls the MCP server directly. This provides
-   a better UX with typed parameters and integrated error handling.
+Janee supports agent-scoped credential isolation. Each creature
+authenticates with its own identity, and policies can restrict which
+secrets a creature can access. See [Janee docs](https://github.com/rsdouglas/janee)
+for configuration details.
