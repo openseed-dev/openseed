@@ -3,25 +3,29 @@
 <head>
   <title>openseed</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='glow'%3E%3Cstop offset='0%25' stop-color='%2322c55e' stop-opacity='0.6'/%3E%3Cstop offset='100%25' stop-color='%2322c55e' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='12' fill='url(%23glow)'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%2322c55e'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-      background: #fafafa; color: #1a1a1a; font-size: 13px;
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: #f8f7f4; color: #1a1a1a; font-size: 13px;
       display: flex;
     }
 
     .sidebar {
       position: sticky; top: 0; height: 100vh;
-      width: 260px; border-right: 1px solid #e5e5e5; background: #fff;
+      width: 260px; border-right: 1px solid #e5e0d8; background: #fff;
       display: flex; flex-direction: column; flex-shrink: 0;
       overflow-y: auto; transition: width 0.2s, opacity 0.2s;
     }
     .sidebar.hidden { width: 0; opacity: 0; overflow: hidden; border-right: none; }
     .sidebar-header {
-      padding: 16px; color: #16a34a; font-size: 16px; font-weight: bold;
-      border-bottom: 1px solid #e5e5e5;
+      padding: 16px; color: #1a1a1a; font-size: 17px; font-weight: 500;
+      font-family: 'Newsreader', Georgia, serif; letter-spacing: -0.02em;
+      border-bottom: 1px solid #e5e0d8;
       display: flex; align-items: center; justify-content: space-between;
     }
     .sidebar-header .spawn-btn {
@@ -119,7 +123,7 @@
       flex: 1; min-width: 0; display: flex; flex-direction: column;
     }
     .main-header {
-      position: sticky; top: 0; z-index: 20; background: #fafafa;
+      position: sticky; top: 0; z-index: 20; background: #f8f7f4;
       padding: 12px 16px; border-bottom: 1px solid #e5e5e5;
       display: flex; align-items: center; gap: 12px;
     }
@@ -128,7 +132,7 @@
     .main-header .sha { color: #2563eb; }
 
     .tab-bar {
-      position: sticky; top: 44px; z-index: 15; background: #fafafa;
+      position: sticky; top: 44px; z-index: 15; background: #f8f7f4;
       display: none; border-bottom: 1px solid #e5e5e5;
       padding: 0 16px;
     }
@@ -161,7 +165,7 @@
     .event.host-promote { border-left-color: #16a34a; }
     .event.host-rollback { border-left-color: #dc2626; background: #fef2f2; }
     .event.creature-boot { border-left-color: #2563eb; background: #f8faff; }
-    .event.creature-thought { border-left-color: #999; background: #fafafa; }
+    .event.creature-thought { border-left-color: #999; background: #f8f7f4; }
     .event.creature-sleep { border-left-color: #60a5fa; background: #f0f7ff; }
     .event.creature-wake { border-left-color: #0284c7; background: #f5fbff; }
     .event.creature-message { border-left-color: #2563eb; background: #eff6ff; }
@@ -211,7 +215,7 @@
     .detail { color: #666; margin-left: 4px; }
 
     .message-bar {
-      position: sticky; bottom: 0; background: #fafafa;
+      position: sticky; bottom: 0; background: #f8f7f4;
       padding: 12px 16px; border-top: 1px solid #e5e5e5;
       display: none; gap: 8px;
     }
@@ -255,104 +259,109 @@
     .mind-content th, .mind-content td { border: 1px solid #e5e5e5; padding: 4px 8px; font-size: 12px; }
     .mind-content th { background: #f5f5f5; color: #1a1a1a; }
 
-    .overview { padding: 20px 32px; max-width: 800px; margin: 0 auto; }
+    .overview { padding: 28px 40px; max-width: 720px; margin: 0 auto; }
     .status-strip {
-      display: flex; flex-wrap: wrap; gap: 4px 14px;
-      padding-bottom: 20px; margin-bottom: 20px;
-      border-bottom: 1px solid #e5e5e5; font-size: 12px;
+      display: flex; flex-wrap: wrap; gap: 3px 16px;
+      padding-bottom: 24px; margin-bottom: 28px;
+      border-bottom: 1px solid #e5e0d8; font-size: 11px;
     }
     .strip-item {
-      display: inline-flex; align-items: center; gap: 6px;
-      cursor: pointer; color: #999; transition: color 0.15s;
+      display: inline-flex; align-items: center; gap: 5px;
+      cursor: pointer; color: #a3a3a3; transition: color 0.15s;
     }
-    .strip-item:hover { color: #333; }
-    .strip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .strip-item:hover { color: #1a1a1a; }
+    .strip-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
     .strip-dot.running { background: #16a34a; }
     .strip-dot.sleeping { background: #60a5fa; }
     .strip-dot.stopped { background: #999; }
     .strip-dot.error { background: #dc2626; }
     .strip-dot.starting { background: #d97706; }
 
-    .moments { display: flex; flex-direction: column; gap: 6px; }
+    .moments { display: flex; flex-direction: column; gap: 0; }
     .moment {
-      padding: 14px 18px; border-radius: 6px;
-      border-left: 3px solid #d0d0d0; background: #fff;
+      padding: 14px 0; border-bottom: 1px solid #e5e0d8;
       animation: moment-in 0.3s ease-out;
     }
-    @keyframes moment-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-    .moment-dream { border-left-color: #7c3aed; }
-    .moment-deep-dream { border-left-color: #9333ea; }
-    .moment-sleep { border-left-color: #60a5fa; }
-    .moment-evolved { border-left-color: #16a34a; }
-    .moment-eval { border-left-color: #16a34a; }
-    .moment-thought { border-left-color: #999; }
-    .moment-wake { border-left-color: #0284c7; }
-    .moment-budget { border-left-color: #dc2626; }
-    .moment-budget-ok { border-left-color: #16a34a; }
+    .moment:last-child { border-bottom: none; }
+    @keyframes moment-in { from { opacity: 0; } to { opacity: 1; } }
+    .moment-dream, .moment-deep-dream, .moment-sleep, .moment-evolved,
+    .moment-eval, .moment-thought, .moment-wake, .moment-budget, .moment-budget-ok { }
     .moment-header {
-      display: flex; align-items: center; gap: 8px;
-      margin-bottom: 8px; font-size: 12px;
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 6px; font-size: 11px;
     }
-    .moment-creature { color: #1a1a1a; font-weight: bold; cursor: pointer; }
+    .moment-creature { color: #1a1a1a; font-weight: 600; cursor: pointer; font-size: 12px; }
     .moment-creature:hover { text-decoration: underline; }
-    .moment-label { font-size: 11px; }
+    .moment-label { font-size: 11px; color: #a3a3a3; }
     .moment-label.dream { color: #7c3aed; }
-    .moment-label.deep { color: #9333ea; font-weight: bold; }
-    .moment-label.sleep { color: #3b82f6; }
+    .moment-label.deep { color: #9333ea; font-weight: 600; }
+    .moment-label.sleep { color: #60a5fa; }
     .moment-label.evolved { color: #16a34a; }
     .moment-label.eval { color: #16a34a; }
-    .moment-label.thought { color: #999; }
+    .moment-label.thought { color: #a3a3a3; }
     .moment-label.wake { color: #0284c7; }
     .moment-label.budget { color: #dc2626; }
     .moment-label.budget-ok { color: #16a34a; }
-    .moment-time { color: #999; margin-left: auto; font-size: 11px; }
+    .moment-time { color: #c4c0b8; margin-left: auto; font-size: 10px; font-variant-numeric: tabular-nums; }
     .moment-text {
-      color: #333; font-size: 13px; line-height: 1.6;
+      color: #5a5a5a; font-size: 12.5px; line-height: 1.55;
       white-space: pre-wrap; word-break: break-word;
     }
     .moment-reflection {
-      color: #666; font-size: 12px; font-style: italic;
-      line-height: 1.5; margin-top: 8px;
-      border-left: 2px solid #e5e5e5; padding-left: 12px;
+      color: #8a8a8a; font-size: 11.5px; font-style: italic;
+      line-height: 1.5; margin-top: 6px;
+      padding-left: 12px; border-left: 1px solid #e5e0d8;
     }
-    .moment-meta { color: #999; font-size: 11px; margin-top: 6px; }
+    .moment-meta { color: #a3a3a3; font-size: 10px; margin-top: 4px; letter-spacing: 0.02em; }
 
-    .narration-feed { display: flex; flex-direction: column; gap: 12px; }
+    .narration-feed { display: flex; flex-direction: column; gap: 0; }
     .narration-entry {
-      padding: 16px 20px; border-radius: 6px;
-      border-left: 3px solid #16a34a; background: #fff;
-      animation: moment-in 0.3s ease-out;
+      padding: 28px 0; border-bottom: 1px solid #e5e0d8;
+      animation: narrate-in 0.6s ease-out;
     }
+    .narration-entry:first-child { padding-top: 0; }
+    .narration-entry:last-child { border-bottom: none; }
+    @keyframes narrate-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     .narration-header {
       display: flex; align-items: center; gap: 8px;
-      margin-bottom: 10px; font-size: 11px; color: #999;
+      margin-bottom: 16px; font-size: 11px; color: #a3a3a3;
     }
-    .narration-label { color: #16a34a; font-weight: bold; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
-    .narration-time { margin-left: auto; }
+    .narration-label {
+      color: #2d8a56; font-weight: 500; font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+    .narration-label::before {
+      content: ''; display: inline-block; width: 6px; height: 6px;
+      background: #2d8a56; border-radius: 50%; margin-right: 6px;
+      vertical-align: 1px;
+    }
+    .narration-time { margin-left: auto; font-variant-numeric: tabular-nums; }
     .narration-text {
-      color: #333; font-size: 15px; line-height: 1.75;
-      font-family: 'Georgia', 'Times New Roman', serif;
-      word-break: break-word;
+      color: #2a2a2a; font-size: 16.5px; line-height: 1.85;
+      font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+      word-break: break-word; font-weight: 400;
+      letter-spacing: -0.005em;
     }
-    .narration-text p { margin: 0 0 10px; }
+    .narration-text p { margin: 0 0 14px; }
     .narration-text p:last-child { margin-bottom: 0; }
-    .narration-text strong { color: #1a1a1a; }
-    .narration-text em { color: #666; }
-    .narration-text code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
-    .narration-creatures { margin-top: 8px; font-size: 10px; color: #999; }
-    .narration-creatures span { color: #16a34a; cursor: pointer; }
+    .narration-text strong { color: #1a1a1a; font-weight: 600; }
+    .narration-text em { color: #5a5a5a; }
+    .narration-text code { background: #edeae4; padding: 1px 5px; border-radius: 3px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
+    .narration-creatures { margin-top: 12px; font-size: 10px; color: #a3a3a3; letter-spacing: 0.02em; }
+    .narration-creatures span { color: #2d8a56; cursor: pointer; }
     .narration-creatures span:hover { text-decoration: underline; }
 
     .moments-toggle {
-      margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e5e5;
+      margin-top: 28px; padding-top: 20px; border-top: 1px solid #e5e0d8;
     }
     .moments-toggle-btn {
-      background: none; border: 1px solid #d0d0d0; color: #999;
-      padding: 4px 12px; border-radius: 3px; cursor: pointer;
+      background: none; border: none; color: #a3a3a3;
+      padding: 0; cursor: pointer;
       font-family: inherit; font-size: 11px;
+      letter-spacing: 0.02em;
     }
-    .moments-toggle-btn:hover { color: #666; border-color: #999; }
-    .moments-toggle-btn.active { color: #666; border-color: #999; }
+    .moments-toggle-btn:hover { color: #666; }
+    .moments-toggle-btn.active { color: #666; }
   </style>
 </head>
 <body>
@@ -378,7 +387,7 @@
       <div class="spawn-error" id="spawnError"></div>
     </div>
     <div class="creature-list" id="creatures"></div>
-    <div id="sidebarFooter" style="border-top:1px solid #e5e5e5;padding:12px;font-size:11px;flex-shrink:0;">
+    <div id="sidebarFooter" style="border-top:1px solid #e5e0d8;padding:12px;font-size:11px;flex-shrink:0;">
       <div id="totalCostDisplay"></div>
       <div id="globalBudget" style="color:#999;"></div>
     </div>
@@ -392,7 +401,8 @@
       <div class="events" id="events"></div>
     </div>
     <div class="message-bar" id="msgbar">
-      <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}"></textarea>
+      <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}" onpaste="return true"></textarea>
+      <button onclick="pasteMsg()" title="Paste from clipboard" style="background:#f8f7f4;border:1px solid #d0d0d0;color:#666;padding:8px 10px;border-radius:4px;cursor:pointer;font-size:13px;">&#x1f4cb;</button>
       <button onclick="sendMsg()">Send</button>
     </div>
   </div>
@@ -950,7 +960,6 @@
       const dotCls = c ? c.status : 'stopped';
       return '<div class="moment ' + cls + '">'
         + '<div class="moment-header">'
-        + '<span class="strip-dot ' + dotCls + '"></span>'
         + '<span class="moment-creature" onclick="select(\'' + esc(ev.creature || '') + '\')">' + esc(ev.creature || '') + '</span>'
         + '<span class="moment-label ' + lcls + '">' + label + '</span>'
         + '<span class="moment-time">' + timeAgo(ev.t) + '</span>'
@@ -1012,9 +1021,9 @@
           + '<span class="strip-dot ' + c.status + '"></span>' + esc(n) + '</span>';
       }
 
-      headerEl.innerHTML = '<div class="info" style="font-size:13px;display:flex;align-items:center;width:100%">'
-        + '<span style="color:#16a34a;font-weight:bold;margin-right:12px">openseed</span>'
-        + '<span style="color:#999">' + names.length + ' creatures</span>'
+      headerEl.innerHTML = '<div style="display:flex;align-items:baseline;width:100%">'
+        + '<span style="font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:500;color:#1a1a1a;letter-spacing:-0.02em">openseed</span>'
+        + '<span style="color:#a3a3a3;font-size:11px;margin-left:auto;letter-spacing:0.02em">' + names.length + ' creatures</span>'
         + '</div>';
 
       const narrationHtml = narrationEntries.map(renderNarrationEntry).join('');
@@ -1023,7 +1032,7 @@
       contentEl.innerHTML = '<div class="overview">'
         + '<div class="status-strip">' + strip + '</div>'
         + '<div class="narration-feed" id="narrationFeed">'
-        + (narrationHtml || '<div style="color:#999;padding:20px;text-align:center">Narrator is warming up...</div>')
+        + (narrationHtml || '<div style="color:#a3a3a3;padding:40px 0;text-align:center;font-size:13px;letter-spacing:0.02em">narrator is warming up\u2026</div>')
         + '</div>'
         + '<div class="moments-toggle">'
         + '<button class="moments-toggle-btn" onclick="toggleMoments()">'
@@ -1031,7 +1040,7 @@
         + '</button>'
         + '</div>'
         + '<div class="moments" id="momentsFeed" style="' + (showMoments ? '' : 'display:none;') + 'margin-top:12px">'
-        + (momentsHtml || '<div style="color:#999;padding:20px;text-align:center">No creature activity yet.</div>')
+        + (momentsHtml || '<div style="color:#a3a3a3;padding:20px 0;text-align:center;font-size:12px">no creature activity yet</div>')
         + '</div>'
         + '</div>';
     }
@@ -1108,6 +1117,17 @@
       await fetch('/api/creatures/' + n + '/archive', { method: 'POST' });
       await refresh();
       select(null);
+    }
+
+    async function pasteMsg() {
+      try {
+        const text = await navigator.clipboard.readText();
+        const inp = document.getElementById('msg');
+        inp.value += text;
+        inp.focus();
+      } catch (e) {
+        alert('Clipboard access denied. Try granting clipboard permission for this page.');
+      }
     }
 
     async function sendMsg() {

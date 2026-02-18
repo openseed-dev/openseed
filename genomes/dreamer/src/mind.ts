@@ -30,7 +30,7 @@ const RULES_FILE = ".self/rules.md";
 const CREATOR_LOG = ".self/creator-log.jsonl";
 const RULES_CAP = 15;
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
-const MAX_EVAL_TURNS = 50;
+const MAX_EVAL_TURNS = 100;
 const MAX_CONSOLIDATION_TURNS = 10;
 
 const provider = createAnthropic({
