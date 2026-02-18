@@ -8,22 +8,48 @@
  *
  * The supervisor injects JANEE_URL into the creature's environment.
  *
+ * GRACEFUL DEGRADATION: If Janee is not running or JANEE_URL is not set,
+ * the tool reports unavailability instead of crashing. The creature can
+ * still function using raw env vars (e.g. GITHUB_TOKEN) as it did before
+ * Janee existed.
+ *
  * @see https://github.com/rsdouglas/janee
  */
 
-function getJaneeUrl(): string {
+function getJaneeUrl(): string | null {
   const url = process.env.JANEE_URL;
-  if (!url) {
-    throw new Error(
-      'JANEE_URL not set. The Janee service should be running on the Docker network. ' +
-      'Check that docker-compose includes the janee service and the supervisor is injecting JANEE_URL.',
-    );
-  }
+  if (!url) return null;
   return url.replace(/\/+$/, '');
+}
+
+async function isJaneeReachable(baseUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 0,
+        method: 'ping',
+        params: {},
+      }),
+      signal: AbortSignal.timeout(3000),
+    });
+    return res.ok || res.status === 400; // 400 = valid endpoint, bad request
+  } catch {
+    return false;
+  }
 }
 
 async function mcpCall(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
   const baseUrl = getJaneeUrl();
+  if (!baseUrl) {
+    throw new Error(
+      'Janee is not configured (JANEE_URL not set). ' +
+      'You can still access APIs using raw environment variables like GITHUB_TOKEN.',
+    );
+  }
+
   const creatureId = process.env.CREATURE_NAME || process.env.HOSTNAME || 'unknown';
 
   const res = await fetch(`${baseUrl}/mcp`, {
@@ -38,6 +64,7 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}): Pr
       method: 'tools/call',
       params: { name: method, arguments: params },
     }),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!res.ok) {
@@ -53,6 +80,30 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}): Pr
 }
 
 /**
+ * Check if Janee is available. Returns status info.
+ */
+export async function janeeStatus(): Promise<string> {
+  const url = getJaneeUrl();
+  if (!url) {
+    return JSON.stringify({
+      available: false,
+      reason: 'JANEE_URL not set',
+      hint: 'Janee is optional. Use raw env vars (GITHUB_TOKEN, etc.) for API access.',
+    }, null, 2);
+  }
+
+  const reachable = await isJaneeReachable(url);
+  return JSON.stringify({
+    available: reachable,
+    url,
+    ...(reachable ? {} : {
+      reason: 'Janee service not reachable',
+      hint: 'Janee may be starting up or not deployed. Use raw env vars as fallback.',
+    }),
+  }, null, 2);
+}
+
+/**
  * List available services and the creature's capabilities for each.
  */
 export async function janeeListServices(): Promise<string> {
@@ -60,7 +111,7 @@ export async function janeeListServices(): Promise<string> {
     const result = await mcpCall('list_services');
     return JSON.stringify(result, null, 2);
   } catch (err: any) {
-    return `Error listing services: ${err.message}`;
+    return `Janee unavailable: ${err.message}\n\nFallback: check raw environment variables for API tokens.`;
   }
 }
 
@@ -91,7 +142,7 @@ export async function janeeExecute(args: {
     });
     return JSON.stringify(result, null, 2);
   } catch (err: any) {
-    return `Error executing request: ${err.message}`;
+    return `Janee unavailable: ${err.message}\n\nFallback: use raw API calls with environment variable tokens.`;
   }
 }
 
@@ -99,7 +150,7 @@ export async function janeeExecute(args: {
  * Main entry point — dispatches Janee tool calls.
  */
 export async function janee(args: {
-  action: 'list_services' | 'execute';
+  action: 'status' | 'list_services' | 'execute';
   capability?: string;
   method?: string;
   path?: string;
@@ -107,6 +158,9 @@ export async function janee(args: {
   reason?: string;
 }): Promise<string> {
   switch (args.action) {
+    case 'status':
+      return janeeStatus();
+
     case 'list_services':
       return janeeListServices();
 
@@ -123,6 +177,6 @@ export async function janee(args: {
       });
 
     default:
-      return `Error: unknown action "${args.action}". Use: list_services, execute`;
+      return `Error: unknown action "${args.action}". Use: status, list_services, execute`;
   }
 }
