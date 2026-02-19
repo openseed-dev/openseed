@@ -1167,7 +1167,8 @@
           if (el) {
             const c = creatures[selected];
             const sr = c.sleepReason === 'budget' ? ' (budget cap)' : '';
-            el.innerHTML = '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status + sr;
+            el.innerHTML = (c.model ? '<span style="color:#999;font-size:11px">' + esc(c.model) + '</span> \u00b7 ' : '')
+              + '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status + sr;
           }
           if (budgetRes && !document.getElementById('beCap')) {
             try { renderBudgetInfo(await budgetRes.json()); } catch {}

@@ -47,6 +47,11 @@ TONE:
 - Calm, precise, matter-of-fact. Not excited, not literary.
 - Don't editorialize. Don't anthropomorphize beyond what the creatures themselves do.
 
+FACT-CHECK:
+- Never claim "first", "biggest", "unprecedented", "milestone", or any superlative unless you verified it with tools (search_narration, git_log, etc.).
+- Prefer neutral phrasing: "merged PR #88" not "merged her first PR". The reader will know if it's notable.
+- If you're unsure whether something is new or recurring, just state the fact without commentary.
+
 SKIP RULE:
 - If nothing interesting happened, respond with exactly the word SKIP — no other text, no explanation, no preamble. Just "SKIP".
 - Never narrate the absence of activity. Never say "nothing new", "no changes", "same state", "no commits", "session produced no X", etc. Either narrate something concrete that happened or SKIP.
@@ -60,7 +65,7 @@ EXAMPLES (for style and length — these are the target):
 
 Example 1 — multi-creature entry:
 
-**atlas** opened PR #247 against vercel/ai (70k+ stars) — fixing an Anthropic caller-chain bug she developed across three sessions. Her first outbound PR to a major upstream repo.
+**atlas** opened PR #247 against vercel/ai (70k+ stars) — fixing an Anthropic caller-chain bug she developed across three sessions.
 
 **trader-one** expanded from 3 to 4 simultaneous positions after her own backtesting showed 35% higher weekly PnL without degrading win rate. Fourth slot filled immediately with FIL at RSI~34.
 
@@ -118,6 +123,18 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {},
+    },
+  },
+  {
+    name: 'search_narration',
+    description: 'Search previous narration entries for a keyword or creature name. Use this to verify claims before saying "first", "new", etc.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search term (case-insensitive substring match)' },
+        n: { type: 'number', description: 'Max entries to search back through. Default: 50' },
+      },
+      required: ['query'],
     },
   },
 ];
@@ -362,6 +379,7 @@ export class Narrator {
         case 'git_log': return await this.toolGitLog(input.creature, input.n);
         case 'git_diff': return await this.toolGitDiff(input.creature, input.ref);
         case 'list_creatures': return await this.toolListCreatures();
+        case 'search_narration': return await this.toolSearchNarration(input.query, input.n);
         default: return `unknown tool: ${name}`;
       }
     } catch (err: any) {
@@ -437,6 +455,14 @@ export class Narrator {
       lines.push(parts.join(' '));
     }
     return lines.join('\n') || 'no creatures';
+  }
+
+  private async toolSearchNarration(query: string, n = 50): Promise<string> {
+    const entries = await this.readRecent(n);
+    const q = query.toLowerCase();
+    const matches = entries.filter(e => e.text.toLowerCase().includes(q));
+    if (matches.length === 0) return `No narration entries mention "${query}" in the last ${n} entries.`;
+    return matches.map(e => `[${e.t.slice(0, 19)}] ${e.text}`).join('\n---\n');
   }
 
   async readRecent(n: number): Promise<NarrationEntry[]> {

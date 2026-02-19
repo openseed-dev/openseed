@@ -219,6 +219,7 @@ export async function handleLLMProxy(
   costs: CostTracker,
   checkBudget?: BudgetChecker,
   onBudgetExceeded?: (creatureName: string) => void,
+  onModelSeen?: (creatureName: string, model: string) => void,
 ): Promise<void> {
   const apiKeyHeader = req.headers['x-api-key'] as string || '';
   const creatureName = apiKeyHeader.startsWith('creature:')
@@ -259,6 +260,7 @@ export async function handleLLMProxy(
 
   const model = parsed.model || 'claude-opus-4-6';
   const provider = inferProvider(model);
+  if (onModelSeen) onModelSeen(creatureName, model);
 
   try {
     if (provider === 'openai') {

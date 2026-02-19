@@ -58,6 +58,7 @@ export class Orchestrator {
   private stores: Map<string, EventStore> = new Map();
   private globalListeners: Set<(name: string, event: Event) => void> = new Set();
   private costs = new CostTracker();
+  private pendingOps: Set<string> = new Set();
   private narrator: Narrator | null = null;
   private dashboardHtml: string;
   private budgetResetInterval: NodeJS.Timeout | null = null;
@@ -131,6 +132,7 @@ export class Orchestrator {
   private async autoReconnect() {
     const creatures = await this.discoverCreatures();
     for (const { name, dir } of creatures) {
+      if (!this.isContainerRunning(name)) continue;
       const port = this.getContainerPort(name);
       if (port) {
         console.log(`[orchestrator] found running container for ${name} on port ${port}`);
@@ -139,14 +141,33 @@ export class Orchestrator {
     }
   }
 
+  private isContainerRunning(name: string): boolean {
+    try {
+      const out = execSync(
+        `docker inspect -f '{{.State.Running}}' creature-${name}`,
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+      ).trim();
+      return out === 'true';
+    } catch { return false; }
+  }
+
   private getContainerPort(name: string): number | null {
+    // Running container: docker port returns mapped host port
     try {
       const out = execSync(`docker port creature-${name} 7778`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
       const port = parseInt(out.split(':').pop()!);
-      return isNaN(port) ? null : port;
-    } catch {
-      return null;
-    }
+      if (!isNaN(port)) return port;
+    } catch {}
+    // Stopped container: inspect HostConfig for the original port binding
+    try {
+      const out = execSync(
+        `docker inspect -f '{{(index (index .HostConfig.PortBindings "7778/tcp") 0).HostPort}}' creature-${name}`,
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+      ).trim();
+      const port = parseInt(out);
+      if (!isNaN(port)) return port;
+    } catch {}
+    return null;
   }
 
   // --- Port allocation ---
@@ -192,6 +213,7 @@ export class Orchestrator {
       return;
     }
     if (existing) throw new Error(`creature "${name}" is already running`);
+    if (this.pendingOps.has(name)) throw new Error(`creature "${name}" is already starting`);
 
     const dir = path.join(CREATURES_DIR, name);
     try { await fs.access(path.join(dir, 'BIRTH.json')); }
@@ -199,17 +221,22 @@ export class Orchestrator {
 
     if (!this.isDockerAvailable()) throw new Error('docker is required but not available');
 
-    if (!this.hasDockerImage(name)) {
-      console.log(`[orchestrator] no docker image for ${name}, building...`);
-      await execAsync(`docker build -t creature-${name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
+    this.pendingOps.add(name);
+    try {
+      if (!this.hasDockerImage(name)) {
+        console.log(`[orchestrator] no docker image for ${name}, building...`);
+        await execAsync(`docker build -t creature-${name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
+      }
+
+      const autoIterate = !(opts?.manual);
+      const existingPort = this.getContainerPort(name);
+      const port = existingPort || await this.allocatePort();
+
+      console.log(`[orchestrator] starting ${name} on port ${port}${existingPort ? ' (existing container)' : ''}`);
+      await this.startCreatureInternal(name, dir, port, { autoIterate });
+    } finally {
+      this.pendingOps.delete(name);
     }
-
-    const autoIterate = !(opts?.manual);
-    const existingPort = this.getContainerPort(name);
-    const port = existingPort || await this.allocatePort();
-
-    console.log(`[orchestrator] starting ${name} on port ${port}${existingPort ? ' (existing container)' : ''}`);
-    await this.startCreatureInternal(name, dir, port, { autoIterate });
   }
 
   private async startCreatureInternal(
@@ -377,16 +404,21 @@ export class Orchestrator {
     console.log(`[${name}] message (${source}): ${text.slice(0, 80)}`);
   }
 
-  async listCreatures(): Promise<Array<{ name: string; status: string; sha: string | null; port: number | null; sleepReason: string | null }>> {
+  async listCreatures(): Promise<Array<{ name: string; status: string; sha: string | null; port: number | null; sleepReason: string | null; model: string | null }>> {
     const all = await this.discoverCreatures();
-    return all.map(({ name }) => {
+    return Promise.all(all.map(async ({ name, dir }) => {
       const sup = this.supervisors.get(name);
       if (sup) {
         const info = sup.getInfo();
-        return { name, status: info.status, sha: info.sha, port: info.port, sleepReason: info.sleepReason };
+        return { name, status: info.status, sha: info.sha, port: info.port, sleepReason: info.sleepReason, model: info.model };
       }
-      return { name, status: 'stopped', sha: null, port: null, sleepReason: null };
-    });
+      let model: string | null = null;
+      try {
+        const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
+        model = birth.model || null;
+      } catch {}
+      return { name, status: 'stopped', sha: null, port: null, sleepReason: null, model };
+    }));
   }
 
   // --- Budget enforcement ---
@@ -447,6 +479,10 @@ export class Orchestrator {
           req, res, this.costs,
           (name) => this.checkCreatureBudget(name),
           (name) => { this.handleBudgetExceeded(name).catch(err => console.error(`[${name}] budget pause error:`, err)); },
+          (name, model) => {
+            const sup = this.supervisors.get(name);
+            if (sup && !sup.getInfo().model) sup.setModel(model);
+          },
         );
         return;
       }
@@ -544,6 +580,7 @@ export class Orchestrator {
           res.writeHead(202, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, name, status: 'spawning' }));
 
+          this.pendingOps.add(name);
           await this.emitEvent(name, { type: 'creature.spawning', t: new Date().toISOString() } as any);
           this.spawnCreature(name, dir, purpose, genome, model).then(async () => {
             console.log(`[orchestrator] creature "${name}" ready`);
@@ -551,6 +588,8 @@ export class Orchestrator {
           }).catch(async (err) => {
             console.error(`[orchestrator] spawn failed for "${name}":`, err);
             await this.emitEvent(name, { type: 'creature.spawn_failed', t: new Date().toISOString(), error: err.message } as any);
+          }).finally(() => {
+            this.pendingOps.delete(name);
           });
         } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;

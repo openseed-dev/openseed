@@ -579,13 +579,7 @@ export class Mind {
         result = await generateText({
           model: provider(MODEL),
           maxOutputTokens: 16384,
-          system: [{
-            type: 'text' as const,
-            text: this.systemPrompt,
-            providerOptions: {
-              anthropic: { cacheControl: { type: 'ephemeral' } },
-            },
-          }],
+          system: this.systemPrompt,
           tools,
           messages: this.messages,
         });
@@ -1242,13 +1236,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
         result = await generateText({
           model: provider(MODEL),
           maxOutputTokens: 4096,
-          system: [{
-            type: 'text' as const,
-            text: system,
-            providerOptions: {
-              anthropic: { cacheControl: { type: 'ephemeral' } },
-            },
-          }],
+          system,
           tools: evalTools,
           messages: evalMessages,
         });

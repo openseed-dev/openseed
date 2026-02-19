@@ -41,7 +41,7 @@ export type SleepReason = 'budget' | 'fatigue' | 'user' | null;
 export class CreatureSupervisor {
   readonly name: string;
   readonly dir: string;
-  readonly port: number;
+  port: number;
   status: CreatureStatus = 'stopped';
   sleepReason: SleepReason = null;
 
@@ -139,6 +139,8 @@ export class CreatureSupervisor {
     }
   }
 
+  setModel(model: string) { this.config = { ...this.config, model }; }
+
   getInfo() {
     return {
       name: this.name,
@@ -148,6 +150,7 @@ export class CreatureSupervisor {
       last_good_sha: this.lastGoodSHA || null,
       healthy: this.healthyAt !== null,
       port: this.port,
+      model: this.config.model || null,
     };
   }
 
@@ -251,6 +254,16 @@ export class CreatureSupervisor {
       console.log(`[${name}] starting existing container (environment preserved)`);
       try {
         execSync(`docker start ${cname}`, { stdio: 'ignore', timeout: 15_000 });
+        // Verify the port Docker restored matches what we were told
+        try {
+          const portOut = execSync(`docker port ${cname} 7778`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+          const actualPort = parseInt(portOut.split(':').pop()!);
+          if (!isNaN(actualPort) && actualPort !== port) {
+            console.warn(`[${name}] port corrected: supervisor had ${port}, Docker has ${actualPort}`);
+            this.port = actualPort;
+            this.config = { ...this.config, port: actualPort };
+          }
+        } catch {}
         this.creature = spawn('docker', ['logs', '-f', '--tail', '50', cname], {
           stdio: ['ignore', 'pipe', 'pipe'],
         });
