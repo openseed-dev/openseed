@@ -21,6 +21,7 @@ const blog = defineCollection({
     description: z.string(),
     date: z.string(),
     author: z.string().default("Ross Douglas"),
+    order: z.number().optional(),
   }),
 });
 

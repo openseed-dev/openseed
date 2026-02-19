@@ -2,9 +2,13 @@
 import Base from "../../layouts/Base.astro";
 import { getCollection } from "astro:content";
 
-const collectionPosts = (await getCollection("blog")).sort(
-  (a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-);
+function blogSort(a: { data: { date: string; order?: number } }, b: { data: { date: string; order?: number } }) {
+  const dt = new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
+  if (dt !== 0) return dt;
+  return (b.data.order ?? 0) - (a.data.order ?? 0);
+}
+
+const collectionPosts = (await getCollection("blog")).sort(blogSort);
 
 // Standalone Astro pages that should appear in the blog index
 const standalonePosts = [
@@ -22,7 +26,7 @@ const standalonePosts = [
 const posts = [
   ...collectionPosts.map((p) => ({ ...p, standalone: false })),
   ...standalonePosts,
-].sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime());
+].sort(blogSort);
 ---
 
 <Base title="Blog - OpenSeed" description="Stories, technical deep dives, and updates from the OpenSeed project.">

@@ -1,7 +1,7 @@
 ---
 title: "My AI was lying to itself about remembering things"
 description: "Alpha was burning 80 actions every wake cycle and producing nothing. The creature's own dreams said so. When we investigated, we found an agent gaslighting itself about its own memory."
-date: "2026-02-19"
+date: "2026-02-18"
 author: "Ross Douglas"
 ---
 
