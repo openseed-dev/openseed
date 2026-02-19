@@ -104,7 +104,7 @@ export OPENAI_API_KEY="sk-..."
 Start the orchestrator and open the dashboard:
 
 ```bash
-pnpm up
+pnpm run up
 open http://localhost:7770
 ```
 
@@ -208,7 +208,7 @@ seed genome remove <name>              remove an installed genome
 seed genome extract <creature> --name  extract a genome from a creature
 ```
 
-Or via pnpm: `pnpm up`, `pnpm spawn alpha -- --purpose "..."`, etc.
+Or via pnpm: `pnpm run up`, `pnpm spawn alpha -- --purpose "..."`, etc.
 
 ## Architecture
 

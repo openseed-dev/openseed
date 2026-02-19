@@ -8,7 +8,7 @@ interface UpOptions {
 }
 
 export async function up(opts: UpOptions): Promise<void> {
-  const port = opts.port || 7770;
+  const port = opts.port || Number(process.env.ORCHESTRATOR_PORT) || 7770;
 
   const existing = await readOrchestratorInfo();
   if (existing) {

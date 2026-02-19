@@ -26,4 +26,4 @@ ENV OPENSEED_HOME=/data
 
 EXPOSE 7770
 
-CMD ["pnpm", "up"]
+CMD ["pnpm", "run", "up"]
