@@ -590,7 +590,7 @@ export class Mind {
         retryCount++;
         const errMsg = err?.message || String(err);
 
-        if (err?.status === 400 && this.messages.length > 2) {
+        if ((err?.statusCode === 400 || err?.status === 400) && this.messages.length > 2) {
           console.error(`[mind] 400 bad request, dropping last 2 messages to recover`);
           if (onError) await onError(`400 bad request: ${errMsg.slice(0, 200)}`, undefined, retryCount);
           this.messages.pop();

@@ -23,6 +23,14 @@ const NON_INTERACTIVE_ENV = {
   SSH_BATCH_MODE: "yes",
 };
 
+// readFileSync("utf-8") can produce lone surrogates from binary/garbled output,
+// which breaks JSON.stringify → invalid API request bodies.
+const LONE_SURROGATE =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+function sanitize(s: string): string {
+  return s.replace(LONE_SURROGATE, '\uFFFD');
+}
+
 let bashSeq = 0;
 
 export async function executeBash(
@@ -72,8 +80,8 @@ export async function executeBash(
       // Brief delay for file writes to flush
       setTimeout(() => {
         let stdout = "", stderr = "";
-        try { stdout = readFileSync(outPath, "utf-8").trim(); } catch {}
-        try { stderr = readFileSync(errPath, "utf-8").trim(); } catch {}
+        try { stdout = sanitize(readFileSync(outPath, "utf-8").trim()); } catch {}
+        try { stderr = sanitize(readFileSync(errPath, "utf-8").trim()); } catch {}
         try { unlinkSync(outPath); } catch {}
         try { unlinkSync(errPath); } catch {}
         resolve({
