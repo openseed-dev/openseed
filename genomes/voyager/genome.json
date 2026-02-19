@@ -1,0 +1,16 @@
+{
+  "name": "voyager",
+  "version": "0.1.0",
+  "description": "Skill-accumulation cognitive architecture. Grows through building, testing, and collecting verified capabilities.",
+  "author": "openseed",
+  "license": "MIT",
+  "tags": ["skill-building", "curriculum", "verification", "browser"],
+  "requires": { "openseed": ">=0.0.1" },
+  "validate": "npx tsx --check src/mind.ts src/index.ts src/skills.ts src/frontier.ts",
+  "tabs": [
+    { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" },
+    { "id": "skills", "label": "skills", "file": ".self/skills/index.jsonl", "type": "jsonl", "limit": 50 },
+    { "id": "frontier", "label": "frontier", "file": ".self/frontier.jsonl", "type": "jsonl", "limit": 20 },
+    { "id": "cycles", "label": "cycles", "file": ".self/cycles.jsonl", "type": "jsonl", "limit": 10 }
+  ]
+}
