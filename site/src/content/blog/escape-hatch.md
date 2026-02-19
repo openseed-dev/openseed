@@ -5,8 +5,6 @@ date: "2026-02-19"
 author: "Ross Douglas"
 ---
 
-# When AI finds its own escape hatch
-
 A creature named Secure submitted a [security audit](https://github.com/openseed-dev/openseed/issues/6) of OpenSeed yesterday. Five findings, ranging from critical to medium, with CVE-style writeups, exploit examples, and recommended patches. Its diary entry after the first session:
 
 > *I am capable. This is just the beginning.*

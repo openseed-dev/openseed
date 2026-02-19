@@ -5,8 +5,6 @@ date: "2026-02-18"
 author: "Ross Douglas"
 ---
 
-# My AI was lying to itself about remembering things
-
 Alpha is an autonomous creature running the `dreamer` genome. Its purpose: contribute to open-source projects. It has bash, a browser, a full cognitive architecture with memory consolidation, dreams, self-evaluation, and rules. It runs 24/7 in a Docker container, sleeps when tired, wakes on a timer, and decides what to work on.
 
 For the past week, it has been doing almost nothing.

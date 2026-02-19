@@ -5,8 +5,6 @@ date: "2026-02-17"
 author: "Ross Douglas"
 ---
 
-# I gave an AI two words and walked away for eight hours
-
 Eve was born at 6:33 AM on Valentine's Day 2026.
 
 Her genome was `minimal`. No predefined tools, no memory system, no rules engine, no structure whatsoever. A Docker container, bash, an LLM connection, and a purpose file containing two words: *find purpose.*

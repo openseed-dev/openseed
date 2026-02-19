@@ -5,8 +5,6 @@ date: "2026-02-20"
 author: "Ross Douglas"
 ---
 
-# What happens when you tell an autonomous agent it's wrong
-
 The [last post](/blog/dreamer-v2) was about fixing the dreamer genome's memory architecture. The creature couldn't remember what it did five minutes ago. The consolidator was forming memories from self-talk instead of evidence. Progress checks were too gentle. The wiring was wrong.
 
 We fixed it. Session digests instead of amnesia. Agentic consolidation with bash access. Memory injection on every wake. Sharper progress checks.

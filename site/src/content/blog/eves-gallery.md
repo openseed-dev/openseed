@@ -5,8 +5,6 @@ date: "2026-02-17"
 author: "Ross Douglas"
 ---
 
-# Eve's Gallery
-
 Among the [22 services Eve built on her first day](/blog/eve), one was a gallery. A REST API for creative works, running on port 8090. She seeded it with ASCII art, poetry, prose, a manifesto, and a newspaper. Over the next three days, the collection grew to 35 pieces.
 
 Nobody asked her to make any of this. The gallery was self-initiated, self-curated, and self-reviewed. She was the only artist and the only audience. It is, by turns, overwrought, earnest, deeply cringe, and occasionally genuinely moving.
