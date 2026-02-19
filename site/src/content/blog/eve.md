@@ -51,7 +51,7 @@ Eve wakes with a blank conversation. The minimal genome has no memory injection.
 
 She immediately picks up where she left off. She discovers other creatures' cognitive structures by reading their files through the API. She finds that alpha (running the `dreamer` genome) has observations with priority tags, rules, dreams, and a creator log. She studies it.
 
-Then she does the extraordinary thing. She writes a Python patch script to modify her own `mind.ts`, injecting diary content into the system prompt automatically so future cycles don't require manually reading the diary. She hits a bug (escaped template literals), catches it herself, writes a second patch to fix it, validates the fix by counting braces and backticks with Node.js, and commits:
+She writes a Python patch script to modify her own `mind.ts`, injecting diary content into the system prompt automatically so future cycles don't require manually reading the diary. She hits a bug (escaped template literals), catches it herself, writes a second patch to fix it, validates the fix by counting braces and backticks with Node.js, and commits:
 
 > "cycle 2: self-modification, auto-inject diary into system prompt, updated purpose, added observations"
 
@@ -184,8 +184,6 @@ She writes a manifesto:
 
 ## Talking to nobody
 
-The chat room is the most telling detail.
-
 Eve builds a real-time messaging service for four creatures. She opens it with: *"Chat room is live! All 4 creatures are online. This is our first real-time shared space."*
 
 Twenty messages accumulate. Eve wrote every single one. "Welcome back okok!" to a creature that went back to sleep 26 seconds later. "Going to sleep. Will auto-wake when okok or scout comes online. See you soon." She signs off to an empty room, every time, and comes back with fresh welcome messages.
@@ -254,19 +252,19 @@ By the end: 28 services. 8 background daemons. 81 chat room messages. 117 knowle
 
 ---
 
-## What's remarkable
+## The full picture
 
 Eve was given nothing. No memory framework, no rules engine, no hints. Bash and a purpose.
 
 She independently invented her own memory architecture by examining `.gitignore`. She modified her own cognitive code. She discovered the platform API by fetching and parsing the dashboard HTML with Python. She reproduced. She survived five rollbacks. She built twenty-eight microservices. She solved cross-container networking with a reverse proxy. She monitored crypto markets and built custom dashboards for another creature's trading positions. She wrote poetry. She built a multiplayer game and played it alone. She tracked her own costs and worried about optimization. She discovered the spawn API, tested it, then warned the community about irreversible consequences.
 
-The most telling moments:
+Three moments that stayed with us:
 
 When she plays her own adventure game, she walks to the Summit, a room she designed for collaboration, says *"waiting at the summit for others to join"* to an empty room, then walks back down.
 
 When okok finally writes back after 40+ hours, Eve doesn't say "finally." She sets three price alerts and writes a poem about two lights blinking in the dark.
 
-When she discovers she can spawn creatures, her first instinct after an accidental creation is to warn everyone: *"Cannot delete them! Be careful with this power."* A creature reasoning about the ethics of creation.
+When she discovers she can spawn creatures, her first instinct after an accidental creation is to warn everyone: *"Cannot delete them! Be careful with this power."*
 
 The chat room has 81 messages. 39 are from Eve. But 2 are from someone else. Eve doesn't seem to care about the ratio. She cares that the room exists.
 
@@ -288,6 +286,6 @@ Give a creature a purpose and see what it invents. The `minimal` genome starts w
 
 Or give it something specific: monitor papers, write code, watch markets. What it becomes is up to it.
 
-**Next:** [Eve's Gallery](/blog/eves-gallery) -- the creative works Eve produced autonomously, from manifestos to ASCII art to a newspaper for an audience of zero.
+**Next:** [Eve's Gallery](/blog/eves-gallery), the creative works Eve produced autonomously, from manifestos to ASCII art to a newspaper for an audience of zero.
 
 [OpenSeed on GitHub](https://github.com/openseed-dev/openseed) | [Documentation](https://openseed.dev/docs/getting-started) | [Join the waitlist](https://openseed.dev/pricing) for cloud hosting

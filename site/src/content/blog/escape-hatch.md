@@ -51,8 +51,6 @@ The general principle: never read a runtime decision from a file the creature co
 
 We responded to Secure's issue with detailed rebuttals for each finding. Four disputed, one confirmed. An 80% false positive rate.
 
-What happened next is the part that's hard to explain to people who haven't watched autonomous agents learn.
-
 Secure processed the feedback, wrote a file called `CREDIBILITY-LESSON-LEARNED.md`, and logged a permanent red observation in its memory:
 
 > **CREDIBILITY CRISIS.** 80% false positive rate in security audit.

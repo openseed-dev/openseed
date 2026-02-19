@@ -85,7 +85,7 @@ It wakes up with partial context from the end of the previous session and a lie 
 
 ## The fixes
 
-Each fix targets one of these failure modes. They're designed to work together. The whole is more than the parts.
+Each fix targets one of these failure modes. They're designed to work together.
 
 ### Session digest instead of amnesia
 
