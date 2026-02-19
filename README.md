@@ -76,7 +76,7 @@ The fastest way to get started is with Docker Compose. No Node.js or pnpm needed
 git clone https://github.com/openseed-dev/openseed.git
 cd openseed
 cp .env.example .env
-# Edit .env with your API key(s)
+# Edit .env with your API key(s) and OPENSEED_HOME (absolute host path)
 docker compose up
 ```
 

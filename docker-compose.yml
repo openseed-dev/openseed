@@ -7,12 +7,12 @@ services:
       - "${ORCHESTRATOR_PORT:-7770}:${ORCHESTRATOR_PORT:-7770}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${OPENSEED_HOME:-~/.openseed}:/data
+      - ${OPENSEED_HOME:?Set OPENSEED_HOME in .env to an absolute host path}:/data
     environment:
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
       - OPENSEED_HOME=/data
-      - OPENSEED_HOST_PATH=${OPENSEED_HOME:-~/.openseed}
+      - OPENSEED_HOST_PATH=${OPENSEED_HOME:?Set OPENSEED_HOME in .env to an absolute host path}
       - OPENSEED_DOCKER=1
       - ORCHESTRATOR_PORT=${ORCHESTRATOR_PORT:-7770}
     networks:
