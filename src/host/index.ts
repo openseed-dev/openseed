@@ -349,10 +349,12 @@ export class Orchestrator {
       const dir = path.join(CREATURES_DIR, name);
       if (supervisor) {
         try {
+          // Read validate from BIRTH.json (set at spawn time, immutable to the creature)
+          // rather than genome.json which the creature can modify.
           let validate: string | undefined;
           try {
-            const genome = JSON.parse(await fs.readFile(path.join(dir, 'genome.json'), 'utf-8'));
-            validate = genome.validate;
+            const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
+            validate = birth.validate;
           } catch {}
           if (validate) {
             await execAsync(validate, { cwd: dir, timeout: 30_000 });

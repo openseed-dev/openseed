@@ -68,6 +68,10 @@ function isDockerAvailable(): boolean {
  * installs deps, inits git, and builds the Docker image.
  */
 export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
+  if (!opts.name || !/^[a-z0-9][a-z0-9-]*$/.test(opts.name)) {
+    throw new Error('invalid name (lowercase alphanumeric + hyphens)');
+  }
+
   const genomeName = opts.genome || 'dreamer';
   const tpl = requireGenomeDir(genomeName);
   if (!tpl) throw new Error(`genome "${genomeName}" not found (checked ~/.openseed/genomes/ and bundled genomes)`);
@@ -87,6 +91,12 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   await copyDir(tpl, dir);
 
   const sourceMeta = readSourceMeta(tpl);
+  let genomeValidate: string | undefined;
+  try {
+    const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
+    if (typeof gj.validate === 'string') genomeValidate = gj.validate;
+  } catch {}
+
   const birth = {
     id: crypto.randomUUID(),
     name: opts.name,
@@ -96,6 +106,7 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
     ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
     parent: null as string | null,
     ...(opts.model ? { model: opts.model } : {}),
+    ...(genomeValidate ? { validate: genomeValidate } : {}),
   };
   await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
 
