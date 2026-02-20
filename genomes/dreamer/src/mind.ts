@@ -428,6 +428,7 @@ export class Mind {
   private actionsSinceProgressCheck = 0;
   private progressCheckCount = 0;
   private pendingInjections: string[] = [];
+  private creatorMessagesSinceSleep: string[] = [];
   private sessionDigest: string[] = [];
   private sleepResolve: (() => void) | null = null;
   private onSpecialTool: SpecialToolCallback | null = null;
@@ -504,6 +505,9 @@ export class Mind {
 
   private drainInjections() {
     if (this.pendingInjections.length === 0) return;
+    for (const msg of this.pendingInjections) {
+      this.creatorMessagesSinceSleep.push(msg);
+    }
     const combined = this.pendingInjections
       .map(t => `[MESSAGE FROM YOUR CREATOR: this is a direct interrupt. Your creator cannot hear you or read your responses. Process this message and continue autonomously.]\n\n${t}`)
       .join("\n\n---\n\n");
@@ -581,6 +585,7 @@ export class Mind {
         await this.wakeUp(forcedSleptS, DEEP_SLEEP_PAUSE, onWake);
         actionsSinceSleep = [];
         monologueSinceSleep = "";
+        this.creatorMessagesSinceSleep = [];
         this.fatigueWarned = false;
         this.actionsSinceProgressCheck = 0;
         this.progressCheckCount = 0;
@@ -836,6 +841,7 @@ export class Mind {
 
         actionsSinceSleep = [];
         monologueSinceSleep = "";
+        this.creatorMessagesSinceSleep = [];
         this.fatigueWarned = false;
         this.actionsSinceProgressCheck = 0;
         this.progressCheckCount = 0;
@@ -1660,6 +1666,14 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
   private buildSessionSummary(actions: ActionRecord[], monologue: string): string {
     const lines: string[] = [];
     lines.push(`Session: ${actions.length} actions\n`);
+
+    if (this.creatorMessagesSinceSleep.length > 0) {
+      lines.push(`--- Creator messages received this session (${this.creatorMessagesSinceSleep.length}) ---`);
+      for (const msg of this.creatorMessagesSinceSleep) {
+        lines.push(`CREATOR: ${msg.slice(0, 500)}`);
+      }
+      lines.push("");
+    }
 
     for (let i = 0; i < actions.length; i++) {
       const a = actions[i];
