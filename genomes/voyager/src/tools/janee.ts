@@ -61,6 +61,9 @@ async function ensureSession(baseUrl: string): Promise<string> {
   if (sid) {
     sessionId = sid;
   } else {
+    // Server may have returned an error (e.g. "already initialized")
+    // but still sent a session ID in a previous response. Try to
+    // proceed without one — some servers accept sessionless calls.
     const text = await res.text();
     const json = parseSSE(text);
     if (json?.error?.message?.includes('already initialized') && json?.error?.data?.sessionId) {

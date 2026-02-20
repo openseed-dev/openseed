@@ -23,6 +23,10 @@ export function getJaneeUrl(): string | null {
 }
 
 async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolean> {
+  // Don't call initialize here — the SDK only allows one session per transport,
+  // and using it for a health check would consume the creature's session slot.
+  // Instead, send a POST without a valid method; any non-network-error response
+  // means the server is alive and accepting connections.
   const localUrl = `http://127.0.0.1:${JANEE_PORT}/mcp`;
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -32,20 +36,12 @@ async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolea
           'Content-Type': 'application/json',
           'Accept': 'application/json, text/event-stream',
         },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 0,
-          method: 'initialize',
-          params: {
-            protocolVersion: '2025-03-26',
-            capabilities: {},
-            clientInfo: { name: 'openseed-orchestrator', version: '1.0' },
-          },
-        }),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'ping' }),
         signal: AbortSignal.timeout(2000),
       });
-      if (res.ok) return true;
-    } catch { /* not ready yet */ }
+      // Any HTTP response (even 4xx) means the server is running
+      return true;
+    } catch { /* not ready yet — connection refused or timeout */ }
     await new Promise(r => setTimeout(r, intervalMs));
   }
   return false;
