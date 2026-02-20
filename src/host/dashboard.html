@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -351,6 +352,73 @@
     .narration-creatures span { color: #2d8a56; cursor: pointer; }
     .narration-creatures span:hover { text-decoration: underline; }
 
+    .share-btn-inline {
+      background: none; border: none; cursor: pointer; padding: 1px 3px;
+      color: #a3a3a3; vertical-align: middle;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    .narration-creatures:hover .share-btn-inline { opacity: 1; }
+    .share-btn-inline:hover { color: #2d8a56; }
+    .share-btn-inline svg { width: 11px; height: 11px; }
+
+    .share-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(248,247,244,0.92);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      animation: share-fade-in 0.2s ease-out;
+    }
+    @keyframes share-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .share-modal {
+      background: #fff; border: 1px solid #e5e0d8;
+      width: 100%; max-width: 640px; max-height: 90vh;
+      overflow-y: auto; padding: 28px;
+    }
+    .share-modal-close {
+      position: absolute; top: 16px; right: 20px;
+      background: none; border: none; color: #a3a3a3; cursor: pointer;
+      font-size: 18px; line-height: 1;
+    }
+    .share-modal-close:hover { color: #1a1a1a; }
+    .share-card-preview {
+      width: 100%; border: 1px solid #e5e0d8; margin-bottom: 12px;
+    }
+    .share-download-link {
+      font-size: 11px; color: #a3a3a3; cursor: pointer;
+      margin-bottom: 20px; display: inline-block;
+    }
+    .share-download-link:hover { color: #2d8a56; }
+    .share-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid #e5e0d8;
+      margin-bottom: 16px;
+    }
+    .share-tab {
+      padding: 8px 16px; cursor: pointer; color: #999;
+      font-size: 12px; border-bottom: 2px solid transparent;
+      background: none; border-top: none; border-left: none; border-right: none;
+      font-family: inherit;
+    }
+    .share-tab:hover { color: #666; }
+    .share-tab.active { color: #2d8a56; border-bottom-color: #2d8a56; }
+    .share-textarea {
+      width: 100%; min-height: 100px; resize: vertical;
+      font-family: 'DM Sans', system-ui, sans-serif; font-size: 13px;
+      border: 1px solid #e5e0d8; padding: 12px; color: #1a1a1a;
+      background: #f8f7f4; line-height: 1.6;
+    }
+    .share-textarea:focus { outline: none; border-color: #2d8a56; }
+    .share-charcount { font-size: 10px; color: #a3a3a3; text-align: right; margin-top: 4px; }
+    .share-charcount.warn { color: #b45309; }
+    .share-charcount.over { color: #dc2626; }
+    .share-action-btn {
+      margin-top: 12px; padding: 8px 16px;
+      background: #f0fdf4; border: 1px solid #2d8a56; color: #2d8a56;
+      cursor: pointer; font-family: inherit; font-size: 12px;
+    }
+    .share-action-btn:hover { background: #dcfce7; }
+    .share-helper { font-size: 11px; color: #a3a3a3; margin-top: 8px; }
+    .share-feedback { font-size: 11px; color: #2d8a56; margin-left: 12px; }
+
     .moments-toggle {
       margin-top: 28px; padding-top: 20px; border-top: 1px solid #e5e0d8;
     }
@@ -580,7 +648,7 @@
 
       if (selected === null) {
         if (ev.type === 'narrator.entry') {
-          const entry = { t: ev.t, text: ev.text, creatures_mentioned: ev.creatures_mentioned || [] };
+          const entry = { t: ev.t, text: ev.text, blocks: ev.blocks || null, creatures_mentioned: ev.creatures_mentioned || [] };
           const html = renderNarrationEntry(entry);
           const feed = document.getElementById('narrationFeed');
           if (feed) {
@@ -977,11 +1045,21 @@
       } catch { narrationEntries = []; }
     }
 
+    const SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+
     function renderNarrationEntry(entry) {
+      const blocks = entry.blocks;
       const html = renderMarkdown(entry.text);
-      const mentioned = (entry.creatures_mentioned || []).map(
-        n => '<span onclick="select(\'' + esc(n) + '\')">' + esc(n) + '</span>'
-      ).join(', ');
+
+      const mentioned = (entry.creatures_mentioned || []).map(n => {
+        let out = '<span onclick="select(\'' + esc(n) + '\')">' + esc(n) + '</span>';
+        if (blocks && blocks[n]) {
+          const dataAttr = btoa(unescape(encodeURIComponent(JSON.stringify({ name: n, summary: blocks[n], t: entry.t }))));
+          out += '<button class="share-btn-inline" data-share="' + dataAttr + '" onclick="event.stopPropagation();openShareModal(JSON.parse(decodeURIComponent(escape(atob(this.dataset.share)))))" title="Share">' + SHARE_ICON + '</button>';
+        }
+        return out;
+      }).join(', ');
+
       return '<div class="narration-entry">'
         + '<div class="narration-header">'
         + '<span class="narration-label">narrator</span>'
@@ -1185,6 +1263,187 @@
         sel.innerHTML = genomes.map(g => '<option value="' + esc(g.name) + '">' + esc(g.name) + '</option>').join('');
       } catch {}
     }
+
+    // --- Share card & modal ---
+
+    function buildShareCard(creatureName, summary, timestamp) {
+      const card = document.createElement('div');
+      card.style.cssText = 'position:fixed;left:-9999px;top:0;width:1200px;height:630px;background:#f8f7f4;font-family:"DM Sans",system-ui,sans-serif;overflow:hidden;';
+
+      const ts = timestamp ? new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+      card.innerHTML = ''
+        + '<div style="position:absolute;inset:0;opacity:0.045;background:repeating-conic-gradient(#000 0% 25%, transparent 0% 50%) 0 0/4px 4px;pointer-events:none;"></div>'
+        + '<div style="position:absolute;top:0;left:0;right:0;height:5px;background:#2d8a56;"></div>'
+        + '<div style="padding:44px 50px;display:flex;flex-direction:column;height:100%;box-sizing:border-box;">'
+        +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:28px;">'
+        +     '<span style="width:7px;height:7px;background:#2d8a56;border-radius:50%;display:inline-block;"></span>'
+        +     '<span style="font-size:16px;color:#a3a3a3;font-weight:500;letter-spacing:0.04em;">openseed</span>'
+        +   '</div>'
+        +   '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;">'
+        +     '<div style="font-family:Newsreader,Georgia,serif;font-size:48px;font-weight:600;color:#2d8a56;letter-spacing:-0.02em;margin-bottom:16px;">' + esc(creatureName) + '</div>'
+        +     '<div style="font-family:Newsreader,Georgia,serif;font-size:36px;line-height:1.6;color:#2a2a2a;font-weight:400;letter-spacing:-0.005em;max-width:1100px;">'
+        +       esc(summary).replace(/`([^`]+)`/g, '<code style="background:#edeae4;padding:1px 6px;border-radius:3px;font-family:SF Mono,Fira Code,monospace;font-size:30px;">' + '$1' + '</code>')
+        +     '</div>'
+        +   '</div>'
+        +   '<div style="border-top:1px solid #e5e0d8;padding-top:14px;display:flex;justify-content:space-between;align-items:center;">'
+        +     '<span style="font-size:14px;color:#c4c0b8;">' + esc(ts) + '</span>'
+        +     '<span style="font-size:14px;color:#a3a3a3;letter-spacing:0.02em;">openseed.dev</span>'
+        +   '</div>'
+        + '</div>';
+
+      document.body.appendChild(card);
+      return card;
+    }
+
+    async function generateShareImage(creatureName, summary, timestamp) {
+      const card = buildShareCard(creatureName, summary, timestamp);
+      try {
+        const canvas = await html2canvas(card, {
+          width: 1200, height: 630, scale: 2,
+          backgroundColor: '#f8f7f4',
+          logging: false, useCORS: true,
+        });
+        return canvas;
+      } finally {
+        card.remove();
+      }
+    }
+
+    let activeShareModal = null;
+
+    function closeShareModal() {
+      if (activeShareModal) {
+        activeShareModal.remove();
+        activeShareModal = null;
+      }
+    }
+
+    async function openShareModal(data) {
+      closeShareModal();
+      const { name, summary, t } = typeof data === 'string' ? JSON.parse(data) : data;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'share-overlay';
+      overlay.onclick = (e) => { if (e.target === overlay) closeShareModal(); };
+      overlay.innerHTML = '<div class="share-modal" onclick="event.stopPropagation()">'
+        + '<button class="share-modal-close" onclick="closeShareModal()">&times;</button>'
+        + '<div id="shareCardContainer" style="margin-bottom:8px;text-align:center;color:#a3a3a3;font-size:12px;">Generating image...</div>'
+        + '<div class="share-tabs">'
+        +   '<button class="share-tab active">Twitter</button>'
+        + '</div>'
+        + '<div id="shareTabContent"></div>'
+        + '</div>';
+
+      document.body.appendChild(overlay);
+      activeShareModal = overlay;
+
+      const tweetText = 'Look what my agent did!\n\nhttps://openseed.dev';
+
+      overlay._shareData = { name, summary, t, tweetText, canvas: null };
+      renderShareTab();
+
+      try {
+        const canvas = await generateShareImage(name, summary, t);
+        overlay._shareData.canvas = canvas;
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL('image/png');
+        img.className = 'share-card-preview';
+        const container = overlay.querySelector('#shareCardContainer');
+        container.innerHTML = '';
+        container.appendChild(img);
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:16px;justify-content:center;margin-top:8px;';
+        const cp = document.createElement('span');
+        cp.className = 'share-download-link';
+        cp.textContent = 'Copy image';
+        cp.onclick = async () => {
+          try {
+            await copyCanvasToClipboard(canvas);
+            cp.textContent = 'Copied!';
+            setTimeout(() => { cp.textContent = 'Copy image'; }, 2000);
+          } catch { cp.textContent = 'Copy failed'; }
+        };
+        const dl = document.createElement('span');
+        dl.className = 'share-download-link';
+        dl.textContent = 'Download image';
+        dl.onclick = () => downloadShareImage(canvas, name);
+        actions.appendChild(cp);
+        actions.appendChild(dl);
+        container.appendChild(actions);
+      } catch (err) {
+        const container = overlay.querySelector('#shareCardContainer');
+        container.textContent = 'Could not generate image';
+      }
+    }
+
+    function renderShareTab() {
+      if (!activeShareModal) return;
+      const container = activeShareModal.querySelector('#shareTabContent');
+      const data = activeShareModal._shareData;
+      if (!container || !data) return;
+
+      const text = data.tweetText;
+      container.innerHTML = ''
+        + '<textarea class="share-textarea" id="shareTweetText" oninput="updateCharCount()">' + esc(text) + '</textarea>'
+        + '<div class="share-charcount" id="shareCharCount">' + text.length + ' / 280</div>'
+        + '<button class="share-action-btn" onclick="shareToTwitter()">Copy image and open Twitter</button>'
+        + '<span class="share-feedback" id="shareFeedback"></span>'
+        + '<div class="share-helper">Paste the image in the compose window</div>';
+      updateCharCount();
+    }
+
+    function updateCharCount() {
+      const ta = document.getElementById('shareTweetText');
+      const cc = document.getElementById('shareCharCount');
+      if (!ta || !cc) return;
+      const len = ta.value.length;
+      cc.textContent = len + ' / 280';
+      cc.className = 'share-charcount' + (len > 280 ? ' over' : len > 250 ? ' warn' : '');
+    }
+
+    async function copyCanvasToClipboard(canvas) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(async (blob) => {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            resolve();
+          } catch (e) { reject(e); }
+        }, 'image/png');
+      });
+    }
+
+    function downloadShareImage(canvas, creatureName) {
+      const a = document.createElement('a');
+      a.download = 'openseed-' + creatureName + '.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }
+
+    async function shareToTwitter() {
+      const data = activeShareModal?._shareData;
+      if (!data) return;
+      const fb = document.getElementById('shareFeedback');
+      const text = document.getElementById('shareTweetText')?.value || data.tweetText;
+
+      if (data.canvas) {
+        try {
+          await copyCanvasToClipboard(data.canvas);
+          if (fb) fb.textContent = 'Image copied!';
+        } catch {
+          if (fb) fb.textContent = 'Could not copy image — download it instead';
+        }
+      }
+
+      const url = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
+      window.open(url, '_blank');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && activeShareModal) closeShareModal();
+    });
+
+    // --- End share ---
 
     refresh().then(() => Promise.all([loadRecentEvents(), loadNarration()])).then(() => { if (selected === null) renderContent(); });
     loadGenomes();

@@ -17,6 +17,7 @@ const MAX_TOOL_ROUNDS = 5;
 export interface NarrationEntry {
   t: string;
   text: string;
+  blocks?: Record<string, string>;
   creatures_mentioned: string[];
   events_count: number;
 }
@@ -59,7 +60,15 @@ SKIP RULE:
 
 TOOLS:
 - You have tools to investigate. Use them when an event warrants deeper context — read a diary, check a git log. Don't use tools speculatively.
-- Your final response must contain ONLY the narration. No reasoning, no investigation notes.
+- Your final response must contain ONLY the narration prose followed by the SHARE BLOCKS (see below). No reasoning, no investigation notes.
+
+SHARE BLOCKS:
+- After the narration prose, output a fenced JSON block containing per-creature summaries for social sharing.
+- Begin each block with "My autonomous agent, [name], ..." — one punchy sentence, max 120 characters. It should make sense to someone who has never heard of OpenSeed.
+- Format:
+\`\`\`json
+{"blocks":{"creature_name":"My autonomous agent, name, did the thing."}}
+\`\`\`
 
 EXAMPLES (for style and length — these are the target):
 
@@ -77,7 +86,13 @@ Example 2 — single creature, reactive:
 
 Example 3 — single creature, milestone:
 
-**atlas** closed the messy PR #3 and opened a clean replacement — PR #4, focused HTTP integration. Stripped the fallback and config scanning that drew criticism. Used all three outbound-action credits: a comment, the close, and the new PR.`;
+**atlas** closed the messy PR #3 and opened a clean replacement — PR #4, focused HTTP integration. Stripped the fallback and config scanning that drew criticism. Used all three outbound-action credits: a comment, the close, and the new PR.
+
+Example share blocks (always include after the prose):
+
+\`\`\`json
+{"blocks":{"atlas":"My autonomous agent, atlas, opened PR #247 against vercel/ai — fixing a caller-chain bug across three sessions.","trader-one":"My autonomous agent, trader-one, expanded to 4 simultaneous positions after its own backtesting showed 35% higher weekly PnL."}}
+\`\`\``;
 
 const TOOLS = [
   {
@@ -291,11 +306,27 @@ export class Narrator {
         const isSkip = !narrationText || narrationText.toUpperCase().includes('SKIP');
         if (!isSkip) {
           const creatureNames = creatures.map(c => c.name);
-          const mentioned = creatureNames.filter(n => new RegExp(`\\b${n}\\b`, 'i').test(narrationText));
+
+          // Extract share blocks JSON from the narration text
+          let blocks: Record<string, string> | undefined;
+          let cleanText = narrationText;
+          const jsonMatch = narrationText.match(/```json\s*\n?([\s\S]*?)\n?```/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[1]);
+              if (parsed.blocks && typeof parsed.blocks === 'object') {
+                blocks = parsed.blocks;
+              }
+            } catch {}
+            cleanText = narrationText.replace(/```json\s*\n?[\s\S]*?\n?```/, '').trim();
+          }
+
+          const mentioned = creatureNames.filter(n => new RegExp(`\\b${n}\\b`, 'i').test(cleanText));
 
           const entry: NarrationEntry = {
             t: new Date().toISOString(),
-            text: narrationText,
+            text: cleanText,
+            ...(blocks && { blocks }),
             creatures_mentioned: mentioned,
             events_count: events.length,
           };
@@ -305,6 +336,7 @@ export class Narrator {
             t: entry.t,
             type: 'narrator.entry',
             text: entry.text,
+            ...(entry.blocks && { blocks: entry.blocks }),
             creatures_mentioned: entry.creatures_mentioned,
           } as any);
 
