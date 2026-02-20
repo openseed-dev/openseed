@@ -12,6 +12,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
 
+RUN git config --global user.email "openseed@localhost" && \
+    git config --global user.name "openseed"
+
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
