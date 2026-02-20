@@ -127,7 +127,7 @@ If Janee is unavailable, you'll get a helpful error with fallback instructions.`
       capability: z.string().describe("Service name for execute (e.g. 'github')").optional(),
       method: z.string().describe("HTTP method for execute (GET, POST, PUT, DELETE)").optional(),
       path: z.string().describe("API path for execute (e.g. '/repos/owner/repo/issues')").optional(),
-      body: z.record(z.unknown()).describe("Request body for POST/PUT").optional(),
+      body: z.string().describe("Request body as JSON string for POST/PUT").optional(),
       reason: z.string().describe("Why you need this request (audit trail)").optional(),
     }),
   }),

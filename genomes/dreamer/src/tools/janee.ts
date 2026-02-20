@@ -150,15 +150,18 @@ export async function janeeExecute(args: {
   capability: string;
   method: string;
   path: string;
-  body?: Record<string, unknown>;
+  body?: string | Record<string, unknown>;
   reason?: string;
 }): Promise<string> {
   try {
+    const bodyStr = typeof args.body === 'string' ? args.body
+      : args.body ? JSON.stringify(args.body)
+      : undefined;
     const result = await mcpCall('execute', {
       capability: args.capability,
       method: args.method,
       path: args.path,
-      ...(args.body ? { body: JSON.stringify(args.body) } : {}),
+      ...(bodyStr ? { body: bodyStr } : {}),
       ...(args.reason ? { reason: args.reason } : {}),
     });
     return JSON.stringify(result, null, 2);
@@ -175,7 +178,7 @@ export async function janee(args: {
   capability?: string;
   method?: string;
   path?: string;
-  body?: Record<string, unknown>;
+  body?: string | Record<string, unknown>;
   reason?: string;
 }): Promise<string> {
   switch (args.action) {
