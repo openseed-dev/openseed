@@ -18,6 +18,7 @@ import {
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
+import { sendErrorResponse, sendJsonErrorResponse } from './http-error-handler.js';
 import {
   getSpendingCap,
   loadGlobalConfig,
@@ -541,7 +542,7 @@ export class Orchestrator {
           const cap = loadGlobalConfig().spending_cap;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
-        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        } catch (err) { sendErrorResponse(res, err); }
         return;
       }
 
@@ -568,7 +569,7 @@ export class Orchestrator {
           if (this.narrator) this.narrator.updateConfig(nar);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(nar));
-        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        } catch (err) { sendErrorResponse(res, err); }
         return;
       }
 
@@ -604,9 +605,8 @@ export class Orchestrator {
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(genomes));
-        } catch (err: any) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
+        } catch (err) {
+          sendJsonErrorResponse(res, err, 500);
         }
         return;
       }
@@ -644,7 +644,7 @@ export class Orchestrator {
           }).finally(() => {
             this.pendingOps.delete(name);
           });
-        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        } catch (err) { sendErrorResponse(res, err); }
         return;
       }
 
@@ -697,7 +697,7 @@ export class Orchestrator {
             const opts = body ? JSON.parse(body) : {};
             await this.startCreature(name, opts);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -705,7 +705,7 @@ export class Orchestrator {
           try {
             await this.stopCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -713,7 +713,7 @@ export class Orchestrator {
           try {
             await this.restartCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -728,7 +728,7 @@ export class Orchestrator {
             });
             await supervisor.rebuild();
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -747,7 +747,7 @@ export class Orchestrator {
             await this.emitEvent(name, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'manual' });
             console.log(`[${name}] force wake triggered: ${reason}`);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -775,7 +775,7 @@ export class Orchestrator {
               } catch {}
             }
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -783,7 +783,7 @@ export class Orchestrator {
           try {
             await this.archiveCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -819,7 +819,7 @@ export class Orchestrator {
             const cap = getSpendingCap(name);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
