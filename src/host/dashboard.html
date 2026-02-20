@@ -322,7 +322,7 @@
     }
     .narration-entry:first-child { padding-top: 0; }
     .narration-entry:last-child { border-bottom: none; }
-    @keyframes narrate-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes narrate-in { from { opacity: 0; } to { opacity: 1; } }
     .narration-header {
       display: flex; align-items: center; gap: 8px;
       margin-bottom: 16px; font-size: 11px; color: #a3a3a3;
@@ -655,7 +655,7 @@
             const placeholder = feed.querySelector('div[style*="text-align:center"]');
             if (placeholder) placeholder.remove();
             feed.insertAdjacentHTML('afterbegin', html);
-            while (feed.children.length > 10) feed.lastChild.remove();
+            while (feed.children.length > narrationDisplayCount) feed.lastChild.remove();
           }
           return;
         }
@@ -1036,10 +1036,11 @@
 
     let allMoments = [];
     let narrationEntries = [];
+    let narrationDisplayCount = 5;
 
     async function loadNarration() {
       try {
-        const res = await fetch('/api/narration?limit=10');
+        const res = await fetch('/api/narration?limit=50');
         narrationEntries = await res.json();
         narrationEntries.reverse();
       } catch { narrationEntries = []; }
@@ -1104,14 +1105,16 @@
         + '<span style="color:#a3a3a3;font-size:11px;margin-left:auto;letter-spacing:0.02em">' + names.length + ' creatures</span>'
         + '</div>';
 
-      const narrationHtml = narrationEntries.map(renderNarrationEntry).join('');
+      const visible = narrationEntries.slice(0, narrationDisplayCount);
+      const narrationHtml = visible.map(renderNarrationEntry).join('');
+      const hasMore = narrationEntries.length > narrationDisplayCount;
       const momentsHtml = allMoments.map(renderMoment).filter(Boolean).join('');
-      const hasNarration = narrationHtml.length > 0;
       contentEl.innerHTML = '<div class="overview">'
         + '<div class="status-strip">' + strip + '</div>'
         + '<div class="narration-feed" id="narrationFeed">'
         + (narrationHtml || '<div style="color:#a3a3a3;padding:40px 0;text-align:center;font-size:13px;letter-spacing:0.02em">narrator is warming up\u2026</div>')
         + '</div>'
+        + (hasMore ? '<div style="text-align:center;padding:16px 0 8px"><button class="moments-toggle-btn" onclick="showMoreNarrations()">read more</button></div>' : '')
         + '<div class="moments-toggle">'
         + '<button class="moments-toggle-btn" onclick="toggleMoments()">'
         + (showMoments ? '\u25bc hide raw events' : '\u25b6 show raw events (' + allMoments.length + ')')
@@ -1145,6 +1148,19 @@
       if (btn) {
         btn.textContent = showMoments ? '\u25bc hide raw events' : '\u25b6 show raw events (' + allMoments.length + ')';
         btn.className = 'moments-toggle-btn' + (showMoments ? ' active' : '');
+      }
+    }
+
+    function showMoreNarrations() {
+      const feed = document.getElementById('narrationFeed');
+      if (!feed) return;
+      const oldCount = narrationDisplayCount;
+      narrationDisplayCount += 10;
+      const newEntries = narrationEntries.slice(oldCount, narrationDisplayCount);
+      feed.insertAdjacentHTML('beforeend', newEntries.map(renderNarrationEntry).join(''));
+      if (narrationEntries.length <= narrationDisplayCount) {
+        const btn = feed.parentElement.querySelector('[onclick="showMoreNarrations()"]');
+        if (btn) btn.parentElement.remove();
       }
     }
 
