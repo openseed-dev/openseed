@@ -4,6 +4,7 @@ import type {
 } from 'node:http';
 
 import type { CostTracker } from './costs.js';
+import { sendErrorResponse } from './http-error-handler.js';
 
 export interface BudgetCheckResult {
   allowed: boolean;
@@ -309,9 +310,8 @@ export async function handleLLMProxy(
       res.writeHead(result.status, { 'content-type': result.contentType });
       res.end(result.body);
     }
-  } catch (err: any) {
-    console.error(`[proxy] LLM proxy error for ${creatureName} (${model}):`, err.message);
-    res.writeHead(502);
-    res.end('proxy error');
+  } catch (err) {
+    console.error(`[proxy] LLM proxy error for ${creatureName} (${model}):`, err instanceof Error ? err.message : String(err));
+    sendErrorResponse(res, err, 502);
   }
 }
