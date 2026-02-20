@@ -77,7 +77,7 @@ export function CreatureDetail() {
         <h2 className="text-sm font-semibold">{name}</h2>
         <div className="text-xs text-text-secondary">
           {c?.model && <><span className="text-text-muted text-[11px]">{c.model}</span> · </>}
-          <span className="text-accent-blue">{(c?.sha || '-').slice(0, 7)}</span> · {c?.status}{sr}
+          {c?.status}{sr}
         </div>
         <BudgetInfo />
         <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={() => api.creatureAction(name, 'wake')}>wake</button>
@@ -99,15 +99,15 @@ export function CreatureDetail() {
                 <TabsTrigger
                   key={id}
                   value={id}
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-accent-blue data-[state=active]:text-accent-blue data-[state=active]:shadow-none bg-transparent px-4 py-2 text-xs text-text-muted hover:text-text-secondary"
+                  className="rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-accent-blue data-[state=active]:text-accent-blue data-[state=active]:shadow-none data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent dark:data-[state=active]:border-transparent dark:data-[state=active]:border-b-accent-blue bg-transparent px-4 py-2 text-xs text-text-muted hover:text-text-secondary"
                 >
                   {tabLabels[id] || id}
                 </TabsTrigger>
               ))}
             </TabsList>
-            <Button variant="ghost" size="icon-xs" className="ml-auto text-text-muted" onClick={() => loadMind()}>
+            <button className="ml-auto px-3 py-2 cursor-pointer text-text-muted text-xs hover:text-text-secondary bg-transparent border-none transition-colors" onClick={() => loadMind()}>
               <RefreshCw className="size-3" />
-            </Button>
+            </button>
           </div>
         </Tabs>
       </div>
