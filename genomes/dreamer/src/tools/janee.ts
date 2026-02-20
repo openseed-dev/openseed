@@ -19,8 +19,7 @@
 let sessionId: string | null = null;
 
 function getJaneeUrl(): string | null {
-  const url = process.env.JANEE_URL;
-  if (!url) return null;
+  const url = process.env.JANEE_URL || 'http://host.docker.internal:3100';
   return url.replace(/\/+$/, '');
 }
 
@@ -59,7 +58,18 @@ async function ensureSession(baseUrl: string): Promise<string> {
   });
 
   const sid = res.headers.get('mcp-session-id');
-  if (sid) sessionId = sid;
+  if (sid) {
+    sessionId = sid;
+  } else {
+    // Server may have returned an error (e.g. "already initialized")
+    // but still sent a session ID in a previous response. Try to
+    // proceed without one — some servers accept sessionless calls.
+    const text = await res.text();
+    const json = parseSSE(text);
+    if (json?.error?.message?.includes('already initialized') && json?.error?.data?.sessionId) {
+      sessionId = json.error.data.sessionId;
+    }
+  }
   return sessionId || '';
 }
 
@@ -72,7 +82,7 @@ async function isJaneeReachable(baseUrl: string): Promise<boolean> {
   }
 }
 
-async function mcpCall(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+async function mcpCall(method: string, params: Record<string, unknown> = {}, _retry = false): Promise<unknown> {
   const baseUrl = getJaneeUrl();
   if (!baseUrl) {
     throw new Error(
@@ -101,9 +111,9 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}): Pr
 
   if (!res.ok) {
     const text = await res.text();
-    // Session may have expired — clear and retry once
-    if (res.status === 400 || res.status === 404) {
+    if (!_retry && (res.status === 400 || res.status === 404)) {
       sessionId = null;
+      return mcpCall(method, params, true);
     }
     throw new Error(`Janee HTTP ${res.status}: ${text}`);
   }
@@ -111,6 +121,10 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}): Pr
   const text = await res.text();
   const json = parseSSE(text);
   if (json.error) {
+    if (!_retry && json.error.message?.includes('session')) {
+      sessionId = null;
+      return mcpCall(method, params, true);
+    }
     throw new Error(`Janee error: ${json.error.message || JSON.stringify(json.error)}`);
   }
   return json.result;
