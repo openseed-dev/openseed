@@ -1,6 +1,5 @@
 import { useState, memo } from 'react';
-import { marked } from 'marked';
-import { esc, timeAgo, summarize } from '@/utils';
+import { esc, timeAgo, summarize, renderMarkdown } from '@/utils';
 import type { MindData } from '@/types';
 
 function JsonlEntry({ entry }: { entry: any }) {
@@ -44,7 +43,7 @@ export const MindContent = memo(function MindContent({ mindData, tabId }: { mind
   }
 
   if (tab.type === 'markdown') {
-    const html = data ? (() => { try { return marked.parse(data) as string; } catch { return esc(data); } })() : 'Empty.';
+    const html = data ? renderMarkdown(data) : 'Empty.';
     return (
       <div
         className="p-4 font-mono text-xs text-text-primary leading-relaxed break-words [&_h1]:text-[15px] [&_h1]:my-4 [&_h2]:text-sm [&_h2]:my-3 [&_h3]:text-[13px] [&_h3]:my-2 [&_p]:my-1 [&_li]:my-0.5 [&_a]:text-accent-blue [&_code]:bg-[#f0f0f0] [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-[#f5f5f5] [&_pre]:p-2 [&_pre]:rounded [&_pre]:overflow-x-auto [&_pre]:my-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_ul]:pl-5 [&_ul]:my-1.5 [&_ol]:pl-5 [&_ol]:my-1.5 [&_blockquote]:border-l-[3px] [&_blockquote]:border-[#d0d0d0] [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary [&_blockquote]:my-2 [&_table]:border-collapse [&_table]:my-2 [&_th]:border [&_th]:border-border-light [&_th]:px-2 [&_th]:py-1 [&_th]:text-xs [&_th]:bg-[#f5f5f5] [&_th]:text-text-primary [&_td]:border [&_td]:border-border-light [&_td]:px-2 [&_td]:py-1 [&_td]:text-xs"
