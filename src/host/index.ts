@@ -23,6 +23,7 @@ import {
   loadGlobalConfig,
   saveCreatureSpendingCap,
   saveGlobalSpendingCap,
+  saveNarratorConfig,
 } from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
@@ -536,6 +537,33 @@ export class Orchestrator {
           const cap = loadGlobalConfig().spending_cap;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
+        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        return;
+      }
+
+      if (p === '/api/narrator/config' && req.method === 'GET') {
+        const nar = loadGlobalConfig().narrator;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(nar));
+        return;
+      }
+
+      if (p === '/api/narrator/config' && req.method === 'PUT') {
+        try {
+          const body = await new Promise<string>((resolve) => {
+            let data = ''; req.on('data', (c) => data += c); req.on('end', () => resolve(data));
+          });
+          const update = JSON.parse(body);
+          const patch: Record<string, any> = {};
+          if (typeof update.enabled === 'boolean') patch.enabled = update.enabled;
+          if (typeof update.model === 'string' && update.model) patch.model = update.model;
+          if (typeof update.interval_minutes === 'number' && update.interval_minutes >= 1) patch.interval_minutes = update.interval_minutes;
+          if (Object.keys(patch).length === 0) { res.writeHead(400); res.end('nothing to update'); return; }
+          saveNarratorConfig(patch);
+          const nar = loadGlobalConfig().narrator;
+          if (this.narrator) this.narrator.updateConfig(nar);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(nar));
         } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }

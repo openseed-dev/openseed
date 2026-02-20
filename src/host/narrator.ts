@@ -247,6 +247,24 @@ export class Narrator {
     }
   }
 
+  updateConfig(config: NarratorConfig) {
+    const wasEnabled = this.config.enabled;
+    const intervalChanged = this.config.interval_minutes !== config.interval_minutes;
+    this.config = config;
+
+    if (!config.enabled) {
+      this.stop();
+      console.log('[narrator] disabled via config update');
+    } else if (!wasEnabled && config.enabled) {
+      this.start();
+    } else if (intervalChanged) {
+      this.stop();
+      const intervalMs = config.interval_minutes * 60 * 1000;
+      this.timer = setInterval(() => this.tick(), intervalMs);
+      console.log(`[narrator] interval updated to ${config.interval_minutes}m`);
+    }
+  }
+
   private async tick() {
     if (this.running) return;
 

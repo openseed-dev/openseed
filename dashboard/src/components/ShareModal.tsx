@@ -1,16 +1,9 @@
-import { signal } from '@preact/signals';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
-import { esc } from '../utils';
-import { useValue } from '../hooks';
-
-interface ShareData {
-  name: string;
-  summary: string;
-  t: string;
-}
-
-export const shareSignal = signal<ShareData | null>(null);
+import { esc } from '@/utils';
+import { useStore } from '@/state';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 function buildShareCard(name: string, summary: string, timestamp: string): HTMLDivElement {
   const card = document.createElement('div');
@@ -70,9 +63,10 @@ async function copyCanvasToClipboard(canvas: HTMLCanvasElement): Promise<void> {
 }
 
 export function ShareModal() {
-  const data = useValue(shareSignal);
+  const data = useStore(s => s.shareData);
+  const setShareData = useStore(s => s.setShareData);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [imgSrc, setImgSrc] = useState<string>('');
+  const [imgSrc, setImgSrc] = useState('');
   const [tweetText, setTweetText] = useState('');
   const [feedback, setFeedback] = useState('');
   const [copyLabel, setCopyLabel] = useState('Copy image');
@@ -91,17 +85,7 @@ export function ShareModal() {
       .catch(() => setImgSrc(''));
   }, [data]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && shareSignal.value) shareSignal.value = null;
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
-
-  if (!data) return null;
-
-  const close = () => { shareSignal.value = null; };
+  const close = () => setShareData(null);
 
   const copyImage = async () => {
     if (!canvas) return;
@@ -115,7 +99,7 @@ export function ShareModal() {
   };
 
   const downloadImage = () => {
-    if (!canvas) return;
+    if (!canvas || !data) return;
     const a = document.createElement('a');
     a.download = `openseed-${data.name}.png`;
     a.href = canvas.toDataURL('image/png');
@@ -137,52 +121,41 @@ export function ShareModal() {
   const charCount = tweetText.length;
 
   return (
-    <div
-      class="fixed inset-0 z-[100] bg-bg/[0.92] backdrop-blur-lg flex items-center justify-center animate-[narrate-in_0.2s_ease-out]"
-      onClick={(e) => { if (e.target === e.currentTarget) close(); }}
-    >
-      <div class="bg-white border border-border-default w-full max-w-[640px] max-h-[90vh] overflow-y-auto p-7 relative" onClick={(e) => e.stopPropagation()}>
-        <button class="absolute top-4 right-5 bg-transparent border-none text-text-dim cursor-pointer text-lg leading-none hover:text-text-primary" onClick={close}>×</button>
-
-        {/* Card preview */}
-        <div class="mb-2 text-center text-text-dim text-xs">
+    <Dialog open={!!data} onOpenChange={(open) => { if (!open) close(); }}>
+      <DialogContent className="max-w-[640px] max-h-[90vh] overflow-y-auto p-7">
+        <div className="mb-2 text-center text-text-dim text-xs">
           {imgSrc
-            ? <img src={imgSrc} class="w-full border border-border-default" />
+            ? <img src={imgSrc} className="w-full border border-border-default" />
             : 'Generating image...'
           }
         </div>
 
         {imgSrc && (
-          <div class="flex gap-4 justify-center mb-5">
-            <span class="text-[11px] text-text-dim cursor-pointer hover:text-narrator" onClick={copyImage}>{copyLabel}</span>
-            <span class="text-[11px] text-text-dim cursor-pointer hover:text-narrator" onClick={downloadImage}>Download image</span>
+          <div className="flex gap-4 justify-center mb-5">
+            <span className="text-[11px] text-text-dim cursor-pointer hover:text-narrator" onClick={copyImage}>{copyLabel}</span>
+            <span className="text-[11px] text-text-dim cursor-pointer hover:text-narrator" onClick={downloadImage}>Download image</span>
           </div>
         )}
 
-        {/* Tabs */}
-        <div class="flex border-b border-border-default mb-4">
-          <button class="px-4 py-2 text-narrator text-xs border-b-2 border-narrator bg-transparent font-sans">Twitter</button>
+        <div className="flex border-b border-border-default mb-4">
+          <button className="px-4 py-2 text-narrator text-xs border-b-2 border-narrator bg-transparent font-sans">Twitter</button>
         </div>
 
-        {/* Tweet text */}
         <textarea
-          class="w-full min-h-[100px] resize-y font-sans text-[13px] border border-border-default p-3 text-text-primary bg-bg leading-relaxed focus:outline-none focus:border-narrator"
+          className="w-full min-h-[100px] resize-y font-sans text-[13px] border border-border-default p-3 text-text-primary bg-bg leading-relaxed focus:outline-none focus:border-narrator rounded"
           value={tweetText}
-          onInput={(e) => setTweetText((e.target as HTMLTextAreaElement).value)}
+          onChange={(e) => setTweetText(e.target.value)}
         />
-        <div class={`text-[10px] text-right mt-1 ${charCount > 280 ? 'text-error' : charCount > 250 ? 'text-warn-light' : 'text-text-dim'}`}>
+        <div className={`text-[10px] text-right mt-1 ${charCount > 280 ? 'text-error' : charCount > 250 ? 'text-warn-light' : 'text-text-dim'}`}>
           {charCount} / 280
         </div>
 
-        <button
-          class="mt-3 px-4 py-2 bg-[#f0fdf4] border border-narrator text-narrator cursor-pointer font-sans text-xs hover:bg-[#dcfce7]"
-          onClick={shareToTwitter}
-        >
+        <Button variant="outline" className="mt-3 border-narrator text-narrator hover:bg-[#f0fdf4]" onClick={shareToTwitter}>
           Copy image and open Twitter
-        </button>
-        {feedback && <span class="text-[11px] text-narrator ml-3">{feedback}</span>}
-        <div class="text-[11px] text-text-dim mt-2">Paste the image in the compose window</div>
-      </div>
-    </div>
+        </Button>
+        {feedback && <span className="text-[11px] text-narrator ml-3">{feedback}</span>}
+        <div className="text-[11px] text-text-dim mt-2">Paste the image in the compose window</div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,11 +1,12 @@
-import { useState } from 'preact/hooks';
-import {
-  creatures, selected, creatureBudgets, globalBudget, genomes, sidebarOpen,
-  selectCreature, refresh, loadGlobalBudget,
-} from '../state';
-import { useValue } from '../hooks';
-import * as api from '../api';
-import { fmtCost } from '../utils';
+import { useState } from 'react';
+import { useStore } from '@/state';
+import * as api from '@/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Settings, PanelLeft } from 'lucide-react';
 
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -15,11 +16,13 @@ function StatusDot({ status }: { status: string }) {
     sleeping: 'bg-dormant',
     error: 'bg-error animate-[pulse-error_1s_ease-in-out_infinite]',
   };
-  return <span class={`w-2 h-2 rounded-full shrink-0 ${colors[status] || 'bg-text-muted'}`} />;
+  return <span className={`w-2 h-2 rounded-full shrink-0 ${colors[status] || 'bg-text-muted'}`} />;
 }
 
 function SpawnForm({ onClose }: { onClose: () => void }) {
-  const genomeList = useValue(genomes);
+  const genomes = useStore(s => s.genomes);
+  const refresh = useStore(s => s.refresh);
+  const selectCreature = useStore(s => s.selectCreature);
   const [name, setName] = useState('');
   const [genome, setGenome] = useState('');
   const [model, setModel] = useState('');
@@ -34,7 +37,7 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
     try {
       const res = await api.spawnCreature(
         name.trim(),
-        genome || genomeList[0]?.name || 'minimal',
+        genome || genomes[0]?.name || 'minimal',
         purpose.trim() || undefined,
         model || undefined,
       );
@@ -50,21 +53,21 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div class="p-3 border-b border-border-light bg-[#f5f5f5] flex flex-col gap-2">
-      <input
-        class="bg-white border border-[#d0d0d0] text-text-primary px-2 py-1.5 rounded text-xs font-sans focus:outline-none focus:border-accent"
+    <div className="p-3 border-b border-border-light bg-[#f5f5f5] flex flex-col gap-2">
+      <Input
         placeholder="name (lowercase)" maxLength={32}
-        value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)}
+        className="text-xs h-8"
+        value={name} onChange={(e) => setName(e.target.value)}
       />
       <select
-        class="bg-white border border-[#d0d0d0] text-text-primary px-2 py-1.5 rounded text-xs font-sans focus:outline-none focus:border-accent"
-        value={genome} onChange={(e) => setGenome((e.target as HTMLSelectElement).value)}
+        className="bg-white border border-input text-text-primary px-2 py-1.5 rounded text-xs font-sans focus:outline-none focus:border-ring"
+        value={genome} onChange={(e) => setGenome(e.target.value)}
       >
-        {genomeList.map(g => <option value={g.name}>{g.name}</option>)}
+        {genomes.map(g => <option key={g.name} value={g.name}>{g.name}</option>)}
       </select>
       <select
-        class="bg-white border border-[#d0d0d0] text-text-primary px-2 py-1.5 rounded text-xs font-sans focus:outline-none focus:border-accent"
-        value={model} onChange={(e) => setModel((e.target as HTMLSelectElement).value)}
+        className="bg-white border border-input text-text-primary px-2 py-1.5 rounded text-xs font-sans focus:outline-none focus:border-ring"
+        value={model} onChange={(e) => setModel(e.target.value)}
       >
         <option value="">model (default: opus)</option>
         <option value="claude-opus-4-6">claude-opus-4-6 ($5/$25)</option>
@@ -75,160 +78,118 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
         <option value="o4-mini">o4-mini ($1.10/$4.40)</option>
       </select>
       <textarea
-        class="bg-white border border-[#d0d0d0] text-text-primary px-2 py-1.5 rounded text-xs font-sans resize-y min-h-12 focus:outline-none focus:border-accent"
+        className="bg-white border border-input text-text-primary px-2 py-1.5 rounded text-xs font-sans resize-y min-h-12 focus:outline-none focus:border-ring"
         placeholder="purpose (optional)" rows={3}
-        value={purpose} onInput={(e) => setPurpose((e.target as HTMLTextAreaElement).value)}
+        value={purpose} onChange={(e) => setPurpose(e.target.value)}
       />
-      <button
-        class="bg-[#f0fdf4] border border-alive text-alive px-3 py-1.5 rounded text-xs font-sans cursor-pointer hover:bg-[#dcfce7] disabled:opacity-40 disabled:cursor-not-allowed"
+      <Button
+        variant="outline" size="sm"
+        className="border-alive text-alive hover:bg-[#dcfce7]"
         onClick={submit} disabled={submitting}
       >
         {submitting ? 'spawning...' : 'spawn'}
-      </button>
-      {error && <div class="text-error text-[11px]">{error}</div>}
-    </div>
-  );
-}
-
-function GlobalBudgetDisplay() {
-  const [editing, setEditing] = useState(false);
-  const [cap, setCap] = useState(20);
-  const [action, setAction] = useState('sleep');
-
-  const b = useValue(globalBudget);
-  if (!b) return null;
-
-  if (editing) {
-    const save = async () => {
-      await api.updateGlobalBudget(cap, action);
-      await loadGlobalBudget();
-      setEditing(false);
-    };
-    return (
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-accent rounded text-[11px] text-text-secondary flex-wrap">
-        <span class="text-text-muted text-[10px]">$/day</span>
-        <input
-          type="number" min="0" step="1" value={cap}
-          class="w-[50px] bg-white border border-[#d0d0d0] text-warn-light px-1.5 py-0.5 rounded text-[11px] text-right font-sans focus:outline-none focus:border-accent"
-          onInput={(e) => setCap(parseFloat((e.target as HTMLInputElement).value))}
-          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
-          ref={(el) => el?.focus()}
-        />
-        <select
-          class="bg-white border border-[#d0d0d0] text-text-primary px-1 py-0.5 rounded text-[11px] font-sans focus:outline-none focus:border-accent"
-          value={action} onChange={(e) => setAction((e.target as HTMLSelectElement).value)}
-        >
-          <option value="sleep">sleep</option>
-          <option value="warn">warn</option>
-          <option value="off">off</option>
-        </select>
-        <button class="bg-[#f0fdf4] border border-alive text-alive px-2 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#dcfce7]" onClick={save}>save</button>
-        <button class="border border-[#d0d0d0] text-text-muted px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:text-text-secondary hover:border-text-muted" onClick={() => setEditing(false)}>x</button>
-      </div>
-    );
-  }
-
-  const label = b.action === 'off' ? 'no cap' : `$${b.daily_usd}/day · ${b.action}`;
-  return (
-    <div class="text-text-muted">
-      <span class="text-text-muted">global cap: </span>
-      <span
-        class="text-warn-light cursor-pointer hover:underline"
-        onClick={() => { setCap(b.daily_usd); setAction(b.action); setEditing(true); }}
-      >
-        {label} ✎
-      </span>
+      </Button>
+      {error && <div className="text-error text-[11px]">{error}</div>}
     </div>
   );
 }
 
 export function Sidebar() {
   const [showSpawn, setShowSpawn] = useState(false);
-  const crMap = useValue(creatures);
-  const sel = useValue(selected);
-  const budgets = useValue(creatureBudgets);
+  const crMap = useStore(s => s.creatures);
+  const sel = useStore(s => s.selected);
+  const budgets = useStore(s => s.creatureBudgets);
+  const selectCreature = useStore(s => s.selectCreature);
+  const refresh = useStore(s => s.refresh);
+  const setSidebarOpen = useStore(s => s.setSidebarOpen);
+  const setSettingsOpen = useStore(s => s.setSettingsOpen);
   const names = Object.keys(crMap).sort();
 
   const onOverview = sel === null;
 
   const goOverview = () => {
     selectCreature(null);
-    sidebarOpen.value = false;
+    setSidebarOpen(false);
   };
 
   return (
-    <div class="sticky top-0 h-screen w-[260px] border-r border-border-default bg-surface flex flex-col shrink-0 overflow-y-auto animate-[slide-in-left_0.15s_ease-out]">
+    <div className="sticky top-0 h-screen w-[260px] border-r border-border-default bg-surface flex flex-col shrink-0 overflow-hidden animate-[slide-in-left_0.15s_ease-out]">
       {/* Header */}
-      <div class="px-4 py-4 text-text-primary text-[17px] font-medium font-serif tracking-[-0.02em] border-b border-border-default flex items-center justify-between">
-        <span class="cursor-pointer hover:text-narrator transition-colors" onClick={goOverview}>openseed</span>
-        <button
-          class="w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0 text-text-faint hover:text-text-secondary transition-colors"
-          onClick={() => { if (onOverview) sidebarOpen.value = false; else goOverview(); }}
+      <div className="px-4 py-4 text-text-primary text-[17px] font-medium font-serif tracking-[-0.02em] border-b border-border-default flex items-center justify-between">
+        <span className="cursor-pointer hover:text-narrator transition-colors" onClick={goOverview}>openseed</span>
+        <Button
+          variant="ghost" size="icon-xs"
+          className="text-text-faint hover:text-text-secondary"
+          onClick={() => { if (onOverview) setSidebarOpen(false); else goOverview(); }}
           title={onOverview ? 'Collapse sidebar' : 'Back to overview'}
         >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="w-[13px] h-[13px]">
-            <rect x="1" y="2" width="14" height="12" rx="2" />
-            <line x1="5.5" y1="2" x2="5.5" y2="14" />
-          </svg>
-        </button>
+          <PanelLeft className="size-[13px]" />
+        </Button>
       </div>
 
       {/* Creature list */}
-      <div class="p-2 flex-1">
-        <div
-          class={`px-3 py-2 rounded cursor-pointer flex items-center gap-2 mb-0.5 transition-colors ${onOverview ? 'bg-[#eff6ff] border-l-2 border-accent' : 'hover:bg-[#f5f5f5]'}`}
-          onClick={goOverview}
-        >
-          <span class="text-text-muted text-[12px]">overview</span>
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          <div
+            className={`px-3 py-2 rounded cursor-pointer flex items-center gap-2 mb-0.5 transition-colors ${onOverview ? 'bg-[#eff6ff] border-l-2 border-accent-blue' : 'hover:bg-[#f5f5f5]'}`}
+            onClick={goOverview}
+          >
+            <span className="text-text-muted text-[12px]">overview</span>
+          </div>
+
+          {names.map(n => {
+            const c = crMap[n];
+            const b = budgets[n];
+            const isSel = sel === n;
+
+            let costLabel = null;
+            if (b && b.action !== 'off' && b.daily_cap_usd > 0) {
+              const pct = Math.min(100, Math.round((b.daily_spent_usd / b.daily_cap_usd) * 100));
+              const cls = pct >= 100 ? 'text-error' : pct >= 80 ? 'text-warn-light' : 'text-text-muted';
+              costLabel = <span className={`text-[10px] ml-1 shrink-0 ${cls}`}>{pct}%</span>;
+            }
+
+            const budgetCapped = c.sleepReason === 'budget';
+
+            return (
+              <div
+                key={n}
+                className={`px-3 py-2 rounded cursor-pointer flex items-center gap-2 mb-0.5 transition-colors ${isSel ? 'bg-[#eff6ff] border-l-2 border-accent-blue' : 'hover:bg-[#f5f5f5]'}`}
+                onClick={() => selectCreature(n)}
+              >
+                <StatusDot status={c.status} />
+                <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{n}</span>
+                {budgetCapped && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">capped</Badge>}
+                {costLabel}
+                {c.status === 'stopped' || budgetCapped ? (
+                  <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'start').then(refresh); }}>start</button>
+                ) : (
+                  <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'stop').then(refresh); }}>stop</button>
+                )}
+              </div>
+            );
+          })}
+
+          <Separator className="mx-3 my-1" />
+          <div
+            className="px-3 py-2 rounded cursor-pointer flex items-center gap-2 text-text-faint text-[12px] hover:text-narrator transition-colors"
+            onClick={() => setShowSpawn(!showSpawn)}
+          >
+            <span>+ spawn creature</span>
+          </div>
+          {showSpawn && <SpawnForm onClose={() => setShowSpawn(false)} />}
         </div>
-
-        {names.map(n => {
-          const c = crMap[n];
-          const b = budgets[n];
-          const isSel = sel === n;
-
-          let costLabel = null;
-          if (b && b.action !== 'off' && b.daily_cap_usd > 0) {
-            const pct = Math.min(100, Math.round((b.daily_spent_usd / b.daily_cap_usd) * 100));
-            const cls = pct >= 100 ? 'text-error' : pct >= 80 ? 'text-warn-light' : 'text-text-muted';
-            costLabel = <span class={`text-[10px] ml-1 shrink-0 ${cls}`}>{pct}%</span>;
-          }
-
-          const budgetCapped = c.sleepReason === 'budget';
-
-          return (
-            <div
-              key={n}
-              class={`px-3 py-2 rounded cursor-pointer flex items-center gap-2 mb-0.5 transition-colors ${isSel ? 'bg-[#eff6ff] border-l-2 border-accent' : 'hover:bg-[#f5f5f5]'}`}
-              onClick={() => selectCreature(n)}
-            >
-              <StatusDot status={c.status} />
-              <span class="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{n}</span>
-              {budgetCapped && <span class="text-[10px] text-error ml-1">capped</span>}
-              {costLabel}
-              {c.status === 'stopped' || budgetCapped ? (
-                <button class="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'start').then(refresh); }}>start</button>
-              ) : (
-                <button class="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'stop').then(refresh); }}>stop</button>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Spawn action */}
-        <div class="mx-3 mt-1 mb-1 border-t border-border-light" />
-        <div
-          class="px-3 py-2 rounded cursor-pointer flex items-center gap-2 text-text-faint text-[12px] hover:text-narrator transition-colors"
-          onClick={() => setShowSpawn(!showSpawn)}
-        >
-          <span>+ spawn creature</span>
-        </div>
-        {showSpawn && <SpawnForm onClose={() => setShowSpawn(false)} />}
-      </div>
+      </ScrollArea>
 
       {/* Footer */}
-      <div class="border-t border-border-default p-3 text-[11px] shrink-0">
-        <GlobalBudgetDisplay />
+      <div className="border-t border-border-default p-3 text-[11px] shrink-0">
+        <div
+          className="flex items-center gap-1.5 text-text-muted cursor-pointer hover:text-text-primary transition-colors"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Settings className="size-3.5" />
+          <span>Settings</span>
+        </div>
       </div>
     </div>
   );

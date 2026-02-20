@@ -1,43 +1,59 @@
-import { signal, computed } from '@preact/signals';
-import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarrationEntry, MindData, GenomeInfo } from './types';
+import { create } from 'zustand';
+import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo } from './types';
 import * as api from './api';
 
-// Core state
-export const creatures = signal<Record<string, CreatureInfo>>({});
-export const selected = signal<string | null>(null);
-export const selectedTab = signal('log');
-export const mindData = signal<MindData | null>(null);
+interface ShareData {
+  name: string;
+  summary: string;
+  t: string;
+}
 
-// Narration
-export const narrationEntries = signal<NarrationEntry[]>([]);
-export const narrationDisplayCount = signal(5);
+interface AppState {
+  creatures: Record<string, CreatureInfo>;
+  selected: string | null;
+  selectedTab: string;
+  mindData: MindData | null;
 
-// Overview moments
-export const allMoments = signal<CreatureEvent[]>([]);
-export const showMoments = signal(false);
+  narrationEntries: NarrationEntry[];
+  narrationDisplayCount: number;
 
-// Sidebar visibility (auto-managed: hidden on overview, visible on creature detail)
-export const sidebarOpen = signal(false);
+  allMoments: CreatureEvent[];
+  showMoments: boolean;
 
-// Budget
-export const creatureBudgets = signal<Record<string, BudgetInfo>>({});
-export const globalBudget = signal<GlobalBudget | null>(null);
+  sidebarOpen: boolean;
+  settingsOpen: boolean;
 
-// Usage
-export const usageData = signal<Record<string, { cost_usd?: number; daily_date?: string; daily_cost_usd?: number }>>({});
-export const totalCost = signal(0);
+  creatureBudgets: Record<string, BudgetInfo>;
+  globalBudget: GlobalBudget | null;
 
-// Genomes
-export const genomes = signal<GenomeInfo[]>([]);
+  usageData: Record<string, { cost_usd?: number; daily_date?: string; daily_cost_usd?: number }>;
+  totalCost: number;
 
-// Last known intents per creature (for sidebar tooltips etc.)
-export const lastIntentMap = signal<Record<string, string>>({});
+  genomes: GenomeInfo[];
+  lastIntentMap: Record<string, string>;
+  creatureEvents: CreatureEvent[];
+  narratorConfig: NarratorConfig | null;
 
-// Creature events (for detail view)
-export const creatureEvents = signal<CreatureEvent[]>([]);
+  shareData: ShareData | null;
+}
 
-// Derived
-export const creatureNames = computed(() => Object.keys(creatures.value).sort());
+interface AppActions {
+  refresh: () => Promise<void>;
+  loadNarration: () => Promise<void>;
+  loadRecentEvents: () => Promise<void>;
+  loadMind: () => Promise<void>;
+  loadGlobalBudget: () => Promise<void>;
+  loadNarratorConfig: () => Promise<void>;
+  loadGenomes: () => Promise<void>;
+  selectCreature: (name: string | null) => Promise<void>;
+  handleSSEEvent: (ev: CreatureEvent) => void;
+  setSelectedTab: (tab: string) => void;
+  setNarrationDisplayCount: (n: number) => void;
+  setShowMoments: (v: boolean) => void;
+  setSidebarOpen: (v: boolean) => void;
+  setSettingsOpen: (v: boolean) => void;
+  setShareData: (d: ShareData | null) => void;
+}
 
 export function isInterestingEvent(ev: CreatureEvent): boolean {
   const t = ev.type;
@@ -50,133 +66,176 @@ export function isInterestingEvent(ev: CreatureEvent): boolean {
   return false;
 }
 
-export async function refresh() {
-  try {
-    const [crList, usageRes] = await Promise.all([
-      api.fetchCreatures(),
-      api.fetchUsage(),
-    ]);
-    const crMap: Record<string, CreatureInfo> = {};
-    for (const c of crList) crMap[c.name] = c;
-    creatures.value = crMap;
+export const useStore = create<AppState & AppActions>()((set, get) => ({
+  creatures: {},
+  selected: null,
+  selectedTab: 'log',
+  mindData: null,
+  narrationEntries: [],
+  narrationDisplayCount: 5,
+  allMoments: [],
+  showMoments: false,
+  sidebarOpen: false,
+  settingsOpen: false,
+  creatureBudgets: {},
+  globalBudget: null,
+  usageData: {},
+  totalCost: 0,
+  genomes: [],
+  lastIntentMap: {},
+  creatureEvents: [],
+  narratorConfig: null,
+  shareData: null,
 
-    usageData.value = usageRes.usage || {};
-    totalCost.value = usageRes.total || 0;
-
-    const names = Object.keys(crMap);
-    const budgetResults = await Promise.all(
-      names.map(n => api.fetchCreatureBudget(n).catch(() => null))
-    );
-    const budgets: Record<string, BudgetInfo> = {};
-    names.forEach((n, i) => { if (budgetResults[i]) budgets[n] = budgetResults[i]!; });
-    creatureBudgets.value = budgets;
-  } catch {}
-}
-
-export async function loadNarration() {
-  try {
-    const entries = await api.fetchNarration(50);
-    entries.reverse();
-    narrationEntries.value = entries;
-  } catch {
-    narrationEntries.value = [];
-  }
-}
-
-export async function loadRecentEvents() {
-  const names = Object.keys(creatures.value);
-  try {
-    const results = await Promise.all(
-      names.map(n => api.fetchCreatureEvents(n).catch(() => []))
-    );
-    let moments: CreatureEvent[] = [];
-    results.forEach((events, i) => {
-      events.slice(-30).forEach(ev => {
-        ev.creature = ev.creature || names[i];
-        if (isInterestingEvent(ev)) moments.push(ev);
-      });
-    });
-    moments.sort((a, b) => (b.t || '').localeCompare(a.t || ''));
-    allMoments.value = moments.slice(0, 60);
-  } catch {}
-}
-
-export async function loadMind() {
-  const name = selected.value;
-  if (!name) return;
-  try {
-    mindData.value = await api.fetchCreatureFiles(name);
-  } catch {
-    mindData.value = {};
-  }
-}
-
-export async function loadGlobalBudget() {
-  try {
-    globalBudget.value = await api.fetchGlobalBudget();
-  } catch {}
-}
-
-export async function loadGenomes() {
-  try {
-    genomes.value = await api.fetchGenomes();
-  } catch {}
-}
-
-export async function selectCreature(name: string | null) {
-  selected.value = name;
-  selectedTab.value = 'log';
-  mindData.value = null;
-  creatureEvents.value = [];
-  if (name) sidebarOpen.value = false;
-
-  if (name) {
+  refresh: async () => {
     try {
-      const [events, budget] = await Promise.all([
-        api.fetchCreatureEvents(name),
-        api.fetchCreatureBudget(name),
+      const [crList, usageRes] = await Promise.all([
+        api.fetchCreatures(),
+        api.fetchUsage(),
       ]);
-      creatureEvents.value = events;
-      creatureBudgets.value = { ...creatureBudgets.value, [name]: budget };
+      const crMap: Record<string, CreatureInfo> = {};
+      for (const c of crList) crMap[c.name] = c;
+
+      const names = Object.keys(crMap);
+      const budgetResults = await Promise.all(
+        names.map(n => api.fetchCreatureBudget(n).catch(() => null))
+      );
+      const budgets: Record<string, BudgetInfo> = {};
+      names.forEach((n, i) => { if (budgetResults[i]) budgets[n] = budgetResults[i]!; });
+
+      set({
+        creatures: crMap,
+        usageData: usageRes.usage || {},
+        totalCost: usageRes.total || 0,
+        creatureBudgets: budgets,
+      });
     } catch {}
-    loadMind();
-  }
-}
+  },
 
-export function handleSSEEvent(ev: CreatureEvent) {
-  if (ev.creature) {
-    const intents = { ...lastIntentMap.value };
-    if (ev.type === 'creature.sleep' && ev.text) {
-      intents[ev.creature] = ev.text.length > 100 ? ev.text.slice(0, 100) + '...' : ev.text;
-    } else if (ev.type === 'creature.thought' && ev.text) {
-      intents[ev.creature] = ev.text.length > 100 ? ev.text.slice(0, 100) + '...' : ev.text;
-    } else if (ev.type === 'creature.dream') {
-      intents[ev.creature] = (ev.deep ? 'deep sleep: ' : 'dreaming: ') + (ev.priority || '').slice(0, 80);
-    } else if (ev.type === 'creature.tool_call') {
-      const cmd = (ev.input || '').split('\n')[0];
-      intents[ev.creature] = '\u25b6 ' + (cmd.length > 80 ? cmd.slice(0, 80) + '...' : cmd);
+  loadNarration: async () => {
+    try {
+      const entries = await api.fetchNarration(50);
+      entries.reverse();
+      set({ narrationEntries: entries });
+    } catch {
+      set({ narrationEntries: [] });
     }
-    lastIntentMap.value = intents;
-  }
+  },
 
-  if (selected.value === null) {
-    if (ev.type === 'narrator.entry') {
-      const entry: NarrationEntry = {
-        t: ev.t!,
-        text: ev.text!,
-        blocks: ev.blocks || null,
-        creatures_mentioned: ev.creatures_mentioned || [],
-      };
-      narrationEntries.value = [entry, ...narrationEntries.value];
+  loadRecentEvents: async () => {
+    const names = Object.keys(get().creatures);
+    try {
+      const results = await Promise.all(
+        names.map(n => api.fetchCreatureEvents(n).catch(() => []))
+      );
+      let moments: CreatureEvent[] = [];
+      results.forEach((events, i) => {
+        events.slice(-30).forEach(ev => {
+          ev.creature = ev.creature || names[i];
+          if (isInterestingEvent(ev)) moments.push(ev);
+        });
+      });
+      moments.sort((a, b) => (b.t || '').localeCompare(a.t || ''));
+      set({ allMoments: moments.slice(0, 60) });
+    } catch {}
+  },
+
+  loadMind: async () => {
+    const name = get().selected;
+    if (!name) return;
+    try {
+      set({ mindData: await api.fetchCreatureFiles(name) });
+    } catch {
+      set({ mindData: {} });
+    }
+  },
+
+  loadGlobalBudget: async () => {
+    try {
+      set({ globalBudget: await api.fetchGlobalBudget() });
+    } catch {}
+  },
+
+  loadNarratorConfig: async () => {
+    try {
+      set({ narratorConfig: await api.fetchNarratorConfig() });
+    } catch {}
+  },
+
+  loadGenomes: async () => {
+    try {
+      set({ genomes: await api.fetchGenomes() });
+    } catch {}
+  },
+
+  selectCreature: async (name) => {
+    set({
+      selected: name,
+      selectedTab: 'log',
+      mindData: null,
+      creatureEvents: [],
+      ...(name ? { sidebarOpen: false } : {}),
+    });
+
+    if (name) {
+      try {
+        const [events, budget] = await Promise.all([
+          api.fetchCreatureEvents(name),
+          api.fetchCreatureBudget(name),
+        ]);
+        set(s => ({
+          creatureEvents: events,
+          creatureBudgets: { ...s.creatureBudgets, [name]: budget },
+        }));
+      } catch {}
+      get().loadMind();
+    }
+  },
+
+  handleSSEEvent: (ev) => {
+    const s = get();
+
+    if (ev.creature) {
+      const intents = { ...s.lastIntentMap };
+      if (ev.type === 'creature.sleep' && ev.text) {
+        intents[ev.creature] = ev.text.length > 100 ? ev.text.slice(0, 100) + '...' : ev.text;
+      } else if (ev.type === 'creature.thought' && ev.text) {
+        intents[ev.creature] = ev.text.length > 100 ? ev.text.slice(0, 100) + '...' : ev.text;
+      } else if (ev.type === 'creature.dream') {
+        intents[ev.creature] = (ev.deep ? 'deep sleep: ' : 'dreaming: ') + (ev.priority || '').slice(0, 80);
+      } else if (ev.type === 'creature.tool_call') {
+        const cmd = (ev.input || '').split('\n')[0];
+        intents[ev.creature] = '\u25b6 ' + (cmd.length > 80 ? cmd.slice(0, 80) + '...' : cmd);
+      }
+      set({ lastIntentMap: intents });
+    }
+
+    if (s.selected === null) {
+      if (ev.type === 'narrator.entry') {
+        const entry: NarrationEntry = {
+          t: ev.t!,
+          text: ev.text!,
+          blocks: ev.blocks || null,
+          creatures_mentioned: ev.creatures_mentioned || [],
+        };
+        set(prev => ({ narrationEntries: [entry, ...prev.narrationEntries] }));
+        return;
+      }
+      if (isInterestingEvent(ev)) {
+        set(prev => ({ allMoments: [ev, ...prev.allMoments.slice(0, 59)] }));
+      }
       return;
     }
-    if (isInterestingEvent(ev)) {
-      allMoments.value = [ev, ...allMoments.value.slice(0, 59)];
-    }
-    return;
-  }
 
-  if (selectedTab.value !== 'log') return;
-  if (ev.creature !== selected.value) return;
-  creatureEvents.value = [...creatureEvents.value, ev];
-}
+    if (s.selectedTab !== 'log') return;
+    if (ev.creature !== s.selected) return;
+    set(prev => ({ creatureEvents: [...prev.creatureEvents, ev] }));
+  },
+
+  setSelectedTab: (tab) => set({ selectedTab: tab }),
+  setNarrationDisplayCount: (n) => set({ narrationDisplayCount: n }),
+  setShowMoments: (v) => set({ showMoments: v }),
+  setSidebarOpen: (v) => set({ sidebarOpen: v }),
+  setSettingsOpen: (v) => set({ settingsOpen: v }),
+  setShareData: (d) => set({ shareData: d }),
+}));

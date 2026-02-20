@@ -18,6 +18,12 @@ export interface GlobalBudget {
   action: 'sleep' | 'warn' | 'off';
 }
 
+export interface NarratorConfig {
+  enabled: boolean;
+  model: string;
+  interval_minutes: number;
+}
+
 export interface NarrationEntry {
   t: string;
   text: string;

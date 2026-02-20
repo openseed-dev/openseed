@@ -1,4 +1,4 @@
-import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarrationEntry, MindData, GenomeInfo, UsageData } from './types';
+import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo, UsageData } from './types';
 
 export async function fetchCreatures(): Promise<CreatureInfo[]> {
   const res = await fetch('/api/creatures');
@@ -44,6 +44,20 @@ export async function updateGlobalBudget(daily_usd: number, action: string): Pro
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ daily_usd, action }),
+  });
+  return res.json();
+}
+
+export async function fetchNarratorConfig(): Promise<NarratorConfig> {
+  const res = await fetch('/api/narrator/config');
+  return res.json();
+}
+
+export async function updateNarratorConfig(config: Partial<NarratorConfig>): Promise<NarratorConfig> {
+  const res = await fetch('/api/narrator/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
   });
   return res.json();
 }

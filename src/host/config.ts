@@ -86,6 +86,14 @@ export function saveGlobalSpendingCap(cap: Partial<SpendingCapConfig>): void {
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
 }
 
+export function saveNarratorConfig(nar: Partial<NarratorConfig>): void {
+  const configPath = path.join(OPENSEED_HOME, 'config.json');
+  const existing = loadJsonSafe(configPath);
+  const merged = { ...existing, narrator: { ...(existing.narrator || {}), ...nar } };
+  mkdirSync(path.dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
+}
+
 export function saveCreatureSpendingCap(name: string, cap: Partial<SpendingCapConfig>): void {
   const configPath = path.join(CREATURES_DIR, name, 'config.json');
   const existing = loadJsonSafe(configPath);

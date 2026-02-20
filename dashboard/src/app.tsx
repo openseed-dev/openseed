@@ -1,20 +1,19 @@
-import { useEffect, useRef } from 'preact/hooks';
-import { Sidebar } from './components/Sidebar';
-import { Overview } from './components/Overview';
-import { CreatureDetail } from './components/CreatureDetail';
-import { ShareModal } from './components/ShareModal';
-import { useValue } from './hooks';
-import {
-  selected, sidebarOpen, refresh, loadNarration, loadRecentEvents,
-  loadGenomes, loadGlobalBudget, handleSSEEvent, selectedTab, creatureEvents,
-} from './state';
+import { useEffect, useRef } from 'react';
+import { Sidebar } from '@/components/Sidebar';
+import { Overview } from '@/components/Overview';
+import { CreatureDetail } from '@/components/CreatureDetail';
+import { ShareModal } from '@/components/ShareModal';
+import { SettingsModal } from '@/components/SettingsModal';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { useStore } from '@/state';
 
 export function App() {
   const sseRef = useRef<EventSource | null>(null);
-  const sel = useValue(selected);
-  const sbOpen = useValue(sidebarOpen);
-  const tab = useValue(selectedTab);
-  const evLen = useValue(creatureEvents).length;
+  const sel = useStore(s => s.selected);
+  const sbOpen = useStore(s => s.sidebarOpen);
+  const tab = useStore(s => s.selectedTab);
+  const evLen = useStore(s => s.creatureEvents.length);
+  const { refresh, loadNarration, loadRecentEvents, loadGenomes, loadGlobalBudget, handleSSEEvent } = useStore();
 
   const showSidebar = sel !== null || sbOpen;
 
@@ -46,12 +45,15 @@ export function App() {
   }, [evLen]);
 
   return (
-    <div class="flex min-h-screen bg-bg text-text-primary text-[13px] font-sans">
-      {showSidebar && <Sidebar />}
-      <div class="flex-1 min-w-0 flex flex-col">
-        {sel === null ? <Overview /> : <CreatureDetail />}
+    <TooltipProvider>
+      <div className="flex min-h-screen bg-bg text-text-primary text-[13px] font-sans">
+        {showSidebar && <Sidebar />}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {sel === null ? <Overview /> : <CreatureDetail />}
+        </div>
+        <ShareModal />
+        <SettingsModal />
       </div>
-      <ShareModal />
-    </div>
+    </TooltipProvider>
   );
 }
