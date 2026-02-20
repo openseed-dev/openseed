@@ -292,10 +292,8 @@ const tiers = [
 
         if (result.ok) {
           if (result.message === "already on the list") {
-            gtag('event', 'waitlist_already');
             msg.textContent = "You're already on the list. We'll be in touch.";
           } else {
-            gtag('event', 'waitlist_submit', { plan: data.plan || 'none', has_use_case: !!data.use_case });
             msg.textContent = "You're on the list. We'll be in touch.";
           }
           msg.className = "text-sm text-center text-alive";
