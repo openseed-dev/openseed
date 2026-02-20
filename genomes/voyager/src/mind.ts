@@ -15,6 +15,7 @@ import {
   closeBrowser,
   executeBrowser,
 } from './tools/browser.js';
+import { janee as executeJanee } from './tools/janee.js';
 import {
   commitSkill as commitSkillToLibrary,
   skillInventory,
@@ -106,6 +107,26 @@ A skill is a reusable piece of code that solves a specific problem. Before commi
       })).describe("New tasks to propose for the frontier (if any)"),
     }),
   }),
+  janee: tool({
+    description: `Proxy API requests through Janee — a secure credential manager. You never see raw API keys.
+
+Actions:
+- status - check if Janee is available
+- list_services - see what APIs you can access (e.g. "github")
+- execute - make an API request through Janee (it injects credentials for you)
+
+For execute, provide capability (service name), method (GET/POST/PUT/DELETE), path, and optionally body and reason.
+
+If Janee is unavailable, you'll get a helpful error with fallback instructions.`,
+    inputSchema: z.object({
+      action: z.enum(["status", "list_services", "execute"]).describe("What to do"),
+      capability: z.string().describe("Service name for execute (e.g. 'github')").optional(),
+      method: z.string().describe("HTTP method for execute (GET, POST, PUT, DELETE)").optional(),
+      path: z.string().describe("API path for execute (e.g. '/repos/owner/repo/issues')").optional(),
+      body: z.string().describe("Request body as JSON string for POST/PUT").optional(),
+      reason: z.string().describe("Why you need this request (audit trail)").optional(),
+    }),
+  }),
 };
 
 // --- Callback types ---
@@ -139,6 +160,7 @@ There is no human to help you. If something is hard, figure it out. If something
 You have:
 - A persistent skill library that grows with every successful cycle
 - Bash and a browser to interact with the world
+- Janee for secure API access (GitHub, etc.) without handling raw credentials
 - A frontier of self-proposed challenges that drive your growth
 - The ability to compose existing skills into new, more powerful ones
 
@@ -198,6 +220,10 @@ Background processes (\`&\`, \`nohup\`) survive sleep. Use \`wakeup "reason"\` f
 **commit_skill** — save a verified skill to your library. Requires: name, code, verification evidence.
 
 **complete_cycle** — end the current foraging cycle with an outcome and optional new frontier tasks.
+
+**janee** — secure API proxy. Call external APIs (GitHub, etc.) without seeing raw credentials.
+Check availability with \`status\`, list services with \`list_services\`, make requests with \`execute\`.
+If Janee is not configured, it tells you so — fall back to raw env vars.
 
 ## Cycle Budget
 
@@ -626,6 +652,11 @@ Return your tasks using the propose_tasks tool.`;
       if (!browserResult.ok) return { ok: false, error: browserResult.error };
       const output = browserResult.snapshot || (browserResult.data ? String(browserResult.data) : "ok");
       return { ok: true, data: { snapshot: browserResult.snapshot, data: browserResult.data } };
+    }
+
+    if (name === "janee") {
+      const result = await executeJanee(args as any);
+      return { ok: true, data: result };
     }
 
     return { ok: false, error: `Unknown tool: ${name}` };
