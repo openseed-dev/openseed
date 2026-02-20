@@ -23,7 +23,8 @@
     "stop": "tsx src/cli/index.ts stop",
     "list": "tsx src/cli/index.ts list",
     "destroy": "tsx src/cli/index.ts destroy",
-    "fork": "tsx src/cli/index.ts fork"
+    "fork": "tsx src/cli/index.ts fork",
+    "build:dashboard": "cd dashboard && pnpm build"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",

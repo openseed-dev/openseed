@@ -1,0 +1,23 @@
+{
+  "name": "openseed-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.8.1",
+    "preact": "^10.28.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.3",
+    "@tailwindcss/vite": "^4.1.18",
+    "html2canvas": "^1.4.1",
+    "marked": "^17.0.3",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

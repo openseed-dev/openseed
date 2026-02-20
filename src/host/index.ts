@@ -2,7 +2,7 @@ import {
   exec,
   execSync,
 } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -33,7 +33,6 @@ import {
   CreatureSupervisor,
   SupervisorConfig,
 } from './supervisor.js';
-import { getJaneeUrl, startJanee, stopJanee } from './janee.js';
 
 const execAsync = promisify(exec);
 
@@ -62,12 +61,15 @@ export class Orchestrator {
   private pendingOps: Set<string> = new Set();
   private narrator: Narrator | null = null;
   private dashboardHtml: string;
+  private dashboardDistDir: string | null;
   private budgetResetInterval: NodeJS.Timeout | null = null;
 
   constructor(port: number) {
     this.port = port;
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
     this.dashboardHtml = readFileSync(path.join(thisDir, 'dashboard.html'), 'utf-8');
+    const distDir = path.resolve(thisDir, '../../dashboard/dist');
+    this.dashboardDistDir = existsSync(path.join(distDir, 'index.html')) ? distDir : null;
   }
 
   async start() {
@@ -75,7 +77,6 @@ export class Orchestrator {
     await this.writeRunFile();
     this.setupCleanup();
     this.createServer();
-    await startJanee();
     await this.autoReconnect();
     this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
 
@@ -107,7 +108,6 @@ export class Orchestrator {
     const cleanup = async () => {
       if (this.budgetResetInterval) clearInterval(this.budgetResetInterval);
       this.narrator?.stop();
-      stopJanee();
       try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
@@ -470,6 +470,22 @@ export class Orchestrator {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url!, `http://localhost:${this.port}`);
       const p = url.pathname;
+
+      if (req.method === 'GET' && this.dashboardDistDir) {
+        const filePath = p === '/' ? '/index.html' : p;
+        const fullPath = path.join(this.dashboardDistDir, filePath);
+        if (fullPath.startsWith(this.dashboardDistDir) && existsSync(fullPath)) {
+          const ext = path.extname(fullPath);
+          const mimeTypes: Record<string, string> = {
+            '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+            '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
+            '.woff2': 'font/woff2', '.woff': 'font/woff',
+          };
+          res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+          res.end(readFileSync(fullPath));
+          return;
+        }
+      }
 
       if (p === '/' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/html' });
