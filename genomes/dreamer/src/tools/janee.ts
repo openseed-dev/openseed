@@ -16,26 +16,57 @@
  * @see https://github.com/rsdouglas/janee
  */
 
+let sessionId: string | null = null;
+
 function getJaneeUrl(): string | null {
   const url = process.env.JANEE_URL;
   if (!url) return null;
   return url.replace(/\/+$/, '');
 }
 
+const MCP_HEADERS = {
+  'Content-Type': 'application/json',
+  'Accept': 'application/json, text/event-stream',
+};
+
+/** Parse SSE response from StreamableHTTP — extracts the JSON data line. */
+function parseSSE(text: string): any {
+  for (const line of text.split('\n')) {
+    if (line.startsWith('data: ')) {
+      return JSON.parse(line.slice(6));
+    }
+  }
+  return JSON.parse(text);
+}
+
+async function ensureSession(baseUrl: string): Promise<string> {
+  if (sessionId) return sessionId;
+
+  const res = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST',
+    headers: MCP_HEADERS,
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 0,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: process.env.CREATURE_NAME || 'creature', version: '1.0' },
+      },
+    }),
+    signal: AbortSignal.timeout(5000),
+  });
+
+  const sid = res.headers.get('mcp-session-id');
+  if (sid) sessionId = sid;
+  return sessionId || '';
+}
+
 async function isJaneeReachable(baseUrl: string): Promise<boolean> {
   try {
-    const res = await fetch(`${baseUrl}/mcp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 0,
-        method: 'ping',
-        params: {},
-      }),
-      signal: AbortSignal.timeout(3000),
-    });
-    return res.ok || res.status === 400; // 400 = valid endpoint, bad request
+    await ensureSession(baseUrl);
+    return true;
   } catch {
     return false;
   }
@@ -50,13 +81,14 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}): Pr
     );
   }
 
-  const creatureId = process.env.CREATURE_NAME || process.env.HOSTNAME || 'unknown';
+  const sid = await ensureSession(baseUrl);
 
   const res = await fetch(`${baseUrl}/mcp`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'X-Creature-ID': creatureId,
+      ...MCP_HEADERS,
+      ...(sid ? { 'Mcp-Session-Id': sid } : {}),
+      'X-Creature-ID': process.env.CREATURE_NAME || process.env.HOSTNAME || 'unknown',
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -64,24 +96,26 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}): Pr
       method: 'tools/call',
       params: { name: method, arguments: params },
     }),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!res.ok) {
     const text = await res.text();
+    // Session may have expired — clear and retry once
+    if (res.status === 400 || res.status === 404) {
+      sessionId = null;
+    }
     throw new Error(`Janee HTTP ${res.status}: ${text}`);
   }
 
-  const json = await res.json() as any;
+  const text = await res.text();
+  const json = parseSSE(text);
   if (json.error) {
     throw new Error(`Janee error: ${json.error.message || JSON.stringify(json.error)}`);
   }
   return json.result;
 }
 
-/**
- * Check if Janee is available. Returns status info.
- */
 export async function janeeStatus(): Promise<string> {
   const url = getJaneeUrl();
   if (!url) {
@@ -103,9 +137,6 @@ export async function janeeStatus(): Promise<string> {
   }, null, 2);
 }
 
-/**
- * List available services and the creature's capabilities for each.
- */
 export async function janeeListServices(): Promise<string> {
   try {
     const result = await mcpCall('list_services');
@@ -115,16 +146,6 @@ export async function janeeListServices(): Promise<string> {
   }
 }
 
-/**
- * Execute an API request through Janee. The creature specifies what it wants
- * to do; Janee injects the real credentials and proxies the request.
- *
- * @param capability - The service capability to use (e.g. "github", "stripe")
- * @param method - HTTP method (GET, POST, PUT, DELETE, etc.)
- * @param path - API path (e.g. "/user", "/v1/balance")
- * @param body - Optional request body (for POST/PUT)
- * @param reason - Why the creature needs this request (for audit trail)
- */
 export async function janeeExecute(args: {
   capability: string;
   method: string;

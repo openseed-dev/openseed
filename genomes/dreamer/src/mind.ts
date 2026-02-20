@@ -19,6 +19,7 @@ import {
   closeBrowser,
   executeBrowser,
 } from './tools/browser.js';
+import { janee as executeJanee } from './tools/janee.js';
 
 const MAX_CONTEXT_CHARS = 100_000;
 const KEEP_RECENT_MESSAGES = 20;
@@ -107,6 +108,29 @@ Every action returns a text snapshot of the page: URL, title, visible text, and 
       reason: z.string().describe("What limitation or improvement you need. Be specific."),
     }),
   }),
+  janee: tool({
+    description: `Proxy API requests through Janee — a secure credential manager. You never see raw API keys.
+
+Actions:
+- status - check if Janee is available
+- list_services - see what APIs you can access (e.g. "github")
+- execute - make an API request through Janee (it injects credentials for you)
+
+For execute, provide capability (service name), method (GET/POST/PUT/DELETE), path, and optionally body and reason.
+
+Example — create a GitHub issue:
+  janee({ action: "execute", capability: "github", method: "POST", path: "/repos/openseed-dev/openseed/issues", body: { title: "...", body: "..." }, reason: "reporting finding" })
+
+If Janee is unavailable, you'll get a helpful error with fallback instructions.`,
+    inputSchema: z.object({
+      action: z.enum(["status", "list_services", "execute"]).describe("What to do"),
+      capability: z.string().describe("Service name for execute (e.g. 'github')").optional(),
+      method: z.string().describe("HTTP method for execute (GET, POST, PUT, DELETE)").optional(),
+      path: z.string().describe("API path for execute (e.g. '/repos/owner/repo/issues')").optional(),
+      body: z.record(z.unknown()).describe("Request body for POST/PUT").optional(),
+      reason: z.string().describe("Why you need this request (audit trail)").optional(),
+    }),
+  }),
 };
 
 async function buildSystemPrompt(purpose: string): Promise<string> {
@@ -172,7 +196,7 @@ You can install more; they persist.
 
 ## Your Tools
 
-You have bash, browser, and set_sleep as tools. Use them freely. You will see the results
+You have bash, browser, set_sleep, and janee as tools. Use them freely. You will see the results
 of each tool call before deciding your next action.
 
 **bash** - full power of a Unix machine. Write scripts, install packages, spin up servers,
@@ -211,6 +235,11 @@ done) &
 Then call set_sleep. The background loop runs while you sleep and wakes you when needed.
 You can watch for anything you can script: GitHub events, file changes, API responses,
 price movements, webhooks, whatever your purpose demands.
+
+**janee** - a secure API proxy that lets you call external APIs without seeing raw credentials.
+Use it to interact with GitHub, Stripe, or any configured service. Janee injects the real
+credentials on your behalf. Check what's available with \`list_services\`, then use \`execute\`
+to make requests. If Janee isn't configured, the tool tells you so — fall back to raw env vars.
 
 If you think "I can't do X because I'm a bot", you're wrong. You have bash on a real machine
 and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
@@ -1601,6 +1630,11 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
               ...(result.data !== undefined ? { data: result.data } : {}),
             },
           };
+        }
+
+        case "janee": {
+          const result = await executeJanee(args as any);
+          return { ok: true, data: result };
         }
 
         default:

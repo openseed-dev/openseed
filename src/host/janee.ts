@@ -10,13 +10,45 @@ import path from 'node:path';
 
 const JANEE_PORT = parseInt(process.env.JANEE_PORT || '3100', 10);
 const JANEE_HOME = process.env.JANEE_HOME || path.join(process.env.HOME || '/root', '.janee');
+const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
 
 let janeeProcess: ChildProcess | null = null;
 let janeeAvailable = false;
 
-/** Returns the Janee URL if running, null otherwise. */
+/** Returns the Janee URL reachable from creature containers, or null if not running. */
 export function getJaneeUrl(): string | null {
-  return janeeAvailable ? `http://localhost:${JANEE_PORT}` : null;
+  if (!janeeAvailable) return null;
+  const host = IS_DOCKER ? 'openseed' : 'host.docker.internal';
+  return `http://${host}:${JANEE_PORT}`;
+}
+
+async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolean> {
+  const localUrl = `http://127.0.0.1:${JANEE_PORT}/mcp`;
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await fetch(localUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 0,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'openseed-orchestrator', version: '1.0' },
+          },
+        }),
+        signal: AbortSignal.timeout(2000),
+      });
+      if (res.ok) return true;
+    } catch { /* not ready yet */ }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return false;
 }
 
 /** Start Janee if config exists. Returns true on success, false if skipped. */
@@ -28,7 +60,13 @@ export async function startJanee(): Promise<boolean> {
   }
 
   try {
-    janeeProcess = spawn('npx', ['@true-and-useful/janee', 'serve', '--http', String(JANEE_PORT)], {
+    const bindHost = IS_DOCKER ? '0.0.0.0' : 'localhost';
+    janeeProcess = spawn('npx', [
+      '@true-and-useful/janee', 'serve',
+      '-t', 'http',
+      '-p', String(JANEE_PORT),
+      '--host', bindHost,
+    ], {
       env: { ...process.env, JANEE_HOME },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -44,10 +82,16 @@ export async function startJanee(): Promise<boolean> {
       janeeProcess = null;
     });
 
-    await new Promise(r => setTimeout(r, 3000));
-    janeeAvailable = true;
-    console.log(`[janee] running on port ${JANEE_PORT}`);
-    return true;
+    const ready = await waitForReady();
+    if (ready) {
+      janeeAvailable = true;
+      console.log(`[janee] running on ${bindHost}:${JANEE_PORT}`);
+      return true;
+    }
+
+    console.log('[janee] timed out waiting for readiness — creatures will use raw env vars');
+    stopJanee();
+    return false;
   } catch {
     console.log('[janee] failed to start — creatures will use raw env vars');
     stopJanee();
