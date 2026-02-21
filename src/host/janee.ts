@@ -1,10 +1,14 @@
 /**
- * Janee process manager — spawns Janee as a child process.
+ * Janee process manager — spawns Janee as a child process (Authority mode).
  *
  * Auto-detects ~/.janee/config.yaml and starts Janee locally.
  * If no config exists, Janee is skipped — creatures fall back to raw env vars.
+ *
+ * With --runner-key, the Authority also exposes REST endpoints for Runners
+ * inside creature containers to request exec grants.
  */
 import { ChildProcess, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fsSync from 'node:fs';
 import path from 'node:path';
 
@@ -14,33 +18,27 @@ const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DO
 
 let janeeProcess: ChildProcess | null = null;
 let janeeAvailable = false;
+const runnerKey = process.env.JANEE_RUNNER_KEY || randomUUID();
 
-/** Returns the Janee URL reachable from creature containers, or null if not running. */
-export function getJaneeUrl(): string | null {
+/** Returns the Authority URL reachable from creature containers, or null if not running. */
+export function getJaneeAuthorityUrl(): string | null {
   if (!janeeAvailable) return null;
   const host = IS_DOCKER ? 'openseed' : 'host.docker.internal';
   return `http://${host}:${JANEE_PORT}`;
 }
 
+/** Runner key shared between Authority and Runners inside containers. */
+export function getJaneeRunnerKey(): string | null {
+  if (!janeeAvailable) return null;
+  return runnerKey;
+}
+
 async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolean> {
-  // Don't call initialize here — the SDK only allows one session per transport,
-  // and using it for a health check would consume the creature's session slot.
-  // Instead, send a POST without a valid method; any non-network-error response
-  // means the server is alive and accepting connections.
-  const localUrl = `http://localhost:${JANEE_PORT}/mcp`;
+  const healthUrl = `http://localhost:${JANEE_PORT}/v1/health`;
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const res = await fetch(localUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'ping' }),
-        signal: AbortSignal.timeout(2000),
-      });
-      // Any HTTP response (even 4xx) means the server is running
-      return true;
+      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) return true;
     } catch { /* not ready yet */ }
     await new Promise(r => setTimeout(r, intervalMs));
   }
@@ -62,6 +60,7 @@ export async function startJanee(): Promise<boolean> {
       '-t', 'http',
       '-p', String(JANEE_PORT),
       '--host', bindHost,
+      '--runner-key', runnerKey,
     ], {
       env: { ...process.env, JANEE_HOME },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -90,7 +89,7 @@ export async function startJanee(): Promise<boolean> {
     const ready = await waitForReady();
     if (ready) {
       janeeAvailable = true;
-      console.log(`[janee] running on ${bindHost}:${JANEE_PORT}`);
+      console.log(`[janee] authority running on ${bindHost}:${JANEE_PORT}`);
       return true;
     }
 

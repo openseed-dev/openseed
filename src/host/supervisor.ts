@@ -6,8 +6,8 @@ import {
 import fsSync from 'node:fs';
 import path from 'node:path';
 
-import { getJaneeUrl } from './janee.js';
 import { Event } from '../shared/types.js';
+import { getJaneeAuthorityUrl, getJaneeRunnerKey } from './janee.js';
 import {
   getCurrentSHA,
   getLastGoodSHA,
@@ -226,10 +226,14 @@ export class CreatureSupervisor {
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
       '-e', `HOST_URL=${orchestratorUrl}`,
       '-e', `CREATURE_NAME=${name}`,
-      ...(getJaneeUrl() ? ['-e', `JANEE_URL=${getJaneeUrl()}`] : []),
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),
+      ...(getJaneeAuthorityUrl() ? [
+        '-e', 'JANEE_URL=http://localhost:3200',
+        '-e', `JANEE_AUTHORITY_URL=${getJaneeAuthorityUrl()}`,
+        '-e', `JANEE_RUNNER_KEY=${getJaneeRunnerKey()}`,
+      ] : []),
       ...(IS_DOCKER ? ['--network', 'openseed'] : []),
       `creature-${name}`,
     ];
