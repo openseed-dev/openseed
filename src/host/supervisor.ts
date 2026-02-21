@@ -6,6 +6,7 @@ import {
 import fsSync from 'node:fs';
 import path from 'node:path';
 
+import { generateCreatureToken, revokeCreatureToken } from './creature-auth.js';
 import { Event } from '../shared/types.js';
 import { getJaneeAuthorityUrl, getJaneeRunnerKey } from './janee.js';
 import {
@@ -83,6 +84,7 @@ export class CreatureSupervisor {
     this.clearTimers();
     try { execSync(`docker stop ${this.containerName()}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
     this.status = 'stopped';
+    revokeCreatureToken(this.name);
     this.sleepReason = 'user';
     this.creature = null;
   }
@@ -228,6 +230,7 @@ export class CreatureSupervisor {
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
       '-e', `HOST_URL=${orchestratorUrl}`,
       '-e', `CREATURE_NAME=${name}`,
+      '-e', `CREATURE_TOKEN=${generateCreatureToken(name)}`,
       '-e', 'PORT=7778',
       '-e', `AUTO_ITERATE=${autoIterate ? 'true' : 'false'}`,
       ...(this.config.model ? ['-e', `LLM_MODEL=${this.config.model}`] : []),

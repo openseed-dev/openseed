@@ -18,6 +18,7 @@ import {
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
+import { authenticateCreatureRequest, generateCreatureToken, revokeCreatureToken } from './creature-auth.js';
 import {
   getSpendingCap,
   loadGlobalConfig,
@@ -311,6 +312,7 @@ export class Orchestrator {
     if (!supervisor) throw new Error(`creature "${name}" is not running`);
     await supervisor.stop();
     this.supervisors.delete(name);
+    revokeCreatureToken(name);
     this.stores.delete(name);
   }
 
@@ -739,6 +741,18 @@ export class Orchestrator {
             res.end('[]');
           }
           return;
+        }
+
+
+        // Auth gate — control actions require valid creature token (or localhost/dashboard)
+        const CONTROL_ACTIONS = new Set(["start", "stop", "restart", "rebuild", "wake", "message"]);
+        if (CONTROL_ACTIONS.has(action) && req.method === "POST") {
+          const auth = authenticateCreatureRequest(req, name);
+          if (!auth.ok) {
+            res.writeHead(auth.status, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: auth.message }));
+            return;
+          }
         }
 
         if (action === 'start' && req.method === 'POST') {
