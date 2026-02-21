@@ -17,15 +17,6 @@ function MessageBar() {
     setText('');
   };
 
-  const paste = async () => {
-    try {
-      const clipboard = await navigator.clipboard.readText();
-      setText(text + clipboard);
-    } catch {
-      alert('Clipboard access denied.');
-    }
-  };
-
   return (
     <div className="sticky bottom-0 bg-bg px-4 py-3 border-t border-border-light flex gap-2">
       <textarea
@@ -38,7 +29,6 @@ function MessageBar() {
           if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); send(); }
         }}
       />
-      <button className="bg-bg border border-[#d0d0d0] text-text-secondary px-2.5 py-2 rounded cursor-pointer text-[13px] hover:bg-[#f5f5f5] transition-colors" onClick={paste} title="Paste from clipboard">📋</button>
       <button className="bg-[#eff6ff] border border-accent-blue text-accent-blue px-4 py-2 rounded cursor-pointer font-sans text-[13px] hover:bg-[#dbeafe] transition-colors" onClick={send}>Send</button>
     </div>
   );

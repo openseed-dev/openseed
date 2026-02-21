@@ -470,7 +470,6 @@
     </div>
     <div class="message-bar" id="msgbar">
       <textarea id="msg" placeholder="Message to creature... (Cmd+Enter to send)" rows="2" onkeydown="if(event.key==='Enter'&&event.metaKey){event.preventDefault();sendMsg()}" onpaste="return true"></textarea>
-      <button onclick="pasteMsg()" title="Paste from clipboard" style="background:#f8f7f4;border:1px solid #d0d0d0;color:#666;padding:8px 10px;border-radius:4px;cursor:pointer;font-size:13px;">&#x1f4cb;</button>
       <button onclick="sendMsg()">Send</button>
     </div>
   </div>
@@ -1213,16 +1212,6 @@
       select(null);
     }
 
-    async function pasteMsg() {
-      try {
-        const text = await navigator.clipboard.readText();
-        const inp = document.getElementById('msg');
-        inp.value += text;
-        inp.focus();
-      } catch (e) {
-        alert('Clipboard access denied. Try granting clipboard permission for this page.');
-      }
-    }
 
     async function sendMsg() {
       if (!selected) return;
