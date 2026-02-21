@@ -12,7 +12,8 @@
     "react-dom": "^19.1.0",
     "zustand": "^5.0.0",
     "html2canvas": "^1.4.1",
-    "marked": "^17.0.3"
+    "marked": "^17.0.3",
+    "dompurify": "^3.2.6"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
