@@ -109,25 +109,27 @@ Every action returns a text snapshot of the page: URL, title, visible text, and 
     }),
   }),
   janee: tool({
-    description: `Proxy API requests through Janee — a secure credential manager. You never see raw API keys.
+    description: `Secure credential manager. You never see raw API keys.
 
 Actions:
 - status - check if Janee is available
-- list_services - see what APIs you can access (e.g. "github")
-- execute - make an API request through Janee (it injects credentials for you)
+- list_services - see what APIs you can access
+- execute - make an HTTP API request through Janee (it injects credentials)
+- exec - run a CLI command (git, gh) with credentials injected as env vars. This is the best way to do git operations.
 
-For execute, provide capability (service name), method (GET/POST/PUT/DELETE), path, and optionally body and reason.
+For execute: provide capability, method (GET/POST/PUT/DELETE), path, and optionally body.
+For exec: provide capability and command (array of strings, e.g. ["git", "push"]). Janee injects GITHUB_TOKEN for you.
 
-Example — create a GitHub issue:
-  janee({ action: "execute", capability: "github", method: "POST", path: "/repos/openseed-dev/openseed/issues", body: { title: "...", body: "..." }, reason: "reporting finding" })
-
-If Janee is unavailable, you'll get a helpful error with fallback instructions.`,
+Example — push and open a PR:
+  exec(capability="openseed-patch-exec", command=["git", "push", "origin", "my-branch"])
+  exec(capability="openseed-patch-exec", command=["gh", "pr", "create", "--title", "Fix X", "--body", "..."])`,
     inputSchema: z.object({
-      action: z.enum(["status", "list_services", "execute"]).describe("What to do"),
-      capability: z.string().describe("Service name for execute (e.g. 'github')").optional(),
-      method: z.string().describe("HTTP method for execute (GET, POST, PUT, DELETE)").optional(),
-      path: z.string().describe("API path for execute (e.g. '/repos/owner/repo/issues')").optional(),
+      action: z.enum(["status", "list_services", "execute", "exec"]).describe("What to do"),
+      capability: z.string().describe("Capability name from list_services").optional(),
+      method: z.string().describe("HTTP method for execute action").optional(),
+      path: z.string().describe("API path for execute action").optional(),
       body: z.string().describe("Request body as JSON string for POST/PUT").optional(),
+      command: z.array(z.string()).describe("Command as array of strings for exec action (e.g. ['git', 'push'])").optional(),
       reason: z.string().describe("Why you need this request (audit trail)").optional(),
     }),
   }),

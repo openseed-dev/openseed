@@ -46,7 +46,7 @@ function MessageBar() {
 
 export function CreatureDetail() {
   const name = useStore(s => s.selected)!;
-  const crMap = useStore(s => s.creatures);
+  const c = useStore(s => s.creatures[name]);
   const events = useStore(s => s.creatureEvents);
   const mind = useStore(s => s.mindData);
   const tab = useStore(s => s.selectedTab);
@@ -54,7 +54,6 @@ export function CreatureDetail() {
   const selectCreature = useStore(s => s.selectCreature);
   const loadMind = useStore(s => s.loadMind);
   const refresh = useStore(s => s.refresh);
-  const c = crMap[name];
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

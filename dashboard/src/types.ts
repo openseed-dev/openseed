@@ -1,6 +1,6 @@
 export interface CreatureInfo {
   name: string;
-  status: 'stopped' | 'starting' | 'running' | 'sleeping' | 'error';
+  status: 'stopped' | 'starting' | 'running' | 'sleeping' | 'error' | 'spawning';
   model?: string;
   sha?: string;
   sleepReason?: string;

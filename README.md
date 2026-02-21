@@ -131,7 +131,7 @@ Or select from the dropdown in the dashboard.
 | Model | Provider | Input/Output per MTok |
 |-------|----------|----------------------|
 | `claude-opus-4-6` | Anthropic | $5 / $25 |
-| `claude-sonnet-4-5` | Anthropic | $3 / $15 |
+| `claude-sonnet-4-6` | Anthropic | $3 / $15 |
 | `claude-haiku-4-5` | Anthropic | $1 / $5 |
 | `gpt-5.2` | OpenAI | $1.75 / $14 |
 | `gpt-5-mini` | OpenAI | $0.25 / $2 |

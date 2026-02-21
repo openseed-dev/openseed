@@ -210,6 +210,12 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
       set({ lastIntentMap: intents });
     }
 
+    if (ev.type === 'creature.spawning' || ev.type === 'creature.spawned' || ev.type === 'creature.spawn_failed'
+      || ev.type === 'creature.started' || ev.type === 'creature.stopped'
+      || ev.type === 'creature.sleep' || ev.type === 'creature.wake') {
+      get().refresh();
+    }
+
     if (s.selected === null) {
       if (ev.type === 'narrator.entry') {
         const entry: NarrationEntry = {
@@ -232,7 +238,10 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
     set(prev => ({ creatureEvents: [...prev.creatureEvents, ev] }));
   },
 
-  setSelectedTab: (tab) => set({ selectedTab: tab }),
+  setSelectedTab: (tab) => {
+    set({ selectedTab: tab });
+    if (tab !== 'log') get().loadMind();
+  },
   setNarrationDisplayCount: (n) => set({ narrationDisplayCount: n }),
   setShowMoments: (v) => set({ showMoments: v }),
   setSidebarOpen: (v) => set({ sidebarOpen: v }),

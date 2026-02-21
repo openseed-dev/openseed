@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { marked } from 'marked';
 import { esc, timeAgo, summarize } from '@/utils';
 import type { MindData } from '@/types';
@@ -27,7 +27,7 @@ function JsonlEntry({ entry }: { entry: any }) {
   );
 }
 
-export function MindContent({ mindData, tabId }: { mindData: MindData; tabId: string }) {
+export const MindContent = memo(function MindContent({ mindData, tabId }: { mindData: MindData; tabId: string }) {
   const tab = (mindData.tabs || []).find(t => t.id === tabId);
   const data = mindData.data?.[tabId];
 
@@ -58,4 +58,4 @@ export function MindContent({ mindData, tabId }: { mindData: MindData; tabId: st
       {data || 'Empty.'}
     </div>
   );
-}
+});

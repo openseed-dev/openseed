@@ -27,7 +27,7 @@ async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolea
   // and using it for a health check would consume the creature's session slot.
   // Instead, send a POST without a valid method; any non-network-error response
   // means the server is alive and accepting connections.
-  const localUrl = `http://127.0.0.1:${JANEE_PORT}/mcp`;
+  const localUrl = `http://localhost:${JANEE_PORT}/mcp`;
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const res = await fetch(localUrl, {
@@ -41,7 +41,7 @@ async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolea
       });
       // Any HTTP response (even 4xx) means the server is running
       return true;
-    } catch { /* not ready yet — connection refused or timeout */ }
+    } catch { /* not ready yet */ }
     await new Promise(r => setTimeout(r, intervalMs));
   }
   return false;
@@ -65,6 +65,15 @@ export async function startJanee(): Promise<boolean> {
     ], {
       env: { ...process.env, JANEE_HOME },
       stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    janeeProcess.stdout?.on('data', (d: Buffer) => {
+      const line = d.toString().trim();
+      if (line) console.log('[janee:out]', line);
+    });
+    janeeProcess.stderr?.on('data', (d: Buffer) => {
+      const line = d.toString().trim();
+      if (line) console.log('[janee:err]', line);
     });
 
     janeeProcess.on('error', (err) => {

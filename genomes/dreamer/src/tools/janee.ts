@@ -180,15 +180,33 @@ export async function janeeExecute(args: {
   }
 }
 
+export async function janeeExec(args: {
+  capability: string;
+  command: string[];
+  reason?: string;
+}): Promise<string> {
+  try {
+    const result = await mcpCall('janee_exec', {
+      capability: args.capability,
+      command: args.command,
+      ...(args.reason ? { reason: args.reason } : {}),
+    });
+    return JSON.stringify(result, null, 2);
+  } catch (err: any) {
+    return `Janee exec failed: ${err.message}`;
+  }
+}
+
 /**
  * Main entry point — dispatches Janee tool calls.
  */
 export async function janee(args: {
-  action: 'status' | 'list_services' | 'execute';
+  action: 'status' | 'list_services' | 'execute' | 'exec';
   capability?: string;
   method?: string;
   path?: string;
   body?: string | Record<string, unknown>;
+  command?: string[];
   reason?: string;
 }): Promise<string> {
   switch (args.action) {
@@ -210,7 +228,17 @@ export async function janee(args: {
         reason: args.reason,
       });
 
+    case 'exec':
+      if (!args.capability || !args.command?.length) {
+        return 'Error: exec requires capability and command (array of strings)';
+      }
+      return janeeExec({
+        capability: args.capability,
+        command: args.command,
+        reason: args.reason,
+      });
+
     default:
-      return `Error: unknown action "${args.action}". Use: status, list_services, execute`;
+      return `Error: unknown action "${args.action}". Use: status, list_services, execute, exec`;
   }
 }

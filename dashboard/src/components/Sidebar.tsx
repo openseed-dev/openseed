@@ -11,6 +11,7 @@ import { Settings, PanelLeft } from 'lucide-react';
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
     stopped: 'bg-text-muted',
+    spawning: 'bg-warn animate-pulse',
     starting: 'bg-warn',
     running: 'bg-alive',
     sleeping: 'bg-dormant',
@@ -71,7 +72,7 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
       >
         <option value="">model (default: opus)</option>
         <option value="claude-opus-4-6">claude-opus-4-6 ($5/$25)</option>
-        <option value="claude-sonnet-4-5">claude-sonnet-4-5 ($3/$15)</option>
+        <option value="claude-sonnet-4-6">claude-sonnet-4-6 ($3/$15)</option>
         <option value="claude-haiku-4-5">claude-haiku-4-5 ($1/$5)</option>
         <option value="gpt-5.2">gpt-5.2 ($1.75/$14)</option>
         <option value="gpt-5-mini">gpt-5-mini ($0.25/$2)</option>
@@ -161,7 +162,9 @@ export function Sidebar() {
                 <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{n}</span>
                 {budgetCapped && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">capped</Badge>}
                 {costLabel}
-                {c.status === 'stopped' || budgetCapped ? (
+                {c.status === 'spawning' ? (
+                  <span className="text-[10px] text-warn-light animate-pulse">spawning...</span>
+                ) : c.status === 'stopped' || budgetCapped ? (
                   <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'start').then(refresh); }}>start</button>
                 ) : (
                   <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'stop').then(refresh); }}>stop</button>

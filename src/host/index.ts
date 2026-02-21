@@ -27,6 +27,7 @@ import {
 } from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
+import { startJanee, stopJanee } from './janee.js';
 import { Narrator } from './narrator.js';
 import type { BudgetCheckResult } from './proxy.js';
 import { handleLLMProxy } from './proxy.js';
@@ -78,6 +79,7 @@ export class Orchestrator {
     await this.writeRunFile();
     this.setupCleanup();
     this.createServer();
+    await startJanee();
     await this.autoReconnect();
     this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
 
@@ -109,6 +111,7 @@ export class Orchestrator {
     const cleanup = async () => {
       if (this.budgetResetInterval) clearInterval(this.budgetResetInterval);
       this.narrator?.stop();
+      stopJanee();
       try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
     };
@@ -423,7 +426,8 @@ export class Orchestrator {
         const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
         model = birth.model || null;
       } catch {}
-      return { name, status: 'stopped', sha: null, port: null, sleepReason: null, model };
+      const status = this.pendingOps.has(name) ? 'spawning' : 'stopped';
+      return { name, status, sha: null, port: null, sleepReason: null, model };
     }));
   }
 

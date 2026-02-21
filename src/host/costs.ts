@@ -12,7 +12,7 @@ const USAGE_FILE = path.join(OPENSEED_HOME, 'usage.json');
 const PRICING: Record<string, { input: number; output: number }> = {
   // Anthropic
   'claude-opus-4-6':   { input: 5 / 1e6,    output: 25 / 1e6 },
-  'claude-sonnet-4-5': { input: 3 / 1e6,    output: 15 / 1e6 },
+  'claude-sonnet-4-6': { input: 3 / 1e6,    output: 15 / 1e6 },
   'claude-haiku-4-5':  { input: 1 / 1e6,    output: 5 / 1e6 },
   // OpenAI GPT
   'gpt-5.2':           { input: 1.75 / 1e6, output: 14 / 1e6 },

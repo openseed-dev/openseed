@@ -23,7 +23,7 @@ export function App() {
       .then(() => {});
     loadGenomes();
     loadGlobalBudget();
-    const interval = setInterval(refresh, 2000);
+    const interval = setInterval(refresh, 30000);
 
     const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {

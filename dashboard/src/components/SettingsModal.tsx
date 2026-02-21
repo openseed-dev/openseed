@@ -129,7 +129,6 @@ function NarratorSection() {
             <SelectContent>
               <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
               <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
-              <SelectItem value="claude-sonnet-4-5">claude-sonnet-4-5</SelectItem>
               <SelectItem value="claude-haiku-4-5">claude-haiku-4-5</SelectItem>
             </SelectContent>
           </Select>
