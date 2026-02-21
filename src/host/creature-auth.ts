@@ -9,11 +9,17 @@
  *
  * Closes #12
  */
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 
 /** In-memory store: creature name → token */
 const creatureTokens = new Map<string, string>();
+
+/** Constant-time string comparison (prevents timing attacks). */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 /** Generate and store a token for a creature. Returns the token string. */
 export function generateCreatureToken(name: string): string {
@@ -66,7 +72,7 @@ export function authenticateCreatureRequest(
   // Find which creature this token belongs to
   let callerName: string | null = null;
   for (const [name, storedToken] of creatureTokens) {
-    if (storedToken === token) {
+    if (safeEqual(storedToken, token)) {
       callerName = name;
       break;
     }
