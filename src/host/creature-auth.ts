@@ -1,19 +1,28 @@
 /**
  * Per-creature API token authentication.
  *
- * Each creature gets a unique token at spawn time, injected as CREATURE_TOKEN.
- * Control endpoints require Bearer token auth. A creature's token only grants
- * access to its own control routes (self-management), preventing lateral movement.
+ * Each creature gets a unique token derived deterministically from
+ * HMAC(orchestrator_secret, creature_name). This means:
+ * - Tokens survive orchestrator restarts (same secret → same tokens)
+ * - No persistence layer needed for tokens
+ * - Creatures still receive tokens at spawn time via CREATURE_TOKEN env var
  *
- * The dashboard (localhost) is exempt — it accesses the API directly without tokens.
+ * The orchestrator secret is read from OPENSEED_SECRET env var or auto-generated
+ * and written to ~/.openseed/secret on first run.
  *
  * Closes #12
  */
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import type { IncomingMessage } from 'node:http';
 
-/** In-memory store: creature name → token */
-const creatureTokens = new Map<string, string>();
+/** Cached orchestrator secret. */
+let orchestratorSecret: string | null = null;
+
+/** Derived token cache: creature name → token (avoids re-deriving on every auth check). */
+const tokenCache = new Map<string, string>();
 
 /** Constant-time string comparison (prevents timing attacks). */
 function safeEqual(a: string, b: string): boolean {
@@ -21,16 +30,59 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-/** Generate and store a token for a creature. Returns the token string. */
-export function generateCreatureToken(name: string): string {
-  const token = randomBytes(32).toString('hex');
-  creatureTokens.set(name, token);
+/**
+ * Get (or create) the orchestrator secret.
+ * Priority: OPENSEED_SECRET env var > ~/.openseed/secret file > auto-generate.
+ */
+function getOrchestratorSecret(): string {
+  if (orchestratorSecret) return orchestratorSecret;
+
+  // 1. Check env var
+  if (process.env.OPENSEED_SECRET) {
+    orchestratorSecret = process.env.OPENSEED_SECRET;
+    return orchestratorSecret;
+  }
+
+  // 2. Check persisted secret file
+  const secretDir = join(homedir(), '.openseed');
+  const secretPath = join(secretDir, 'secret');
+
+  if (existsSync(secretPath)) {
+    orchestratorSecret = readFileSync(secretPath, 'utf-8').trim();
+    return orchestratorSecret;
+  }
+
+  // 3. Generate and persist
+  orchestratorSecret = randomBytes(32).toString('hex');
+  mkdirSync(secretDir, { recursive: true });
+  writeFileSync(secretPath, orchestratorSecret, { mode: 0o600 });
+  return orchestratorSecret;
+}
+
+/**
+ * Derive a deterministic token for a creature.
+ * HMAC-SHA256(orchestrator_secret, creature_name) → hex string.
+ */
+export function deriveCreatureToken(name: string): string {
+  const cached = tokenCache.get(name);
+  if (cached) return cached;
+
+  const secret = getOrchestratorSecret();
+  const token = createHmac('sha256', secret).update(name).digest('hex');
+  tokenCache.set(name, token);
   return token;
 }
 
-/** Remove a creature's token (on destroy). */
+/**
+ * @deprecated Use deriveCreatureToken() instead. Kept for backward compat during transition.
+ */
+export function generateCreatureToken(name: string): string {
+  return deriveCreatureToken(name);
+}
+
+/** Remove a creature's cached token (on destroy). */
 export function revokeCreatureToken(name: string): void {
-  creatureTokens.delete(name);
+  tokenCache.delete(name);
 }
 
 /** Check if a request is from localhost (dashboard). */
@@ -69,10 +121,11 @@ export function authenticateCreatureRequest(
 
   const token = authHeader.slice(7);
 
-  // Find which creature this token belongs to
+  // Find which creature this token belongs to by re-deriving
+  // (We check against all known creatures in the token cache)
   let callerName: string | null = null;
-  for (const [name, storedToken] of creatureTokens) {
-    if (safeEqual(storedToken, token)) {
+  for (const [name, derivedToken] of tokenCache) {
+    if (safeEqual(derivedToken, token)) {
       callerName = name;
       break;
     }

@@ -18,7 +18,7 @@ import {
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
 import { Event } from '../shared/types.js';
-import { authenticateCreatureRequest, generateCreatureToken, revokeCreatureToken } from './creature-auth.js';
+import { authenticateCreatureRequest, deriveCreatureToken, revokeCreatureToken } from './creature-auth.js';
 import {
   getSpendingCap,
   loadGlobalConfig,
