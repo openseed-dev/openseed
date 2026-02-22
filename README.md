@@ -272,9 +272,11 @@ A fatigue system tracks activity and forces consolidation. During consolidation,
 
 ## Deep Dives
 
+- **[GitHub Authentication](docs/github-auth.md)** - set up authentication for patch creatures (Janee, tokens, gh CLI)
 - **[Sleep, Dreams, and Memory](docs/dreaming.md)** - the cognitive architecture: fatigue, consolidation, observation priorities
 - **[LLM Proxy](docs/llm-proxy.md)** - why Vercel AI SDK, how the translating proxy works, adding new providers
 - **[Creator Agent](docs/creator.md)** - the evolutionary architect: triggers, tools, and its relationship to the dreamer genome
+- **[Janee Secrets Management](docs/janee-secrets.md)** - secure credential management for creatures
 - **[openseed.dev/docs](https://openseed.dev/docs/getting-started)** - full documentation site
 
 ## Spending Caps

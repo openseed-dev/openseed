@@ -68,3 +68,7 @@ Credentials created by a creature at runtime default to `agent-only` — only th
 | `JANEE_PORT` | `3100` | Local port |
 
 [Janee on GitHub](https://github.com/rsdouglas/janee) · [npm](https://www.npmjs.com/package/@true-and-useful/janee)
+
+---
+
+**[← Back to Documentation Index](README.md)**
