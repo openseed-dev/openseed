@@ -112,17 +112,17 @@ const tiers = [
               ))}
             </div>
 
-            <button
-              disabled
+            <a
+              href="#waitlist"
               class:list={[
-                "mt-6 w-full py-2.5 rounded-md text-sm font-medium cursor-not-allowed opacity-50",
+                "mt-6 w-full py-2.5 rounded-md text-sm font-medium text-center block transition-colors",
                 tier.highlight
-                  ? "bg-alive text-bg"
-                  : "bg-surface border border-border text-text-secondary",
+                  ? "bg-alive text-bg hover:bg-alive/90"
+                  : "bg-surface border border-border text-text-secondary hover:text-text hover:border-border-accent",
               ]}
             >
-              Coming soon
-            </button>
+              Join Waitlist
+            </a>
           </div>
         ))}
       </div>
@@ -166,7 +166,7 @@ const tiers = [
   </section>
 
   <!-- Waitlist form -->
-  <section class="py-24 border-t border-border" data-reveal>
+  <section id="waitlist" class="py-24 border-t border-border scroll-mt-8" data-reveal>
     <div class="max-w-lg mx-auto px-6">
       <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-center">
         Get early access
