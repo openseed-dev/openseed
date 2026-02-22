@@ -73,13 +73,6 @@ export function deriveCreatureToken(name: string): string {
   return token;
 }
 
-/**
- * @deprecated Use deriveCreatureToken() instead. Kept for backward compat during transition.
- */
-export function generateCreatureToken(name: string): string {
-  return deriveCreatureToken(name);
-}
-
 /** Remove a creature's cached token (on destroy). */
 export function revokeCreatureToken(name: string): void {
   tokenCache.delete(name);
