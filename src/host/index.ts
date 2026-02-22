@@ -55,6 +55,42 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
+/**
+ * Safely extracts error message from unknown error, with special handling
+ * for exec errors that may have stderr/stdout properties.
+ */
+function getErrorMessage(err: unknown): string {
+  // Handle exec-style errors with stderr/stdout
+  if (err && typeof err === 'object') {
+    const errObj = err as Record<string, unknown>;
+    
+    // Check for stderr (highest priority for exec errors)
+    if ('stderr' in errObj && typeof errObj.stderr === 'string' && errObj.stderr) {
+      return errObj.stderr;
+    }
+    // Check for stdout
+    if ('stdout' in errObj && typeof errObj.stdout === 'string' && errObj.stdout) {
+      return errObj.stdout;
+    }
+    // Check for message property
+    if ('message' in errObj && typeof errObj.message === 'string') {
+      return errObj.message;
+    }
+  }
+  
+  // Handle Error objects
+  if (err instanceof Error) {
+    return err.message;
+  }
+  
+  // Handle strings
+  if (typeof err === 'string') {
+    return err;
+  }
+  
+  return 'unknown error';
+}
+
 export class Orchestrator {
   private port: number;
   private supervisors: Map<string, CreatureSupervisor> = new Map();
@@ -373,8 +409,8 @@ export class Orchestrator {
           // docker restart: process restarts, container environment preserved
           await supervisor.restart();
           console.log(`[${name}] creature-requested restart completed`);
-        } catch (err: any) {
-          const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
+        } catch (err: unknown) {
+          const errMsg = getErrorMessage(err);
           console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
           try {
             await this.sendMessage(name, `[SYSTEM] Your restart request failed. TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
@@ -463,8 +499,8 @@ export class Orchestrator {
         try {
           await supervisor.start();
           await this.emitEvent(name, { t: new Date().toISOString(), type: 'budget.reset' } as any);
-        } catch (err: any) {
-          console.error(`[${name}] failed to wake after budget reset:`, err.message);
+        } catch (err: unknown) {
+          console.error(`[${name}] failed to wake after budget reset:`, getErrorMessage(err));
         }
       }
     }
