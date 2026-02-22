@@ -60,15 +60,16 @@ export async function commitSkill(
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
   ensureDir();
 
+  const tagList = Array.isArray(tags) ? tags : String(tags).split(/,\s*/);
   const ext = LANG_EXT[lang] || lang;
   const filePath = `${SKILLS_DIR}/${name}.${ext}`;
   const now = new Date().toISOString();
 
   const header = lang === "bash"
-    ? `#!/bin/bash\n# @name: ${name}\n# @desc: ${desc}\n# @tags: ${tags.join(", ")}\n# @verified: ${now}\n`
+    ? `#!/bin/bash\n# @name: ${name}\n# @desc: ${desc}\n# @tags: ${tagList.join(", ")}\n# @verified: ${now}\n`
     : lang === "python"
-    ? `#!/usr/bin/env python3\n# @name: ${name}\n# @desc: ${desc}\n# @tags: ${tags.join(", ")}\n# @verified: ${now}\n`
-    : `// @name: ${name}\n// @desc: ${desc}\n// @tags: ${tags.join(", ")}\n// @verified: ${now}\n`;
+    ? `#!/usr/bin/env python3\n# @name: ${name}\n# @desc: ${desc}\n# @tags: ${tagList.join(", ")}\n# @verified: ${now}\n`
+    : `// @name: ${name}\n// @desc: ${desc}\n// @tags: ${tagList.join(", ")}\n// @verified: ${now}\n`;
 
   const fullCode = code.startsWith("#!") ? code : header + code;
 
@@ -85,7 +86,7 @@ export async function commitSkill(
   const entry: Skill = {
     name,
     desc,
-    tags,
+    tags: tagList,
     path: filePath,
     lang,
     verified: now,
