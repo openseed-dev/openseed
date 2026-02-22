@@ -18,7 +18,22 @@ const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DO
 
 let janeeProcess: ChildProcess | null = null;
 let janeeAvailable = false;
-const runnerKey = process.env.JANEE_RUNNER_KEY || randomUUID();
+
+const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.openseed');
+
+function loadOrCreateRunnerKey(): string {
+  if (process.env.JANEE_RUNNER_KEY) return process.env.JANEE_RUNNER_KEY;
+  const keyPath = path.join(OPENSEED_HOME, 'runner-key');
+  try {
+    const existing = fsSync.readFileSync(keyPath, 'utf-8').trim();
+    if (existing) return existing;
+  } catch { /* doesn't exist yet */ }
+  const key = randomUUID();
+  try { fsSync.writeFileSync(keyPath, key + '\n', { mode: 0o600 }); } catch { /* best effort */ }
+  return key;
+}
+
+const runnerKey = loadOrCreateRunnerKey();
 
 /** Returns the Authority URL reachable from creature containers, or null if not running. */
 export function getJaneeAuthorityUrl(): string | null {
@@ -33,7 +48,7 @@ export function getJaneeRunnerKey(): string | null {
   return runnerKey;
 }
 
-async function waitForReady(maxAttempts = 10, intervalMs = 1000): Promise<boolean> {
+async function waitForReady(maxAttempts = 20, intervalMs = 1000): Promise<boolean> {
   const healthUrl = `http://localhost:${JANEE_PORT}/v1/health`;
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -56,7 +71,7 @@ export async function startJanee(): Promise<boolean> {
   try {
     const bindHost = IS_DOCKER ? '0.0.0.0' : 'localhost';
     janeeProcess = spawn('npx', [
-      '@true-and-useful/janee', 'serve',
+      '@true-and-useful/janee@latest', 'serve',
       '-t', 'http',
       '-p', String(JANEE_PORT),
       '--host', bindHost,
