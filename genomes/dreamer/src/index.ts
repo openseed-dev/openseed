@@ -23,6 +23,14 @@ function getCurrentSHA(): string {
   }
 }
 
+function getJaneeVersion(): string | null {
+  try {
+    return execSync("janee --version 2>/dev/null", { encoding: "utf-8" }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 interface CreatureEvent {
   t?: string;
   type: string;
@@ -47,7 +55,8 @@ class Creature {
     this.booted = true;
 
     const sha = getCurrentSHA();
-    await this.emit({ type: "creature.boot", sha });
+    const janeeVersion = getJaneeVersion();
+    await this.emit({ type: "creature.boot", sha, ...(janeeVersion && { janeeVersion }) });
     await this.memory.append("heartbeat", { sha, event: "boot" });
 
     this.startHeartbeat();
@@ -259,6 +268,7 @@ class Creature {
       await this.memory.append("observation", {
         error: err instanceof Error ? err.message : String(err),
       });
+    } finally {
       this.running = false;
     }
   }

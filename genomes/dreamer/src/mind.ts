@@ -638,8 +638,20 @@ export class Mind {
         }
 
         if (retryCount >= 5) {
-          console.error(`[mind] ${retryCount} consecutive failures, resetting conversation`);
-          break;
+          const RECOVERY_PAUSE_S = 120;
+          console.error(`[mind] ${retryCount} consecutive failures — LLM unreachable, pausing ${RECOVERY_PAUSE_S}s before fresh start`);
+          if (onError) await onError(`LLM unreachable after ${retryCount} failures, pausing ${RECOVERY_PAUSE_S}s`, RECOVERY_PAUSE_S * 1000, retryCount);
+          await new Promise(r => setTimeout(r, RECOVERY_PAUSE_S * 1000));
+
+          this.systemPrompt = await buildSystemPrompt(this.purpose);
+          const freshContext = await this.buildInitialContext();
+          this.messages = [];
+          this.pushMessage({ role: "user", content: freshContext });
+          actionsSinceSleep = [];
+          monologueSinceSleep = "";
+          retryDelay = 1000;
+          retryCount = 0;
+          continue;
         }
 
         console.error(`[mind] LLM call failed, retrying in ${retryDelay}ms:`, err);

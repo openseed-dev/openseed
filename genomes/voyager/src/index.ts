@@ -217,6 +217,7 @@ class Creature {
       );
     } catch (err) {
       console.error("[creature] cognition crashed:", err);
+    } finally {
       this.running = false;
     }
   }

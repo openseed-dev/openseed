@@ -157,7 +157,8 @@ You can install more; they persist across restarts.`;
           }
 
           if (retryCount >= 5) {
-            console.error(`[mind] ${retryCount} consecutive failures, resetting conversation`);
+            console.error(`[mind] ${retryCount} consecutive failures, pausing 120s before fresh start`);
+            await new Promise(r => setTimeout(r, 120_000));
             break;
           }
 
