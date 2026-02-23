@@ -3,6 +3,9 @@ set -e
 
 pnpm install --frozen-lockfile 2>/dev/null || true
 
+# Ensure latest Janee Runner
+npm install -g @true-and-useful/janee@latest --prefer-online 2>/dev/null || true
+
 # Start Janee Runner if Authority URL is set
 if [ -n "$JANEE_AUTHORITY_URL" ] && [ -n "$JANEE_RUNNER_KEY" ]; then
   janee serve -t http -p 3200 --host 127.0.0.1 \

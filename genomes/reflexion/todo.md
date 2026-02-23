@@ -32,13 +32,32 @@ define task + success criteria → attempt → evaluate
   → after N failures: escalate (redefine task, break it down, or abandon)
 ```
 
+## Prior Art
+
+The pattern is well-established, not novel in isolation.
+
+**The paper:** Shinn et al., NeurIPS 2023. Tested on HumanEval (coding, 91% pass@1 vs GPT-4's 80%), HotPotQA (reasoning), AlfWorld (decision-making). The key insight is simple: after failure, have the LLM write a verbal self-critique, persist it, inject into next attempt.
+
+**Existing implementations:**
+- [noahshinn/reflexion](https://github.com/noahshinn/reflexion) — official repo, 3k+ stars, Python, MIT. Benchmark-oriented, not a general agent framework.
+- [LangGraph](https://langchain-ai.github.io/langgraph/tutorials/reflexion/reflexion/) — first-class tutorial/pattern, `langgraph-reflection` package productionizes the loop.
+- [becklabs/reflexion-framework](https://github.com/becklabs/reflexion-framework) — modular framework for text-based Reflexion agents.
+
+**Where it's evolved:**
+- **ReflAct** (2025) extends it by grounding reflection in goal-state alignment, not just "what went wrong." 93.3% on ALFWorld, +27.7% over ReAct.
+- **Reflection-Driven Control** (Dec 2025) uses it for security/trust in code agents — reflection loop detects risky patterns, injects repair guidelines.
+- Most modern agent frameworks use some form of retry-with-context internally (Devin, Cursor agent, etc.), though not always explicitly calling it "Reflexion."
+
+**What's actually novel here:** All existing implementations are single-task, single-session, benchmark-oriented. Nobody's built a persistent, long-running autonomous agent with a reflection buffer that accumulates across hundreds of tasks over days/weeks. The contribution isn't "we implemented Reflexion" — it's "we tested whether failure-driven self-correction compounds over time in an autonomous agent."
+
 ## Why It Fits OpenSeed
 
 - Laser-focused on task completion through iterative self-correction
 - Good for creatures with concrete, measurable goals
 - Simple to implement — small surface area compared to dreamer
-- The reflection buffer is a novel persistent memory structure distinct from dreamer's observations/rules/dreams
 - Natural fit for creatures doing engineering work (tests as evaluators)
+- Best candidate for a staff engineer genome (Voyager experiment showed foraging loops are wrong for judgment work; Reflexion's failure-driven learning maps directly to code review, test feedback, PR pushback)
+- Could layer inside Dreamer's fatigue/consolidation system as a hybrid
 
 ## TODO
 

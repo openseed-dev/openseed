@@ -18,6 +18,7 @@ interface GenomeMeta {
   name: string;
   version?: string;
   description?: string;
+  disabled?: boolean;
 }
 
 function readGenomeMeta(dir: string): GenomeMeta | null {
@@ -82,7 +83,7 @@ export async function genomeList(): Promise<void> {
     for (const entry of fs.readdirSync(GENOMES_DIR, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const meta = readGenomeMeta(path.join(GENOMES_DIR, entry.name));
-      if (!meta) continue;
+      if (!meta || meta.disabled) continue;
       seen.add(entry.name);
       rows.push({
         name: meta.name || entry.name,
@@ -98,7 +99,7 @@ export async function genomeList(): Promise<void> {
     for (const entry of fs.readdirSync(bundledRoot, { withFileTypes: true })) {
       if (!entry.isDirectory() || seen.has(entry.name)) continue;
       const meta = readGenomeMeta(path.join(bundledRoot, entry.name));
-      if (!meta) continue;
+      if (!meta || meta.disabled) continue;
       rows.push({
         name: meta.name || entry.name,
         version: meta.version || '?',

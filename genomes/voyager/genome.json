@@ -1,6 +1,7 @@
 {
   "name": "voyager",
   "version": "0.1.0",
+  "disabled": true,
   "description": "Skill-accumulation cognitive architecture. Grows through building, testing, and collecting verified capabilities.",
   "author": "openseed",
   "license": "MIT",

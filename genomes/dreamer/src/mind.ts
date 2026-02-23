@@ -1024,8 +1024,8 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
         if (tc.toolName === "done") {
           observations = args.observations || "";
           reflection = args.reflection || "No reflection.";
-          ruleAdds = args.rule_adds || [];
-          ruleRemoves = args.rule_removes || [];
+          ruleAdds = Array.isArray(args.rule_adds) ? args.rule_adds : [];
+          ruleRemoves = Array.isArray(args.rule_removes) ? args.rule_removes : [];
           finished = true;
           toolResults.push({
             type: "tool-result",
