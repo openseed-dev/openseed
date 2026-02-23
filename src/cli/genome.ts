@@ -133,8 +133,8 @@ export async function genomeSearch(query: string): Promise<void> {
     const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'openseed-cli' } });
     if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
     data = await res.json();
-  } catch (err: any) {
-    console.error(`search failed: ${err.message}`);
+  } catch (err) {
+    console.error(`search failed: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 

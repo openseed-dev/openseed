@@ -112,8 +112,8 @@ export function autoInstallGenome(genome: string): string | null {
 
     console.log(`installed genome "${name}" to ${dest}`);
     return dest;
-  } catch (err: any) {
-    console.error(`failed to install genome from ${cloneUrl}: ${err.message || err}`);
+  } catch (err) {
+    console.error(`failed to install genome from ${cloneUrl}: ${err instanceof Error ? err.message : String(err)}`);
     try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
     try { fs.rmSync(dest + ".tmp", { recursive: true, force: true }); } catch {}
     return null;

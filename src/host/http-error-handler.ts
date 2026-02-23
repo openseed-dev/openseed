@@ -36,7 +36,7 @@ function toSafeError(err: unknown, defaultStatus: number = 400): SafeError {
 
 /**
  * Sends an error response with proper type safety.
- * Replaces the pattern: catch (err: any) { res.writeHead(400); res.end(err.message); }
+ * Replaces the pattern: catch (err) { res.writeHead(400); res.end(err.message); }
  * 
  * @param res - The HTTP response object
  * @param err - The caught error (unknown type)
