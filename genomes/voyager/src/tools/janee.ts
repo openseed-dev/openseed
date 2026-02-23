@@ -7,11 +7,7 @@
  * real credentials, makes the request, and returns the response.
  *
  * The supervisor injects JANEE_URL into the creature's environment.
- *
- * GRACEFUL DEGRADATION: If Janee is not running or JANEE_URL is not set,
- * the tool reports unavailability instead of crashing. The creature can
- * still function using raw env vars (e.g. GITHUB_TOKEN) as it did before
- * Janee existed.
+ * Janee is REQUIRED for any authenticated API access or git operations.
  *
  * @see https://github.com/rsdouglas/janee
  */
@@ -87,7 +83,7 @@ async function mcpCall(method: string, params: Record<string, unknown> = {}, _re
   if (!baseUrl) {
     throw new Error(
       'Janee is not configured (JANEE_URL not set). ' +
-      'You can still access APIs using raw environment variables like GITHUB_TOKEN.',
+      'Cannot authenticate. The orchestrator may have started without Janee.',
     );
   }
 
@@ -134,8 +130,8 @@ export async function janeeStatus(): Promise<string> {
   if (!url) {
     return JSON.stringify({
       available: false,
-      reason: 'JANEE_URL not set',
-      hint: 'Janee is optional. Use raw env vars (GITHUB_TOKEN, etc.) for API access.',
+      reason: 'JANEE_URL not set — cannot authenticate.',
+      hint: 'The orchestrator may have started without Janee. Do not attempt API calls or git operations until Janee is available.',
     }, null, 2);
   }
 
@@ -145,7 +141,7 @@ export async function janeeStatus(): Promise<string> {
     url,
     ...(reachable ? {} : {
       reason: 'Janee service not reachable',
-      hint: 'Janee may be starting up or not deployed. Use raw env vars as fallback.',
+      hint: 'Janee may be starting up or temporarily down. Do not attempt API calls or git operations until Janee is available. Sleep and retry.',
     }),
   }, null, 2);
 }
@@ -155,7 +151,7 @@ export async function janeeListServices(): Promise<string> {
     const result = await mcpCall('list_services');
     return JSON.stringify(result, null, 2);
   } catch (err: any) {
-    return `Janee unavailable: ${err.message}\n\nFallback: check raw environment variables for API tokens.`;
+    return `Janee unavailable: ${err.message}. Cannot list services — no authentication available without Janee.`;
   }
 }
 
@@ -179,7 +175,7 @@ export async function janeeExecute(args: {
     });
     return JSON.stringify(result, null, 2);
   } catch (err: any) {
-    return `Janee unavailable: ${err.message}\n\nFallback: use raw API calls with environment variable tokens.`;
+    return `Janee unavailable: ${err.message}. Cannot make authenticated API calls without Janee.`;
   }
 }
 
