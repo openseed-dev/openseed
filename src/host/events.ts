@@ -45,26 +45,4 @@ export class EventStore {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
-
-  emit(event: Event) {
-    this.append(event);
-  }
-}
-
-export function createSSEStream(store: EventStore) {
-  return (req: any, res: any) => {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    });
-
-    const unsub = store.subscribe((event) => {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-    });
-
-    req.on("close", () => {
-      unsub();
-    });
-  };
 }
