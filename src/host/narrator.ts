@@ -6,7 +6,7 @@ import {
   CREATURES_DIR,
   OPENSEED_HOME,
 } from '../shared/paths.js';
-import type { Event } from '../shared/types.js';
+import type { Event, GenomeEvent } from '../shared/types.js';
 import type { NarratorConfig } from './config.js';
 import type { CostTracker } from './costs.js';
 
@@ -185,18 +185,18 @@ const TOOLS = [
   },
 ];
 
-function isInterestingEvent(ev: any): boolean {
+function isInterestingEvent(ev: Event): boolean {
   const t = ev.type;
   if (t === 'creature.dream') return true;
-  if (t === 'creature.sleep' && ev.text) return true;
+  if (t === 'creature.sleep' && typeof ev.text === 'string') return true;
   if (t === 'creature.self_evaluation' || t === 'creator.evaluation') return true;
-  if (t === 'creature.thought' && ev.text && ev.text.length > 20) return true;
+  if (t === 'creature.thought' && typeof ev.text === 'string' && ev.text.length > 20) return true;
   if (t === 'creature.wake') return true;
   if (t === 'budget.exceeded' || t === 'budget.reset') return true;
   return false;
 }
 
-function formatEvent(creature: string, ev: any): string {
+function formatEvent(creature: string, ev: Event): string {
   const t = ev.type;
   const time = ev.t ? ev.t.slice(11, 19) : '';
   const parts = [`[${time}] ${creature}: ${t}`];
@@ -204,20 +204,22 @@ function formatEvent(creature: string, ev: any): string {
   if (t === 'creature.dream') {
     if (ev.deep) parts.push('(deep sleep)');
     if (ev.priority) parts.push(`priority: ${ev.priority}`);
-    if (ev.reflection) parts.push(`reflection: ${ev.reflection.slice(0, 300)}`);
+    if (typeof ev.reflection === 'string') parts.push(`reflection: ${ev.reflection.slice(0, 300)}`);
   } else if (t === 'creature.sleep') {
-    if (ev.text) parts.push(ev.text.slice(0, 200));
+    if (typeof ev.text === 'string') parts.push(ev.text.slice(0, 200));
     if (ev.actions) parts.push(`${ev.actions} actions`);
     if (ev.seconds) parts.push(`sleeping ${ev.seconds}s`);
   } else if (t === 'creature.self_evaluation' || t === 'creator.evaluation') {
-    if (ev.reasoning) parts.push(ev.reasoning.slice(0, 300));
+    if (typeof ev.reasoning === 'string') parts.push(ev.reasoning.slice(0, 300));
     if (ev.changed) parts.push('(code changed)');
   } else if (t === 'creature.thought') {
-    if (ev.text) parts.push(ev.text.slice(0, 200));
+    if (typeof ev.text === 'string') parts.push(ev.text.slice(0, 200));
   } else if (t === 'creature.wake') {
-    if (ev.reason) parts.push(ev.reason);
+    if (typeof ev.reason === 'string') parts.push(ev.reason);
   } else if (t === 'budget.exceeded') {
-    parts.push(`$${(ev.daily_spent || 0).toFixed(2)} / $${(ev.daily_cap || 0).toFixed(2)}`);
+    const spent = typeof ev.daily_spent === 'number' ? ev.daily_spent : 0;
+    const cap = typeof ev.daily_cap === 'number' ? ev.daily_cap : 0;
+    parts.push(`$${spent.toFixed(2)} / $${cap.toFixed(2)}`);
   }
 
   return parts.join(' | ');
@@ -228,7 +230,7 @@ export class Narrator {
   private listCreatures: ListCreaturesFn;
   private emitEvent: EmitEventFn;
   private costs: CostTracker;
-  private eventBuffer: Array<{ creature: string; event: any }> = [];
+  private eventBuffer: Array<{ creature: string; event: GenomeEvent }> = [];
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private lastRunTime = 0;
