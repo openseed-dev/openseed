@@ -63,7 +63,6 @@ export class Orchestrator {
   private costs = new CostTracker();
   private pendingOps: Set<string> = new Set();
   private narrator: Narrator | null = null;
-  private dashboardHtml: string;
   private dashboardDistDir: string | null;
   private budgetResetInterval: NodeJS.Timeout | null = null;
   private healthCleanup: (() => void) | null = null;
@@ -71,7 +70,6 @@ export class Orchestrator {
   constructor(port: number) {
     this.port = port;
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    this.dashboardHtml = readFileSync(path.join(thisDir, 'dashboard.html'), 'utf-8');
     const distDir = path.resolve(thisDir, '../../dashboard/dist');
     this.dashboardDistDir = existsSync(path.join(distDir, 'index.html')) ? distDir : null;
   }
@@ -512,12 +510,6 @@ export class Orchestrator {
           res.end(readFileSync(fullPath));
           return;
         }
-      }
-
-      if (p === '/' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(this.dashboardHtml);
-        return;
       }
 
       // LLM proxy: creatures call this instead of api.anthropic.com
