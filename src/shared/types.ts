@@ -28,7 +28,14 @@ export type CreatureLifecycleEvent =
   | { t: string; type: "creature.wake"; reason: string; source: "manual" | "timer" | "external" }
   | { t: string; type: "creature.message"; text: string; source: "user" | "system" }
   | { t: string; type: "creature.error"; error: string; retryIn?: number; retries?: number; fatal?: boolean }
-  | { t: string; type: "creature.request_restart"; reason: string };
+  | { t: string; type: "creature.request_restart"; reason: string }
+  // Budget events (orchestrator emits and interprets)
+  | { t: string; type: "budget.exceeded"; daily_spent: number; daily_cap: number }
+  | { t: string; type: "budget.reset" }
+  // Spawn lifecycle events (orchestrator emits)
+  | { t: string; type: "creature.spawning" }
+  | { t: string; type: "creature.spawned" }
+  | { t: string; type: "creature.spawn_failed"; error: string };
 
 // Genome-specific events. The host relays these but doesn't interpret them.
 // Genomes can emit any event type with any fields.
