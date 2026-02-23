@@ -1,9 +1,22 @@
+export interface DependencyStatus {
+  status: 'up' | 'down' | 'unknown';
+  lastCheck: string;
+  error?: string;
+  version?: string;
+}
+
+export interface OrchestratorHealth {
+  status: 'healthy' | 'degraded';
+  dependencies: Record<string, DependencyStatus>;
+}
+
 export interface CreatureInfo {
   name: string;
   status: 'stopped' | 'starting' | 'running' | 'sleeping' | 'error' | 'spawning';
   model?: string;
   sha?: string;
   sleepReason?: string;
+  janeeVersion?: string;
 }
 
 export interface BudgetInfo {

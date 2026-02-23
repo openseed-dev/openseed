@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo } from './types';
+import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo, OrchestratorHealth } from './types';
 import * as api from './api';
 
 interface ShareData {
@@ -35,6 +35,8 @@ interface AppState {
   narratorConfig: NarratorConfig | null;
 
   shareData: ShareData | null;
+
+  health: OrchestratorHealth;
 }
 
 interface AppActions {
@@ -45,6 +47,7 @@ interface AppActions {
   loadGlobalBudget: () => Promise<void>;
   loadNarratorConfig: () => Promise<void>;
   loadGenomes: () => Promise<void>;
+  loadHealth: () => Promise<void>;
   selectCreature: (name: string | null) => Promise<void>;
   handleSSEEvent: (ev: CreatureEvent) => void;
   setSelectedTab: (tab: string) => void;
@@ -86,6 +89,13 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
   creatureEvents: [],
   narratorConfig: null,
   shareData: null,
+  health: { status: 'healthy', dependencies: {} },
+
+  loadHealth: async () => {
+    try {
+      set({ health: await api.fetchStatus() });
+    } catch {}
+  },
 
   refresh: async () => {
     try {
@@ -194,6 +204,11 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
 
   handleSSEEvent: (ev) => {
     const s = get();
+
+    if (ev.type === 'orchestrator.status') {
+      set({ health: { status: ev.status, dependencies: ev.dependencies } });
+      return;
+    }
 
     if (ev.creature) {
       const intents = { ...s.lastIntentMap };

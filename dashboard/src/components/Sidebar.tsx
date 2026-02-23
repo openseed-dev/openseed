@@ -31,7 +31,10 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const degraded = useStore(s => s.health.status !== 'healthy');
+
   const submit = async () => {
+    if (degraded) { setError('Orchestrator is degraded — cannot spawn creatures.'); return; }
     if (!name.trim()) { setError('name is required'); return; }
     setSubmitting(true);
     setError('');
@@ -104,6 +107,7 @@ export function Sidebar() {
   const refresh = useStore(s => s.refresh);
   const setSidebarOpen = useStore(s => s.setSidebarOpen);
   const setSettingsOpen = useStore(s => s.setSettingsOpen);
+  const degraded = useStore(s => s.health.status !== 'healthy');
   const names = Object.keys(crMap).sort();
 
   const onOverview = sel === null;
@@ -165,7 +169,7 @@ export function Sidebar() {
                 {c.status === 'spawning' ? (
                   <span className="text-[10px] text-warn-light animate-pulse">spawning...</span>
                 ) : c.status === 'stopped' || budgetCapped ? (
-                  <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'start').then(refresh); }}>start</button>
+                  <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded} title={degraded ? 'Orchestrator degraded' : undefined} onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'start').then(refresh); }}>start</button>
                 ) : (
                   <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={(e) => { e.stopPropagation(); api.creatureAction(n, 'stop').then(refresh); }}>stop</button>
                 )}

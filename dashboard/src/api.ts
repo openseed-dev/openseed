@@ -1,4 +1,4 @@
-import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo, UsageData } from './types';
+import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo, UsageData, OrchestratorHealth } from './types';
 
 export async function fetchCreatures(): Promise<CreatureInfo[]> {
   const res = await fetch('/api/creatures');
@@ -82,6 +82,11 @@ export async function sendMessage(name: string, text: string): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   });
+}
+
+export async function fetchStatus(): Promise<OrchestratorHealth> {
+  const res = await fetch('/api/status');
+  return res.json();
 }
 
 export async function spawnCreature(name: string, genome: string, purpose?: string, model?: string): Promise<Response> {
