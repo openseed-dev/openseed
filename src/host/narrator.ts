@@ -10,6 +10,37 @@ import type { Event } from '../shared/types.js';
 import type { NarratorConfig } from './config.js';
 import type { CostTracker } from './costs.js';
 
+// Minimal types for the raw Anthropic Messages API
+type AnthropicTextBlock = { type: 'text'; text: string };
+type AnthropicThinkingBlock = { type: 'thinking'; thinking: string };
+type AnthropicToolUseBlock = {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+};
+type AnthropicContentBlock = AnthropicTextBlock | AnthropicThinkingBlock | AnthropicToolUseBlock;
+
+interface AnthropicMessage {
+  id: string;
+  type: 'message';
+  role: 'assistant';
+  content: AnthropicContentBlock[];
+  model: string;
+  stop_reason: string | null;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
+type AnthropicToolResultBlock = {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+};
+
+type ConversationMessage =
+  | { role: 'user'; content: string | AnthropicToolResultBlock[] }
+  | { role: 'assistant'; content: AnthropicContentBlock[] };
+
 const NARRATION_FILE = path.join(OPENSEED_HOME, 'narration.jsonl');
 const MAX_ENTRIES = 500;
 const MAX_TOOL_ROUNDS = 5;
@@ -305,7 +336,7 @@ export class Narrator {
       userContent += `\n\nYour previous narrations (for continuity, don't repeat):\n${prev}`;
     }
 
-    const messages: any[] = [{ role: 'user', content: userContent }];
+    const messages: ConversationMessage[] = [{ role: 'user', content: userContent }];
 
     // Agentic loop: call LLM, handle tool use, repeat
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -315,11 +346,11 @@ export class Narrator {
       messages.push({ role: 'assistant', content: response.content });
 
       // Check if there are tool calls
-      const toolBlocks = response.content.filter((b: any) => b.type === 'tool_use');
+      const toolBlocks = response.content.filter((b): b is AnthropicToolUseBlock => b.type === 'tool_use');
       if (toolBlocks.length === 0) {
         // Done -- extract text and store
-        const textBlocks = response.content.filter((b: any) => b.type === 'text');
-        const narrationText = textBlocks.map((b: any) => b.text).join('\n').trim();
+        const textBlocks = response.content.filter((b): b is AnthropicTextBlock => b.type === 'text');
+        const narrationText = textBlocks.map(b => b.text).join('\n').trim();
 
         const isSkip = !narrationText || narrationText.toUpperCase().includes('SKIP');
         if (!isSkip) {
@@ -356,7 +387,7 @@ export class Narrator {
             text: entry.text,
             ...(entry.blocks && { blocks: entry.blocks }),
             creatures_mentioned: entry.creatures_mentioned,
-          } as any);
+          });
 
           console.log(`[narrator] new entry (${entry.text.length} chars, ${mentioned.length} creatures mentioned)`);
         }
@@ -364,7 +395,7 @@ export class Narrator {
       }
 
       // Execute tool calls
-      const toolResults: any[] = [];
+      const toolResults: AnthropicToolResultBlock[] = [];
       for (const tool of toolBlocks) {
         const result = await this.executeTool(tool.name, tool.input || {});
         toolResults.push({
@@ -379,7 +410,7 @@ export class Narrator {
     console.warn('[narrator] hit max tool rounds without producing narration');
   }
 
-  private async callLLM(messages: any[]): Promise<any | null> {
+  private async callLLM(messages: ConversationMessage[]): Promise<AnthropicMessage | null> {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return null;
 
@@ -409,7 +440,7 @@ export class Narrator {
         return null;
       }
 
-      const data = await res.json() as any;
+      const data = await res.json() as AnthropicMessage;
 
       if (data.usage) {
         this.costs.record('_narrator', data.usage.input_tokens || 0, data.usage.output_tokens || 0, this.config.model);
@@ -422,14 +453,16 @@ export class Narrator {
     }
   }
 
-  private async executeTool(name: string, input: any): Promise<string> {
+  private async executeTool(name: string, input: Record<string, unknown>): Promise<string> {
     try {
+      const str = (v: unknown) => (typeof v === 'string' ? v : String(v ?? ''));
+      const num = (v: unknown) => (typeof v === 'number' ? v : undefined);
       switch (name) {
-        case 'read_file': return await this.toolReadFile(input.creature, input.path, input.tail);
-        case 'git_log': return await this.toolGitLog(input.creature, input.n);
-        case 'git_diff': return await this.toolGitDiff(input.creature, input.ref);
+        case 'read_file': return await this.toolReadFile(str(input.creature), str(input.path), num(input.tail));
+        case 'git_log': return await this.toolGitLog(str(input.creature), num(input.n));
+        case 'git_diff': return await this.toolGitDiff(str(input.creature), str(input.ref));
         case 'list_creatures': return await this.toolListCreatures();
-        case 'search_narration': return await this.toolSearchNarration(input.query, input.n);
+        case 'search_narration': return await this.toolSearchNarration(str(input.query), num(input.n));
         default: return `unknown tool: ${name}`;
       }
     } catch (err) {
