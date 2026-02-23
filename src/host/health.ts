@@ -18,6 +18,7 @@ const deps: Record<string, DependencyStatus> = {
 };
 
 let healthInterval: NodeJS.Timeout | null = null;
+let checkInFlight = false;
 const changeListeners = new Set<(health: OrchestratorHealth) => void>();
 
 export async function checkDocker(): Promise<DependencyStatus> {
@@ -50,15 +51,23 @@ export async function checkJanee(): Promise<DependencyStatus> {
 }
 
 async function runAllChecks() {
-  const prevStatus = getStatus().status;
+  // Skip if a previous check is still running (e.g. docker info near its 5s timeout)
+  if (checkInFlight) return;
+  checkInFlight = true;
 
-  deps.docker = await checkDocker();
-  deps.janee = await checkJanee();
+  try {
+    const prevStatus = getStatus().status;
 
-  const newStatus = getStatus().status;
-  if (newStatus !== prevStatus) {
-    const health = getStatus();
-    for (const cb of changeListeners) cb(health);
+    deps.docker = await checkDocker();
+    deps.janee = await checkJanee();
+
+    const newStatus = getStatus().status;
+    if (newStatus !== prevStatus) {
+      const health = getStatus();
+      for (const cb of changeListeners) cb(health);
+    }
+  } finally {
+    checkInFlight = false;
   }
 }
 
@@ -66,7 +75,10 @@ export function getStatus(): OrchestratorHealth {
   const allUp = Object.values(deps).every(d => d.status === 'up');
   return {
     status: allUp ? 'healthy' : 'degraded',
-    dependencies: { ...deps },
+    // Deep-copy each dependency so callers get a stable snapshot
+    dependencies: Object.fromEntries(
+      Object.entries(deps).map(([k, v]) => [k, { ...v }]),
+    ),
   };
 }
 
