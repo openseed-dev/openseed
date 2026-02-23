@@ -276,8 +276,8 @@ export class Narrator {
     this.running = true;
     try {
       await this.generateNarration();
-    } catch (err: any) {
-      console.error('[narrator] error:', err.message);
+    } catch (err) {
+      console.error('[narrator] error:', err instanceof Error ? err.message : String(err));
     } finally {
       this.running = false;
       this.lastRunTime = Date.now();
@@ -416,8 +416,8 @@ export class Narrator {
       }
 
       return data;
-    } catch (err: any) {
-      console.error('[narrator] LLM call failed:', err.message);
+    } catch (err) {
+      console.error('[narrator] LLM call failed:', err instanceof Error ? err.message : String(err));
       return null;
     }
   }
@@ -432,8 +432,8 @@ export class Narrator {
         case 'search_narration': return await this.toolSearchNarration(input.query, input.n);
         default: return `unknown tool: ${name}`;
       }
-    } catch (err: any) {
-      return `error: ${err.message}`;
+    } catch (err) {
+      return `error: ${err instanceof Error ? err.message : String(err)}`;
     }
   }
 

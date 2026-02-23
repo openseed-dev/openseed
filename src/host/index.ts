@@ -17,6 +17,7 @@ import {
   OPENSEED_HOME,
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
+import { sendErrorResponse, sendJsonErrorResponse } from './http-error-handler.js';
 import { Event } from '../shared/types.js';
 import {
   getSpendingCap,
@@ -372,8 +373,8 @@ export class Orchestrator {
           // docker restart: process restarts, container environment preserved
           await supervisor.restart();
           console.log(`[${name}] creature-requested restart completed`);
-        } catch (err: any) {
-          const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'stderr' in err ? String((err as any).stderr) : String(err || 'unknown error'));
           console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
           try {
             await this.sendMessage(name, `[SYSTEM] Your restart request failed. TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
@@ -462,8 +463,8 @@ export class Orchestrator {
         try {
           await supervisor.start();
           await this.emitEvent(name, { t: new Date().toISOString(), type: 'budget.reset' } as any);
-        } catch (err: any) {
-          console.error(`[${name}] failed to wake after budget reset:`, err.message);
+        } catch (err: unknown) {
+          console.error(`[${name}] failed to wake after budget reset:`, err instanceof Error ? err.message : String(err));
         }
       }
     }
@@ -541,7 +542,7 @@ export class Orchestrator {
           const cap = loadGlobalConfig().spending_cap;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
-        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        } catch (err) { sendErrorResponse(res, err); }
         return;
       }
 
@@ -568,7 +569,7 @@ export class Orchestrator {
           if (this.narrator) this.narrator.updateConfig(nar);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(nar));
-        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        } catch (err) { sendErrorResponse(res, err); }
         return;
       }
 
@@ -604,9 +605,8 @@ export class Orchestrator {
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(genomes));
-        } catch (err: any) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
+        } catch (err) {
+          sendJsonErrorResponse(res, err, 500);
         }
         return;
       }
@@ -644,7 +644,7 @@ export class Orchestrator {
           }).finally(() => {
             this.pendingOps.delete(name);
           });
-        } catch (err: any) { res.writeHead(400); res.end(err.message); }
+        } catch (err) { sendErrorResponse(res, err); }
         return;
       }
 
@@ -697,7 +697,7 @@ export class Orchestrator {
             const opts = body ? JSON.parse(body) : {};
             await this.startCreature(name, opts);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -705,7 +705,7 @@ export class Orchestrator {
           try {
             await this.stopCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -713,7 +713,7 @@ export class Orchestrator {
           try {
             await this.restartCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -728,7 +728,7 @@ export class Orchestrator {
             });
             await supervisor.rebuild();
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -747,7 +747,7 @@ export class Orchestrator {
             await this.emitEvent(name, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'manual' });
             console.log(`[${name}] force wake triggered: ${reason}`);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -775,7 +775,7 @@ export class Orchestrator {
               } catch {}
             }
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -783,7 +783,7 @@ export class Orchestrator {
           try {
             await this.archiveCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
@@ -819,7 +819,7 @@ export class Orchestrator {
             const cap = getSpendingCap(name);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
-          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          } catch (err) { sendErrorResponse(res, err); }
           return;
         }
 
