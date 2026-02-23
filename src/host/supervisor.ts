@@ -45,6 +45,7 @@ export class CreatureSupervisor {
   port: number;
   status: CreatureStatus = 'stopped';
   sleepReason: SleepReason = null;
+  janeeVersion: string | null = null;
 
   private creature: ChildProcess | null = null;
   private currentSHA = '';
@@ -152,6 +153,7 @@ export class CreatureSupervisor {
       healthy: this.healthyAt !== null,
       port: this.port,
       model: this.config.model || null,
+      janeeVersion: this.janeeVersion,
     };
   }
 

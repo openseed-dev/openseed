@@ -44,6 +44,7 @@ export function CreatureDetail() {
   const selectCreature = useStore(s => s.selectCreature);
   const loadMind = useStore(s => s.loadMind);
   const refresh = useStore(s => s.refresh);
+  const degraded = useStore(s => s.health.status !== 'healthy');
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,11 +68,12 @@ export function CreatureDetail() {
         <div className="text-xs text-text-secondary">
           {c?.model && <><span className="text-text-muted text-[11px]">{c.model}</span> · </>}
           {c?.status}{sr}
+          {c?.janeeVersion && <> · <span className="text-text-muted text-[11px]">janee {c.janeeVersion}</span></>}
         </div>
         <BudgetInfo />
         <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={() => api.creatureAction(name, 'wake')}>wake</button>
-        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={() => { api.creatureAction(name, 'restart'); refresh(); }}>restart</button>
-        <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors" onClick={() => { api.creatureAction(name, 'rebuild'); refresh(); }}>rebuild</button>
+        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded} title={degraded ? 'Orchestrator degraded' : undefined} onClick={() => { api.creatureAction(name, 'restart'); refresh(); }}>restart</button>
+        <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded} title={degraded ? 'Orchestrator degraded' : undefined} onClick={() => { api.creatureAction(name, 'rebuild'); refresh(); }}>rebuild</button>
         <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors" onClick={() => {
           if (confirm(`Archive creature "${name}"? It will be stopped and moved to the archive.`)) {
             api.creatureAction(name, 'archive').then(() => { refresh(); selectCreature(null); });

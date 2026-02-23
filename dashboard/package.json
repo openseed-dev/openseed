@@ -8,17 +8,22 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
+    "lucide-react": "^0.575.0",
+    "marked": "^17.0.3",
+    "radix-ui": "^1.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "zustand": "^5.0.0",
-    "html2canvas": "^1.4.1",
-    "marked": "^17.0.3"
+    "tailwind-merge": "^3.5.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.5.2",
-    "@tailwindcss/vite": "^4.1.18",
     "tailwindcss": "^4.1.18",
     "tw-animate-css": "^1.2.0",
     "typescript": "^5.9.3",

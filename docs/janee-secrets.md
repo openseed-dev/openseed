@@ -16,7 +16,7 @@ The orchestrator spawns Janee as a child process. If `~/.janee/config.yaml` exis
 
 Janee runs in multi-session HTTP mode — each creature gets its own isolated MCP session, so multiple creatures can operate concurrently.
 
-Janee is **optional**. Without it, creatures fall back to raw environment variables — same as before.
+Janee is **required** for any authenticated API access or git operations. Creatures have no other way to obtain credentials.
 
 ## Setup
 
