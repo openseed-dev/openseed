@@ -66,6 +66,9 @@ function isDockerAvailable(): boolean {
  * Core spawn logic used by both CLI and orchestrator.
  * Resolves the genome, copies it, writes the birth certificate,
  * installs deps, inits git, and builds the Docker image.
+ *
+ * If any step after the directory is created fails, the partial directory
+ * is cleaned up so the caller can retry with the same name.
  */
 export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   if (!opts.name || !/^[a-z0-9][a-z0-9-]*$/.test(opts.name)) {
@@ -83,54 +86,61 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   try {
     await fs.access(dir);
     throw new Error(`creature "${opts.name}" already exists at ${dir}`);
-  } catch (e: any) {
-    if (e.message.includes('already exists')) throw e;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('already exists')) throw e;
+    // ENOENT means directory doesn't exist — proceed
   }
 
   await fs.mkdir(CREATURES_DIR, { recursive: true });
   await copyDir(tpl, dir);
 
-  const sourceMeta = readSourceMeta(tpl);
-  let genomeValidate: string | undefined;
   try {
-    const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
-    if (typeof gj.validate === 'string') genomeValidate = gj.validate;
-  } catch {}
+    const sourceMeta = readSourceMeta(tpl);
+    let genomeValidate: string | undefined;
+    try {
+      const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
+      if (typeof gj.validate === 'string') genomeValidate = gj.validate;
+    } catch {}
 
-  const birth = {
-    id: crypto.randomUUID(),
-    name: opts.name,
-    born: new Date().toISOString(),
-    genome: genomeName,
-    genome_version: readGenomeVersion(tpl),
-    ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
-    parent: null as string | null,
-    ...(opts.model ? { model: opts.model } : {}),
-    ...(genomeValidate ? { validate: genomeValidate } : {}),
-  };
-  await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
+    const birth = {
+      id: crypto.randomUUID(),
+      name: opts.name,
+      born: new Date().toISOString(),
+      genome: genomeName,
+      genome_version: readGenomeVersion(tpl),
+      ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
+      parent: null as string | null,
+      ...(opts.model ? { model: opts.model } : {}),
+      ...(genomeValidate ? { validate: genomeValidate } : {}),
+    };
+    await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
 
-  if (opts.purpose) {
-    await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
+    if (opts.purpose) {
+      await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
+    }
+
+    console.log(`installing dependencies for "${opts.name}"...`);
+    await execAsync('pnpm install --silent', { cwd: dir });
+
+    await execAsync('git init', { cwd: dir });
+    await execAsync('git add -A', { cwd: dir });
+    await execAsync('git commit -m "genesis"', { cwd: dir });
+
+    if (!isDockerAvailable()) throw new Error('docker is required but not available');
+    console.log(`building docker image for "${opts.name}"...`);
+    await execAsync(`docker build -t creature-${opts.name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
+
+    return {
+      id: birth.id,
+      name: birth.name,
+      born: birth.born,
+      genome: birth.genome,
+      genome_version: birth.genome_version,
+      dir,
+    };
+  } catch (err) {
+    // Clean up the partial directory so the caller can retry with the same name
+    try { await fs.rm(dir, { recursive: true, force: true }); } catch {}
+    throw err;
   }
-
-  console.log(`installing dependencies for "${opts.name}"...`);
-  await execAsync('pnpm install --silent', { cwd: dir });
-
-  await execAsync('git init', { cwd: dir });
-  await execAsync('git add -A', { cwd: dir });
-  await execAsync('git commit -m "genesis"', { cwd: dir });
-
-  if (!isDockerAvailable()) throw new Error('docker is required but not available');
-  console.log(`building docker image for "${opts.name}"...`);
-  await execAsync(`docker build -t creature-${opts.name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
-
-  return {
-    id: birth.id,
-    name: birth.name,
-    born: birth.born,
-    genome: birth.genome,
-    genome_version: birth.genome_version,
-    dir,
-  };
 }
