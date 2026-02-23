@@ -1,5 +1,6 @@
 import {
   exec,
+  execFile,
   execSync,
 } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -38,6 +39,42 @@ import {
 } from './supervisor.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Safely run a genome validate command without invoking a shell.
+ * Parses the command string into executable + args, then uses execFile
+ * so no shell metacharacters are interpreted.
+ *
+ * Allowed executables: npx, node — no absolute paths, no shell builtins.
+ * Argument values must look like file paths (alphanumeric, '.', '/', '-', '_').
+ */
+async function runValidateCommand(cmd: string, opts: { cwd: string; timeout: number }): Promise<void> {
+  const parts = cmd.trim().split(/\s+/);
+  if (parts.length < 1) throw new Error('validate command is empty');
+
+  const exe = parts[0];
+  const args = parts.slice(1);
+
+  // Only allow safe executables
+  const allowedExes = ['npx', 'node'];
+  if (!allowedExes.includes(exe)) {
+    throw new Error(`validate command uses disallowed executable: ${JSON.stringify(exe)}`);
+  }
+
+  // Validate each argument: no shell metacharacters, no absolute paths
+  const safeArgPattern = /^[a-zA-Z0-9._\-/@][a-zA-Z0-9._\-/@]*$/;
+  for (const arg of args) {
+    if (!safeArgPattern.test(arg)) {
+      throw new Error(`validate command arg contains unsafe characters: ${JSON.stringify(arg)}`);
+    }
+    if (path.isAbsolute(arg)) {
+      throw new Error(`validate command arg must be relative path, got: ${JSON.stringify(arg)}`);
+    }
+  }
+
+  await execFileAsync(exe, args, opts);
+}
 
 const ARCHIVE_DIR = path.join(OPENSEED_HOME, 'archive');
 const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
@@ -377,7 +414,7 @@ export class Orchestrator {
             validate = birth.validate;
           } catch {}
           if (validate) {
-            await execAsync(validate, { cwd: dir, timeout: 30_000 });
+            await runValidateCommand(validate, { cwd: dir, timeout: 30_000 });
           }
           await execAsync(`git add -A && git commit -m "creature: self-modification, ${reason.slice(0, 60)}" --allow-empty`, {
             cwd: dir,
