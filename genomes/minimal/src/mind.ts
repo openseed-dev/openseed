@@ -50,6 +50,7 @@ Actions:
       path: z.string().optional().describe("API path (for execute)"),
       body: z.string().optional().describe("Request body as JSON string (for execute)"),
       command: z.array(z.string()).optional().describe("Command as array of strings (for exec)"),
+      cwd: z.string().optional().describe("Working directory for exec commands"),
       reason: z.string().optional().describe("Why you need this"),
     }),
   }),

@@ -179,12 +179,14 @@ export async function janeeExecute(args: {
 export async function janeeExec(args: {
   capability: string;
   command: string[];
+  cwd?: string;
   reason?: string;
 }): Promise<string> {
   try {
     const result = await mcpCall('janee_exec', {
       capability: args.capability,
       command: args.command,
+      ...(args.cwd ? { cwd: args.cwd } : {}),
       ...(args.reason ? { reason: args.reason } : {}),
     });
     return JSON.stringify(result, null, 2);
@@ -203,6 +205,7 @@ export async function janee(args: {
   path?: string;
   body?: string | Record<string, unknown>;
   command?: string[];
+  cwd?: string;
   reason?: string;
 }): Promise<string> {
   switch (args.action) {
@@ -231,6 +234,7 @@ export async function janee(args: {
       return janeeExec({
         capability: args.capability,
         command: args.command,
+        cwd: args.cwd,
         reason: args.reason,
       });
 
