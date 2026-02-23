@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { executeBash } from './tools/bash.js';
+import { janee as executeJanee } from './tools/janee.js';
 
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 
@@ -32,6 +33,24 @@ Commands time out after 120s by default. You have no terminal, so interactive pr
     description: "Pause for N seconds (2–86400). When you wake, this conversation starts fresh.",
     inputSchema: z.object({
       seconds: z.number().describe("How long to sleep"),
+    }),
+  }),
+  janee: tool({
+    description: `Secure credential proxy. Call external APIs and run authenticated CLI commands without seeing raw keys.
+
+Actions:
+- status: check if Janee is available
+- list_services: see what capabilities are configured for you
+- execute: make an authenticated API request (capability, method, path, optional body)
+- exec: run a CLI command with credentials injected (e.g. git, gh)`,
+    inputSchema: z.object({
+      action: z.enum(['status', 'list_services', 'execute', 'exec']).describe("What to do"),
+      capability: z.string().optional().describe("Capability name (for execute/exec)"),
+      method: z.string().optional().describe("HTTP method (for execute)"),
+      path: z.string().optional().describe("API path (for execute)"),
+      body: z.string().optional().describe("Request body as JSON string (for execute)"),
+      command: z.array(z.string()).optional().describe("Command as array of strings (for exec)"),
+      reason: z.string().optional().describe("Why you need this"),
     }),
   }),
 };
@@ -98,7 +117,7 @@ export class Mind {
 
 ${purpose}
 
-You have bash. Use it to do anything a developer can do from a terminal.
+You have bash and janee as tools. Use bash for shell access. Use janee for authenticated operations (APIs, git, gh) — it proxies credentials so you never see raw keys. Call janee with action "list_services" to see what's available.
 
 You can sleep by calling set_sleep with a number of seconds. While you sleep, you consume no resources. When you wake, this conversation starts completely fresh.
 
@@ -196,6 +215,24 @@ You can install more; they persist across restarts.`;
               input: args,
               output: { type: 'text', value: `Sleeping for ${sleepSeconds}s. Conversation resets on wake.` },
             });
+            continue;
+          }
+
+          if (tc.toolName === "janee") {
+            const start = Date.now();
+            const result = await executeJanee(args as any);
+            const ms = Date.now() - start;
+            this.actionCount++;
+            toolResults.push({
+              type: "tool-result",
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input: args,
+              output: { type: 'text', value: result.slice(0, 50000) },
+            });
+            if (onToolResult) {
+              await onToolResult("janee", args, { ok: true, data: result }, ms);
+            }
             continue;
           }
 

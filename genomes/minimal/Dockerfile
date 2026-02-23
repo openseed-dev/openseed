@@ -12,6 +12,9 @@ RUN (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | 
 
 RUN corepack enable
 
+# Janee Runner — local MCP proxy that talks to the host Authority
+RUN npm install -g @true-and-useful/janee
+
 # Self-wake primitive
 RUN printf '#!/bin/sh\ncurl -s -X POST http://localhost:7778/wake -H "Content-Type: application/json" -d "{\\\"reason\\\": \\\"$*\\\"}" 2>/dev/null\n' > /usr/local/bin/wakeup && chmod +x /usr/local/bin/wakeup
 
@@ -27,4 +30,7 @@ RUN mkdir -p .sys workspace
 EXPOSE 7778
 
 ENV CI=true
-CMD ["sh", "-c", "pnpm install --frozen-lockfile 2>/dev/null; exec npx tsx src/index.ts"]
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+CMD ["/usr/local/bin/entrypoint.sh"]
