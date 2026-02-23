@@ -5,9 +5,11 @@
  * Fires onChange when a dependency transitions state.
  * Exposes getStatus() used to gate creature operations.
  */
-import { execSync } from 'node:child_process';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { DependencyStatus, OrchestratorHealth } from '../shared/types.js';
 
+const execAsync = promisify(exec);
 const JANEE_PORT = parseInt(process.env.JANEE_PORT || '3100', 10);
 
 const deps: Record<string, DependencyStatus> = {
@@ -16,12 +18,12 @@ const deps: Record<string, DependencyStatus> = {
 };
 
 let healthInterval: NodeJS.Timeout | null = null;
-let changeCallback: ((health: OrchestratorHealth) => void) | null = null;
+const changeListeners = new Set<(health: OrchestratorHealth) => void>();
 
 export async function checkDocker(): Promise<DependencyStatus> {
   const now = new Date().toISOString();
   try {
-    execSync('docker info', { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] });
+    await execAsync('docker info', { timeout: 5000 });
     return { status: 'up', lastCheck: now };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -54,8 +56,9 @@ async function runAllChecks() {
   deps.janee = await checkJanee();
 
   const newStatus = getStatus().status;
-  if (newStatus !== prevStatus && changeCallback) {
-    changeCallback(getStatus());
+  if (newStatus !== prevStatus) {
+    const health = getStatus();
+    for (const cb of changeListeners) cb(health);
   }
 }
 
@@ -71,8 +74,9 @@ export function getDependency(name: string): DependencyStatus | undefined {
   return deps[name];
 }
 
-export function onStatusChange(cb: (health: OrchestratorHealth) => void) {
-  changeCallback = cb;
+export function onStatusChange(cb: (health: OrchestratorHealth) => void): () => void {
+  changeListeners.add(cb);
+  return () => { changeListeners.delete(cb); };
 }
 
 export async function startHealthLoop(intervalMs = 15_000): Promise<() => void> {
