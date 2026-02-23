@@ -1,14 +1,27 @@
+export interface DependencyStatus {
+  status: 'up' | 'down' | 'unknown';
+  lastCheck: string;
+  error?: string;
+  version?: string;
+}
+
+export interface OrchestratorHealth {
+  status: 'healthy' | 'degraded';
+  dependencies: Record<string, DependencyStatus>;
+}
+
 // Host events (orchestrator interprets these)
 export type HostEvent =
   | { t: string; type: "host.boot" }
   | { t: string; type: "host.spawn"; pid: number; sha: string }
   | { t: string; type: "host.promote"; sha: string }
   | { t: string; type: "host.rollback"; from: string; to: string; reason: string }
-  | { t: string; type: "host.infra_failure"; reason: string };
+  | { t: string; type: "host.infra_failure"; reason: string }
+  | { t: string; type: "orchestrator.status" } & OrchestratorHealth;
 
 // Universal creature lifecycle events (orchestrator interprets these)
 export type CreatureLifecycleEvent =
-  | { t: string; type: "creature.boot"; sha: string }
+  | { t: string; type: "creature.boot"; sha: string; janeeVersion?: string }
   | { t: string; type: "creature.thought"; text: string }
   | { t: string; type: "creature.sleep"; text: string; seconds: number; actions: number }
   | { t: string; type: "creature.tool_call"; tool: string; input: string; ok: boolean; output: string; ms: number }

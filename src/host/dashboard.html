@@ -215,6 +215,18 @@
     .sha { color: #2563eb; }
     .detail { color: #666; margin-left: 4px; }
 
+    .health-banner {
+      display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: #fef2f2; border-bottom: 2px solid #dc2626;
+      padding: 10px 16px; font-size: 12px; color: #991b1b;
+      text-align: center;
+    }
+    .health-banner.visible { display: block; }
+    .health-banner .dep-detail { color: #dc2626; font-weight: 500; }
+    body.degraded .sidebar { padding-top: 40px; }
+    body.degraded .main-header { top: 40px; }
+    body.degraded .tab-bar { top: 84px; }
+
     .message-bar {
       position: sticky; bottom: 0; background: #f8f7f4;
       padding: 12px 16px; border-top: 1px solid #e5e5e5;
@@ -433,6 +445,7 @@
   </style>
 </head>
 <body>
+  <div class="health-banner" id="healthBanner"></div>
   <div class="sidebar">
     <div class="sidebar-header">
       <span>openseed</span>
@@ -481,6 +494,7 @@
     let mindData = null;
     let lastIntentMap = {};
     let showMoments = false;
+    let orchestratorDegraded = false;
     const eventsEl = document.getElementById('events');
     const headerEl = document.getElementById('header');
     const tabBar = document.getElementById('tabbar');
@@ -626,9 +640,33 @@
     }
 
     // SSE
+    function updateHealthBanner(health) {
+      const banner = document.getElementById('healthBanner');
+      orchestratorDegraded = health.status !== 'healthy';
+      if (orchestratorDegraded) {
+        const issues = Object.entries(health.dependencies || {})
+          .filter(([, d]) => d.status !== 'up')
+          .map(([name, d]) => '<span class="dep-detail">' + esc(name) + '</span>: ' + esc(d.error || 'down'))
+          .join(' &middot; ');
+        banner.innerHTML = 'Orchestrator degraded — creature operations suspended. ' + issues;
+        banner.classList.add('visible');
+        document.body.classList.add('degraded');
+      } else {
+        banner.classList.remove('visible');
+        document.body.classList.remove('degraded');
+      }
+    }
+
+    fetch('/api/status').then(r => r.json()).then(updateHealthBanner).catch(() => {});
+
     const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {
       const ev = JSON.parse(e.data);
+
+      if (ev.type === 'orchestrator.status') {
+        updateHealthBanner(ev);
+        return;
+      }
 
       if (ev.creature) {
         if (ev.type === 'creature.sleep' && ev.text) {
@@ -1163,10 +1201,10 @@
       }
     }
 
-    async function startC(n) { await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
+    async function startC(n) { if(orchestratorDegraded){alert('Orchestrator is degraded — cannot start creatures.');return;} await fetch('/api/creatures/'+n+'/start',{method:'POST'}); refresh(); }
     async function stopC(n) { await fetch('/api/creatures/'+n+'/stop',{method:'POST'}); refresh(); }
-    async function restartC(n) { await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
-    async function rebuildC(n) { if(confirm('Rebuild destroys the container environment. Continue?')) { await fetch('/api/creatures/'+n+'/rebuild',{method:'POST'}); refresh(); } }
+    async function restartC(n) { if(orchestratorDegraded){alert('Orchestrator is degraded — cannot restart creatures.');return;} await fetch('/api/creatures/'+n+'/restart',{method:'POST'}); refresh(); }
+    async function rebuildC(n) { if(orchestratorDegraded){alert('Orchestrator is degraded — cannot rebuild creatures.');return;} if(confirm('Rebuild destroys the container environment. Continue?')) { await fetch('/api/creatures/'+n+'/rebuild',{method:'POST'}); refresh(); } }
     async function wakeC(n) { await fetch('/api/creatures/'+n+'/wake',{method:'POST'}); }
     function toggleSpawnForm() {
       document.getElementById('spawnForm').classList.toggle('visible');
@@ -1181,6 +1219,7 @@
       const errEl = document.getElementById('spawnError');
       const btn = document.getElementById('spawnBtn');
       const name = nameEl.value.trim();
+      if (orchestratorDegraded) { errEl.textContent = 'Orchestrator is degraded — cannot spawn creatures.'; return; }
       if (!name) { errEl.textContent = 'name is required'; return; }
       btn.disabled = true;
       btn.textContent = 'spawning...';
@@ -1250,8 +1289,9 @@
           if (el) {
             const c = creatures[selected];
             const sr = c.sleepReason === 'budget' ? ' (budget cap)' : '';
+            const jv = c.janeeVersion ? ' \u00b7 <span style="color:#999;font-size:11px">janee ' + esc(c.janeeVersion) + '</span>' : '';
             el.innerHTML = (c.model ? '<span style="color:#999;font-size:11px">' + esc(c.model) + '</span> \u00b7 ' : '')
-              + '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status + sr;
+              + '<span class="sha">' + (c.sha||'-').slice(0,7) + '</span> \u00b7 ' + c.status + sr + jv;
           }
           if (budgetRes && !document.getElementById('beCap')) {
             try { renderBudgetInfo(await budgetRes.json()); } catch {}

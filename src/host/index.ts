@@ -17,7 +17,6 @@ import {
   OPENSEED_HOME,
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
-import { sendErrorResponse, sendJsonErrorResponse } from './http-error-handler.js';
 import { Event } from '../shared/types.js';
 import {
   getSpendingCap,
@@ -28,6 +27,7 @@ import {
 } from './config.js';
 import { CostTracker } from './costs.js';
 import { EventStore } from './events.js';
+import { getStatus, onStatusChange, startHealthLoop, stopHealthLoop } from './health.js';
 import { startJanee, stopJanee } from './janee.js';
 import { Narrator } from './narrator.js';
 import type { BudgetCheckResult } from './proxy.js';
@@ -66,6 +66,7 @@ export class Orchestrator {
   private dashboardHtml: string;
   private dashboardDistDir: string | null;
   private budgetResetInterval: NodeJS.Timeout | null = null;
+  private healthCleanup: (() => void) | null = null;
 
   constructor(port: number) {
     this.port = port;
@@ -79,8 +80,20 @@ export class Orchestrator {
     console.log('[orchestrator] starting...');
     await this.writeRunFile();
     this.setupCleanup();
-    this.createServer();
+
+    // Start dependencies before accepting requests
     await startJanee();
+    this.healthCleanup = await startHealthLoop();
+
+    onStatusChange((health) => {
+      const event = { t: new Date().toISOString(), type: 'orchestrator.status' as const, ...health };
+      for (const listener of this.globalListeners) {
+        listener('_orchestrator', event);
+      }
+      console.log(`[orchestrator] status → ${health.status}`, health.dependencies);
+    });
+
+    this.createServer();
     await this.autoReconnect();
     this.budgetResetInterval = setInterval(() => this.checkBudgetResets(), 60_000);
 
@@ -112,6 +125,7 @@ export class Orchestrator {
     const cleanup = async () => {
       if (this.budgetResetInterval) clearInterval(this.budgetResetInterval);
       this.narrator?.stop();
+      stopHealthLoop();
       stopJanee();
       try { await fs.unlink(path.join(OPENSEED_HOME, 'orchestrator.json')); } catch {}
       process.exit(0);
@@ -373,8 +387,8 @@ export class Orchestrator {
           // docker restart: process restarts, container environment preserved
           await supervisor.restart();
           console.log(`[${name}] creature-requested restart completed`);
-        } catch (err: unknown) {
-          const errMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'stderr' in err ? String((err as any).stderr) : String(err || 'unknown error'));
+        } catch (err: any) {
+          const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
           console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
           try {
             await this.sendMessage(name, `[SYSTEM] Your restart request failed. TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
@@ -396,6 +410,13 @@ export class Orchestrator {
         this.stores.set(name, store);
       } catch { /* unknown creature, still emit */ }
     }
+
+    if (event.type === 'creature.boot') {
+      const jv = (event as any).janeeVersion;
+      const sup = this.supervisors.get(name);
+      if (sup && typeof jv === 'string') sup.janeeVersion = jv;
+    }
+
     await this.emitEvent(name, event);
   }
 
@@ -463,8 +484,8 @@ export class Orchestrator {
         try {
           await supervisor.start();
           await this.emitEvent(name, { t: new Date().toISOString(), type: 'budget.reset' } as any);
-        } catch (err: unknown) {
-          console.error(`[${name}] failed to wake after budget reset:`, err instanceof Error ? err.message : String(err));
+        } catch (err: any) {
+          console.error(`[${name}] failed to wake after budget reset:`, err.message);
         }
       }
     }
@@ -542,7 +563,7 @@ export class Orchestrator {
           const cap = loadGlobalConfig().spending_cap;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
-        } catch (err) { sendErrorResponse(res, err); }
+        } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }
 
@@ -569,7 +590,7 @@ export class Orchestrator {
           if (this.narrator) this.narrator.updateConfig(nar);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(nar));
-        } catch (err) { sendErrorResponse(res, err); }
+        } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }
 
@@ -593,6 +614,7 @@ export class Orchestrator {
                 if (!e.isDirectory() || seen.has(e.name)) continue;
                 try {
                   const gj = JSON.parse(await fs.readFile(path.join(dir, e.name, 'genome.json'), 'utf-8'));
+                  if (gj.disabled) continue;
                   seen.add(e.name);
                   genomes.push({ name: e.name, description: gj.description, source });
                 } catch {}
@@ -605,9 +627,16 @@ export class Orchestrator {
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(genomes));
-        } catch (err) {
-          sendJsonErrorResponse(res, err, 500);
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
         }
+        return;
+      }
+
+      if (p === '/api/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(getStatus()));
         return;
       }
 
@@ -619,6 +648,12 @@ export class Orchestrator {
       }
 
       if (p === '/api/creatures' && req.method === 'POST') {
+        const health = getStatus();
+        if (health.status !== 'healthy') {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Orchestrator degraded — cannot spawn creatures', dependencies: health.dependencies }));
+          return;
+        }
         try {
           const body = JSON.parse(await readBody(req));
           const name = (body.name || '').trim();
@@ -644,7 +679,7 @@ export class Orchestrator {
           }).finally(() => {
             this.pendingOps.delete(name);
           });
-        } catch (err) { sendErrorResponse(res, err); }
+        } catch (err: any) { res.writeHead(400); res.end(err.message); }
         return;
       }
 
@@ -654,6 +689,11 @@ export class Orchestrator {
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
         });
+
+        // Send current health status immediately on connect
+        const health = getStatus();
+        res.write(`data: ${JSON.stringify({ creature: '_orchestrator', t: new Date().toISOString(), type: 'orchestrator.status', ...health })}\n\n`);
+
         const listener = (name: string, event: Event) => {
           res.write(`data: ${JSON.stringify({ creature: name, ...event })}\n\n`);
         };
@@ -692,12 +732,18 @@ export class Orchestrator {
         }
 
         if (action === 'start' && req.method === 'POST') {
+          const health = getStatus();
+          if (health.status !== 'healthy') {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Orchestrator degraded — cannot start creatures', dependencies: health.dependencies }));
+            return;
+          }
           try {
             const body = await readBody(req);
             const opts = body ? JSON.parse(body) : {};
             await this.startCreature(name, opts);
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
@@ -705,19 +751,31 @@ export class Orchestrator {
           try {
             await this.stopCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
         if (action === 'restart' && req.method === 'POST') {
+          const health = getStatus();
+          if (health.status !== 'healthy') {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Orchestrator degraded — cannot restart creatures', dependencies: health.dependencies }));
+            return;
+          }
           try {
             await this.restartCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
         if (action === 'rebuild' && req.method === 'POST') {
+          const health = getStatus();
+          if (health.status !== 'healthy') {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Orchestrator degraded — cannot rebuild creatures', dependencies: health.dependencies }));
+            return;
+          }
           try {
             const supervisor = this.supervisors.get(name);
             if (!supervisor) throw new Error(`creature "${name}" is not running`);
@@ -728,7 +786,7 @@ export class Orchestrator {
             });
             await supervisor.rebuild();
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
@@ -747,7 +805,7 @@ export class Orchestrator {
             await this.emitEvent(name, { t: new Date().toISOString(), type: 'creature.wake', reason, source: 'manual' });
             console.log(`[${name}] force wake triggered: ${reason}`);
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
@@ -775,7 +833,7 @@ export class Orchestrator {
               } catch {}
             }
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
@@ -783,7 +841,7 @@ export class Orchestrator {
           try {
             await this.archiveCreature(name);
             res.writeHead(200); res.end('ok');
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
@@ -819,7 +877,7 @@ export class Orchestrator {
             const cap = getSpendingCap(name);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ daily_usd: cap.daily_usd, action: cap.action }));
-          } catch (err) { sendErrorResponse(res, err); }
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
         }
 
