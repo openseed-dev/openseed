@@ -114,28 +114,14 @@ export function authenticateCreatureRequest(
 
   const token = authHeader.slice(7);
 
-  // Find which creature this token belongs to by re-deriving
-  // (We check against all known creatures in the token cache)
-  let callerName: string | null = null;
-  for (const [name, derivedToken] of tokenCache) {
-    if (safeEqual(derivedToken, token)) {
-      callerName = name;
-      break;
-    }
-  }
+  // Re-derive the expected token for the target creature directly.
+  // This avoids relying on the token cache (which is empty after orchestrator restart)
+  // and eliminates the O(n) cache scan.
+  const expected = deriveCreatureToken(targetCreature);
 
-  if (!callerName) {
+  if (!safeEqual(expected, token)) {
     return { ok: false, status: 401, message: 'Invalid token.' };
   }
 
-  // Creatures can only control themselves
-  if (callerName !== targetCreature) {
-    return {
-      ok: false,
-      status: 403,
-      message: `Creature "${callerName}" cannot control "${targetCreature}". Self-management only.`,
-    };
-  }
-
-  return { ok: true, caller: callerName };
+  return { ok: true, caller: targetCreature };
 }
