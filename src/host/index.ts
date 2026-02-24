@@ -672,7 +672,7 @@ export class Orchestrator {
           const model = (body.model || '').trim() || undefined;
           if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
           const dir = path.join(CREATURES_DIR, name);
-          try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e: any) { if (e.message.includes('already exists')) throw e; }
+          try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e) { if (e instanceof Error && e.message.includes('already exists')) throw e; }
 
           // Return 202 immediately; spawn runs in background
           res.writeHead(202, { 'Content-Type': 'application/json' });

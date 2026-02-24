@@ -114,9 +114,9 @@ export async function genomeExtract(opts: ExtractOptions): Promise<void> {
         stdio: ['pipe', 'pipe', 'ignore'],
       });
     }
-  } catch (e: any) {
+  } catch (e) {
     // diff returns exit code 1 when files differ, which is expected
-    if (e.stdout) diffOutput = e.stdout;
+    if (e != null && typeof e === 'object' && 'stdout' in e) diffOutput = String((e as { stdout: unknown }).stdout);
   }
 
   if (diffOutput.trim()) {
