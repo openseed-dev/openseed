@@ -90,47 +90,59 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   await fs.mkdir(CREATURES_DIR, { recursive: true });
   await copyDir(tpl, dir);
 
-  const sourceMeta = readSourceMeta(tpl);
-  let genomeValidate: string | undefined;
+  // Everything after copyDir can fail — wrap so we clean up the partial directory
   try {
-    const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
-    if (typeof gj.validate === 'string') genomeValidate = gj.validate;
-  } catch {}
+    const sourceMeta = readSourceMeta(tpl);
+    let genomeValidate: string | undefined;
+    try {
+      const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
+      if (typeof gj.validate === 'string') genomeValidate = gj.validate;
+    } catch {}
 
-  const birth = {
-    id: crypto.randomUUID(),
-    name: opts.name,
-    born: new Date().toISOString(),
-    genome: genomeName,
-    genome_version: readGenomeVersion(tpl),
-    ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
-    parent: null as string | null,
-    ...(opts.model ? { model: opts.model } : {}),
-    ...(genomeValidate ? { validate: genomeValidate } : {}),
-  };
-  await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
+    const birth = {
+      id: crypto.randomUUID(),
+      name: opts.name,
+      born: new Date().toISOString(),
+      genome: genomeName,
+      genome_version: readGenomeVersion(tpl),
+      ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
+      parent: null as string | null,
+      ...(opts.model ? { model: opts.model } : {}),
+      ...(genomeValidate ? { validate: genomeValidate } : {}),
+    };
+    await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
 
-  if (opts.purpose) {
-    await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
+    if (opts.purpose) {
+      await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
+    }
+
+    console.log(`installing dependencies for "${opts.name}"...`);
+    await execAsync('pnpm install --silent', { cwd: dir });
+
+    await execAsync('git init', { cwd: dir });
+    await execAsync('git add -A', { cwd: dir });
+    await execAsync('git commit -m "genesis"', { cwd: dir });
+
+    if (!isDockerAvailable()) throw new Error('docker is required but not available');
+    console.log(`building docker image for "${opts.name}"...`);
+    await execAsync(`docker build -t creature-${opts.name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
+
+    return {
+      id: birth.id,
+      name: birth.name,
+      born: birth.born,
+      genome: birth.genome,
+      genome_version: birth.genome_version,
+      dir,
+    };
+  } catch (err) {
+    // Clean up the partial creature directory so a retry doesn't fail with "already exists"
+    console.error(`spawn failed for "${opts.name}", cleaning up ${dir}`);
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+    } catch (cleanupErr) {
+      console.error(`warning: failed to remove orphaned directory ${dir}:`, cleanupErr);
+    }
+    throw err;
   }
-
-  console.log(`installing dependencies for "${opts.name}"...`);
-  await execAsync('pnpm install --silent', { cwd: dir });
-
-  await execAsync('git init', { cwd: dir });
-  await execAsync('git add -A', { cwd: dir });
-  await execAsync('git commit -m "genesis"', { cwd: dir });
-
-  if (!isDockerAvailable()) throw new Error('docker is required but not available');
-  console.log(`building docker image for "${opts.name}"...`);
-  await execAsync(`docker build -t creature-${opts.name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
-
-  return {
-    id: birth.id,
-    name: birth.name,
-    born: birth.born,
-    genome: birth.genome,
-    genome_version: birth.genome_version,
-    dir,
-  };
 }
