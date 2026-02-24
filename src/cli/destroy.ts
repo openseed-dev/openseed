@@ -8,7 +8,14 @@ interface DestroyOptions {
   name: string;
 }
 
+const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+
 export async function destroy(opts: DestroyOptions): Promise<void> {
+  if (!NAME_RE.test(opts.name)) {
+    console.error(`invalid creature name "${opts.name}" (lowercase alphanumeric + hyphens only)`);
+    process.exit(1);
+  }
+
   const dir = creatureDir(opts.name);
 
   try {
