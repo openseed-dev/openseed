@@ -111,7 +111,9 @@ export async function startJanee(): Promise<boolean> {
 
   const portOk = await isPortFree(JANEE_PORT);
   if (!portOk) {
-    console.log(`[janee] port ${JANEE_PORT} already in use — cannot start`);
+    console.log(`[janee] port ${JANEE_PORT} already in use — will retry`);
+    autoRestartEnabled = true;
+    scheduleRestart();
     return false;
   }
 
