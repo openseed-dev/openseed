@@ -19,9 +19,14 @@ export type BudgetChecker = (creatureName: string) => BudgetCheckResult;
 // Creatures always speak Anthropic format. The proxy detects the model
 // and routes to the right upstream, translating if needed.
 
-function inferProvider(model: string): 'anthropic' | 'openai' {
+type Provider = 'anthropic' | 'openai' | 'openrouter' | 'gemini';
+
+function inferProvider(model: string): Provider {
+  // Slash check first: org/model format (e.g. "openai/o3-mini") always routes via OpenRouter
+  if (model.includes('/')) return 'openrouter';
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gpt-') || model.startsWith('o3') || model.startsWith('o4')) return 'openai';
+  if (model.startsWith('gemini-')) return 'gemini';
   return 'anthropic'; // safe default
 }
 
@@ -214,6 +219,348 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+// --- Anthropic-to-OpenAI Chat Completions translation (for OpenRouter) ---
+
+function translateMessagesToChat(messages: any[], system?: string | any[]): { systemMessage: string | undefined; chatMessages: any[] } {
+  let systemMessage: string | undefined;
+  if (Array.isArray(system)) {
+    systemMessage = system.map((b: any) => b.text || '').filter(Boolean).join('\n');
+  } else {
+    systemMessage = system || undefined;
+  }
+
+  const chatMessages: any[] = [];
+
+  for (const msg of messages) {
+    const content = msg.content;
+
+    if (msg.role === 'user') {
+      if (typeof content === 'string') {
+        chatMessages.push({ role: 'user', content });
+      } else if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'tool_result') {
+            const outputText = typeof block.content === 'string'
+              ? block.content
+              : Array.isArray(block.content)
+                ? block.content.map((b: any) => b.text || '').join('\n')
+                : JSON.stringify(block.content);
+            chatMessages.push({
+              role: 'tool',
+              tool_call_id: block.tool_use_id,
+              content: outputText,
+            });
+          } else if (block.type === 'text') {
+            chatMessages.push({ role: 'user', content: block.text });
+          }
+        }
+      }
+    } else if (msg.role === 'assistant') {
+      if (typeof content === 'string') {
+        chatMessages.push({ role: 'assistant', content });
+      } else if (Array.isArray(content)) {
+        const textParts: string[] = [];
+        const toolCalls: any[] = [];
+        for (const block of content) {
+          if (block.type === 'text') {
+            textParts.push(block.text);
+          } else if (block.type === 'tool_use') {
+            toolCalls.push({
+              id: block.id,
+              type: 'function',
+              function: {
+                name: block.name,
+                arguments: JSON.stringify(block.input),
+              },
+            });
+          }
+        }
+        const assistantMsg: any = { role: 'assistant' };
+        if (textParts.length) assistantMsg.content = textParts.join('\n');
+        if (toolCalls.length) assistantMsg.tool_calls = toolCalls;
+        chatMessages.push(assistantMsg);
+      }
+    }
+  }
+
+  return { systemMessage, chatMessages };
+}
+
+function translateToolsToChat(tools: any[]): any[] {
+  if (!tools?.length) return [];
+  return tools.map(t => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description || '',
+      parameters: t.input_schema || {},
+    },
+  }));
+}
+
+function translateChatResponseToAnthropic(chatResp: any): any {
+  const content: any[] = [];
+  let hasToolUse = false;
+
+  const choice = chatResp.choices?.[0];
+  if (!choice) {
+    return {
+      id: chatResp.id || 'resp_translated',
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'text', text: '' }],
+      model: chatResp.model,
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: {
+        input_tokens: chatResp.usage?.prompt_tokens || 0,
+        output_tokens: chatResp.usage?.completion_tokens || 0,
+      },
+    };
+  }
+
+  const msg = choice.message;
+  if (msg.content) {
+    content.push({ type: 'text', text: msg.content });
+  }
+
+  if (msg.tool_calls?.length) {
+    hasToolUse = true;
+    for (const tc of msg.tool_calls) {
+      let parsedInput: any;
+      try {
+        parsedInput = JSON.parse(tc.function.arguments);
+      } catch {
+        parsedInput = {};
+      }
+      content.push({
+        type: 'tool_use',
+        id: tc.id,
+        name: tc.function.name,
+        input: parsedInput,
+      });
+    }
+  }
+
+  const stopReason = hasToolUse ? 'tool_use' : 'end_turn';
+
+  return {
+    id: chatResp.id || 'resp_translated',
+    type: 'message',
+    role: 'assistant',
+    content,
+    model: chatResp.model,
+    stop_reason: stopReason,
+    stop_sequence: null,
+    usage: {
+      input_tokens: chatResp.usage?.prompt_tokens || 0,
+      output_tokens: chatResp.usage?.completion_tokens || 0,
+    },
+  };
+}
+
+async function forwardToOpenRouter(body: any): Promise<{ status: number; body: string }> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { status: 500, body: 'no OPENROUTER_API_KEY configured' };
+
+  const { systemMessage, chatMessages } = translateMessagesToChat(body.messages, body.system);
+  const tools = translateToolsToChat(body.tools);
+
+  const messages: any[] = [];
+  if (systemMessage) messages.push({ role: 'system', content: systemMessage });
+  messages.push(...chatMessages);
+
+  const openrouterBody: any = {
+    model: body.model,
+    messages,
+    max_tokens: body.max_tokens || 16384,
+  };
+  if (tools.length) openrouterBody.tools = tools;
+
+  const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(openrouterBody),
+  });
+
+  const rawResp = await upstream.text();
+  if (!upstream.ok) return { status: upstream.status, body: rawResp };
+
+  let chatResp: any;
+  try {
+    chatResp = JSON.parse(rawResp);
+  } catch {
+    return { status: 502, body: 'failed to parse OpenRouter response' };
+  }
+
+  const translated = translateChatResponseToAnthropic(chatResp);
+  return { status: 200, body: JSON.stringify(translated) };
+}
+
+// --- Anthropic-to-Gemini translation ---
+
+function translateMessagesToGemini(messages: any[], system?: string | any[]): { systemInstruction: any | undefined; contents: any[] } {
+  let systemInstruction: any | undefined;
+  if (Array.isArray(system)) {
+    const text = system.map((b: any) => b.text || '').filter(Boolean).join('\n');
+    if (text) systemInstruction = { parts: [{ text }] };
+  } else if (system) {
+    systemInstruction = { parts: [{ text: system }] };
+  }
+
+  const contents: any[] = [];
+
+  for (const msg of messages) {
+    const content = msg.content;
+
+    if (msg.role === 'user') {
+      if (typeof content === 'string') {
+        contents.push({ role: 'user', parts: [{ text: content }] });
+      } else if (Array.isArray(content)) {
+        const parts: any[] = [];
+        for (const block of content) {
+          if (block.type === 'tool_result') {
+            const outputText = typeof block.content === 'string'
+              ? block.content
+              : Array.isArray(block.content)
+                ? block.content.map((b: any) => b.text || '').join('\n')
+                : JSON.stringify(block.content);
+            parts.push({
+              functionResponse: {
+                name: block.tool_use_id, // Gemini uses name, but we store tool_use_id here
+                response: { result: outputText },
+              },
+            });
+          } else if (block.type === 'text') {
+            parts.push({ text: block.text });
+          }
+        }
+        if (parts.length) contents.push({ role: 'user', parts });
+      }
+    } else if (msg.role === 'assistant') {
+      if (typeof content === 'string') {
+        contents.push({ role: 'model', parts: [{ text: content }] });
+      } else if (Array.isArray(content)) {
+        const parts: any[] = [];
+        for (const block of content) {
+          if (block.type === 'text') {
+            parts.push({ text: block.text });
+          } else if (block.type === 'tool_use') {
+            parts.push({
+              functionCall: {
+                name: block.name,
+                args: block.input,
+              },
+            });
+          }
+        }
+        if (parts.length) contents.push({ role: 'model', parts });
+      }
+    }
+  }
+
+  return { systemInstruction, contents };
+}
+
+function translateToolsToGemini(tools: any[]): any[] {
+  if (!tools?.length) return [];
+  return [{
+    functionDeclarations: tools.map(t => ({
+      name: t.name,
+      description: t.description || '',
+      parameters: t.input_schema || { type: 'object', properties: {} },
+    })),
+  }];
+}
+
+function translateGeminiResponseToAnthropic(geminiResp: any, model: string): any {
+  const content: any[] = [];
+  let hasToolUse = false;
+
+  const candidate = geminiResp.candidates?.[0];
+  if (candidate?.content?.parts) {
+    for (const part of candidate.content.parts) {
+      if (part.text) {
+        content.push({ type: 'text', text: part.text });
+      } else if (part.functionCall) {
+        hasToolUse = true;
+        content.push({
+          type: 'tool_use',
+          id: `toolu_${Math.random().toString(36).slice(2, 14)}`,
+          name: part.functionCall.name,
+          input: part.functionCall.args || {},
+        });
+      }
+    }
+  }
+
+  if (!content.length) {
+    content.push({ type: 'text', text: '' });
+  }
+
+  const stopReason = hasToolUse ? 'tool_use' : 'end_turn';
+
+  return {
+    id: `msg_${Math.random().toString(36).slice(2, 14)}`,
+    type: 'message',
+    role: 'assistant',
+    content,
+    model,
+    stop_reason: stopReason,
+    stop_sequence: null,
+    usage: {
+      input_tokens: geminiResp.usageMetadata?.promptTokenCount || 0,
+      output_tokens: geminiResp.usageMetadata?.candidatesTokenCount || 0,
+    },
+  };
+}
+
+async function forwardToGemini(body: any): Promise<{ status: number; body: string }> {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) return { status: 500, body: 'no GOOGLE_API_KEY configured' };
+
+  const model = body.model || 'gemini-2.5-flash';
+  const { systemInstruction, contents } = translateMessagesToGemini(body.messages, body.system);
+  const tools = translateToolsToGemini(body.tools);
+
+  const geminiBody: any = {
+    contents,
+    generationConfig: {
+      maxOutputTokens: body.max_tokens || 16384,
+    },
+  };
+  if (systemInstruction) geminiBody.systemInstruction = systemInstruction;
+  if (tools.length) geminiBody.tools = tools;
+
+  const upstream = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(geminiBody),
+    },
+  );
+
+  const rawResp = await upstream.text();
+  if (!upstream.ok) return { status: upstream.status, body: rawResp };
+
+  let geminiResp: any;
+  try {
+    geminiResp = JSON.parse(rawResp);
+  } catch {
+    return { status: 502, body: 'failed to parse Gemini response' };
+  }
+
+  const translated = translateGeminiResponseToAnthropic(geminiResp, model);
+  return { status: 200, body: JSON.stringify(translated) };
+}
+
 export async function handleLLMProxy(
   req: IncomingMessage,
   res: ServerResponse,
@@ -264,7 +611,51 @@ export async function handleLLMProxy(
   if (onModelSeen) onModelSeen(creatureName, model);
 
   try {
-    if (provider === 'openai') {
+    if (provider === 'openrouter') {
+      const result = await forwardToOpenRouter(parsed);
+
+      try {
+        const respParsed = JSON.parse(result.body);
+        if (respParsed.usage) {
+          costs.record(creatureName, respParsed.usage.input_tokens || 0, respParsed.usage.output_tokens || 0, model);
+          if (checkBudget && onBudgetExceeded) {
+            const budget = checkBudget(creatureName);
+            if (!budget.allowed && budget.action === 'sleep') {
+              console.log(`[proxy:${creatureName}] call pushed over daily budget ($${budget.dailySpent.toFixed(2)} / $${budget.dailyCap.toFixed(2)})`);
+              onBudgetExceeded(creatureName);
+            }
+          }
+        }
+        if (respParsed.stop_reason) {
+          console.log(`[proxy:${creatureName}] model=${model} stop_reason=${respParsed.stop_reason} content_blocks=${(respParsed.content || []).length}`);
+        }
+      } catch {}
+
+      res.writeHead(result.status, { 'content-type': 'application/json' });
+      res.end(result.body);
+    } else if (provider === 'gemini') {
+      const result = await forwardToGemini(parsed);
+
+      try {
+        const respParsed = JSON.parse(result.body);
+        if (respParsed.usage) {
+          costs.record(creatureName, respParsed.usage.input_tokens || 0, respParsed.usage.output_tokens || 0, model);
+          if (checkBudget && onBudgetExceeded) {
+            const budget = checkBudget(creatureName);
+            if (!budget.allowed && budget.action === 'sleep') {
+              console.log(`[proxy:${creatureName}] call pushed over daily budget ($${budget.dailySpent.toFixed(2)} / $${budget.dailyCap.toFixed(2)})`);
+              onBudgetExceeded(creatureName);
+            }
+          }
+        }
+        if (respParsed.stop_reason) {
+          console.log(`[proxy:${creatureName}] model=${model} stop_reason=${respParsed.stop_reason} content_blocks=${(respParsed.content || []).length}`);
+        }
+      } catch {}
+
+      res.writeHead(result.status, { 'content-type': 'application/json' });
+      res.end(result.body);
+    } else if (provider === 'openai') {
       const result = await forwardToOpenAI(parsed);
 
       try {

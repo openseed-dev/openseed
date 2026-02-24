@@ -1,6 +1,9 @@
+import { setDependency } from './health.js';
 import {
   readFileSync,
   writeFileSync,
+  existsSync,
+  mkdirSync,
 } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -8,29 +11,131 @@ import path from 'node:path';
 
 const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(os.homedir(), '.openseed');
 const USAGE_FILE = path.join(OPENSEED_HOME, 'usage.json');
+const PRICING_CACHE_FILE = path.join(OPENSEED_HOME, 'litellm-pricing.json');
+const LITELLM_PRICING_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
+const PRICING_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-const PRICING: Record<string, { input: number; output: number }> = {
-  // Anthropic
-  'claude-opus-4-6':   { input: 5 / 1e6,    output: 25 / 1e6 },
-  'claude-sonnet-4-6': { input: 3 / 1e6,    output: 15 / 1e6 },
-  'claude-haiku-4-5':  { input: 1 / 1e6,    output: 5 / 1e6 },
-  // OpenAI GPT
-  'gpt-5.2':           { input: 1.75 / 1e6, output: 14 / 1e6 },
-  'gpt-5.2-codex':     { input: 1.75 / 1e6, output: 14 / 1e6 },
-  'gpt-5.1':           { input: 1.25 / 1e6, output: 10 / 1e6 },
-  'gpt-5':             { input: 1.25 / 1e6, output: 10 / 1e6 },
-  'gpt-5-mini':        { input: 0.25 / 1e6, output: 2 / 1e6 },
-  'gpt-5-nano':        { input: 0.05 / 1e6, output: 0.4 / 1e6 },
-  'gpt-4o':            { input: 2.5 / 1e6,  output: 10 / 1e6 },
-  'gpt-4o-mini':       { input: 0.15 / 1e6, output: 0.6 / 1e6 },
-  'gpt-4.1':           { input: 2 / 1e6,    output: 8 / 1e6 },
-  'gpt-4.1-mini':      { input: 0.4 / 1e6,  output: 1.6 / 1e6 },
-  'gpt-4.1-nano':      { input: 0.1 / 1e6,  output: 0.4 / 1e6 },
-  // OpenAI reasoning
-  'o3-mini':           { input: 1.1 / 1e6,  output: 4.4 / 1e6 },
-  'o3':                { input: 2 / 1e6,    output: 8 / 1e6 },
-};
-const DEFAULT_PRICING = PRICING['claude-opus-4-6'];
+interface LiteLLMEntry {
+  input_cost_per_token?: number;
+  output_cost_per_token?: number;
+  litellm_provider?: string;
+  mode?: string;
+}
+
+// Loaded LiteLLM pricing data — populated at startup
+let litellmPricing: Record<string, LiteLLMEntry> | null = null;
+
+// No fallback pricing — LiteLLM data is a required dependency.
+// The health system gates creature operations when pricing is unavailable.
+
+/**
+ * Load LiteLLM pricing from cache or fetch fresh.
+ * Call once at startup. Pricing is a required dependency —
+ * reports status via the health system.
+ */
+export async function initPricing(): Promise<void> {
+  const now = () => new Date().toISOString();
+  let freshFromCache = false;
+
+  // Try loading from cache first
+  try {
+    if (existsSync(PRICING_CACHE_FILE)) {
+      const stat = await fs.stat(PRICING_CACHE_FILE);
+      const ageMs = Date.now() - stat.mtimeMs;
+      const raw = await fs.readFile(PRICING_CACHE_FILE, 'utf-8');
+      litellmPricing = JSON.parse(raw);
+      freshFromCache = ageMs < PRICING_REFRESH_INTERVAL_MS;
+    }
+  } catch {
+    // Cache read failed — will fetch
+  }
+
+  if (litellmPricing && freshFromCache) {
+    const count = Object.keys(litellmPricing).length;
+    setDependency('pricing', { status: 'up', lastCheck: now(), version: `${count} models (cached)` });
+    return;
+  }
+
+  // Fetch fresh data
+  const doFetch = async () => {
+    try {
+      const resp = await fetch(LITELLM_PRICING_URL, { signal: AbortSignal.timeout(15_000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json() as Record<string, LiteLLMEntry>;
+      litellmPricing = data;
+      if (!existsSync(OPENSEED_HOME)) mkdirSync(OPENSEED_HOME, { recursive: true });
+      await fs.writeFile(PRICING_CACHE_FILE, JSON.stringify(data));
+      const count = Object.keys(data).length;
+      setDependency('pricing', { status: 'up', lastCheck: now(), version: `${count} models` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!litellmPricing) {
+        setDependency('pricing', { status: 'down', lastCheck: now(), error: msg.slice(0, 200) });
+      }
+      // If we have stale cache, keep pricing 'up' but log warning
+    }
+  };
+
+  if (litellmPricing) {
+    // Have stale cache — mark up, refresh in background
+    const count = Object.keys(litellmPricing).length;
+    setDependency('pricing', { status: 'up', lastCheck: now(), version: `${count} models (stale cache, refreshing)` });
+    doFetch();
+  } else {
+    // No cache — must fetch before continuing
+    await doFetch();
+  }
+}
+
+/**
+ * Look up pricing for a model from LiteLLM data.
+ * Tries exact match, then common prefixed variants (e.g. "gemini/model", "openrouter/provider/model").
+ */
+function lookupPricing(model: string): { input: number; output: number } | null {
+  if (!litellmPricing) return null;
+
+  // Try exact match first
+  const exact = litellmPricing[model];
+  if (exact?.input_cost_per_token != null && exact?.output_cost_per_token != null) {
+    return { input: exact.input_cost_per_token, output: exact.output_cost_per_token };
+  }
+
+  // Try common prefixed variants
+  const prefixes = ['', 'gemini/', 'vertex_ai/', 'openrouter/', 'openai/', 'anthropic/'];
+  for (const prefix of prefixes) {
+    const key = prefix + model;
+    const entry = litellmPricing[key];
+    if (entry?.input_cost_per_token != null && entry?.output_cost_per_token != null) {
+      return { input: entry.input_cost_per_token, output: entry.output_cost_per_token };
+    }
+  }
+
+  // Try suffix match — find any key that ends with the model name
+  for (const [key, entry] of Object.entries(litellmPricing)) {
+    if (key.endsWith('/' + model) && entry?.input_cost_per_token != null && entry?.output_cost_per_token != null) {
+      return { input: entry.input_cost_per_token, output: entry.output_cost_per_token };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get pricing for a model from LiteLLM data.
+ * Returns zero-cost if pricing data is unavailable (health system prevents this at startup).
+ */
+export function getPricing(model: string): { input: number; output: number } {
+  const litellm = lookupPricing(model);
+  if (litellm) return litellm;
+
+  if (!litellmPricing) {
+    console.warn(`[costs] pricing data not loaded — cost tracking disabled for model: ${model}`);
+    return { input: 0, output: 0 };
+  }
+
+  console.warn(`[costs] unknown model pricing: ${model} — cost will not be tracked`);
+  return { input: 0, output: 0 };
+}
 
 export interface UsageEntry {
   input_tokens: number;
@@ -56,7 +161,7 @@ export class CostTracker {
 
   record(name: string, inputTokens: number, outputTokens: number, model?: string) {
     const entry = this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0, daily_cost_usd: 0, daily_date: null };
-    const p = (model && PRICING[model]) || DEFAULT_PRICING;
+    const p = model ? getPricing(model) : { input: 0, output: 0 };
     const callCost = inputTokens * p.input + outputTokens * p.output;
     entry.input_tokens += inputTokens;
     entry.output_tokens += outputTokens;
@@ -91,6 +196,12 @@ export class CostTracker {
     return result;
   }
 
+  getTotal(): number {
+    let total = 0;
+    for (const v of this.usage.values()) total += v.cost_usd;
+    return total;
+  }
+
   getCreatureCost(name: string): number {
     let total = 0;
     for (const [key, entry] of this.usage) {
@@ -99,46 +210,33 @@ export class CostTracker {
     return total;
   }
 
-  getTotal(): number {
-    let total = 0;
-    for (const v of this.usage.values()) total += v.cost_usd;
-    return total;
-  }
-
   private load() {
     try {
-      const data = JSON.parse(readFileSync(USAGE_FILE, 'utf-8'));
+      const raw = readFileSync(USAGE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
       for (const [k, v] of Object.entries(data)) {
         this.usage.set(k, v as UsageEntry);
       }
-      console.log(`[costs] loaded usage data (${this.usage.size} entries)`);
     } catch {
-      // No file yet, start fresh
+      // No existing usage — start fresh
     }
   }
 
-  async save() {
+  save() {
     if (!this.dirty) return;
-    try {
-      const data = Object.fromEntries(this.usage);
-      await fs.writeFile(USAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-      this.dirty = false;
-    } catch (err) {
-      console.error('[costs] failed to save:', err);
-    }
+    this.saveSync();
   }
 
   private saveSync() {
     if (!this.dirty) return;
     try {
-      const data = Object.fromEntries(this.usage);
-      writeFileSync(USAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      if (!existsSync(OPENSEED_HOME)) mkdirSync(OPENSEED_HOME, { recursive: true });
+      const obj: Record<string, UsageEntry> = {};
+      for (const [k, v] of this.usage) obj[k] = v;
+      writeFileSync(USAGE_FILE, JSON.stringify(obj, null, 2));
       this.dirty = false;
-    } catch {}
-  }
-
-  destroy() {
-    if (this.timer) clearInterval(this.timer);
-    this.saveSync();
+    } catch {
+      // Can't save — will retry
+    }
   }
 }

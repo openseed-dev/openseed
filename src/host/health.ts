@@ -15,6 +15,7 @@ const JANEE_PORT = parseInt(process.env.JANEE_PORT || '3100', 10);
 const deps: Record<string, DependencyStatus> = {
   docker: { status: 'unknown', lastCheck: new Date().toISOString() },
   janee: { status: 'unknown', lastCheck: new Date().toISOString() },
+  pricing: { status: 'unknown', lastCheck: new Date().toISOString() },
 };
 
 let healthInterval: NodeJS.Timeout | null = null;
@@ -72,6 +73,16 @@ export function getStatus(): OrchestratorHealth {
 
 export function getDependency(name: string): DependencyStatus | undefined {
   return deps[name];
+}
+
+export function setDependency(name: string, status: DependencyStatus) {
+  const prev = getStatus().status;
+  deps[name] = status;
+  const next = getStatus().status;
+  if (next !== prev) {
+    const health = getStatus();
+    for (const cb of changeListeners) cb(health);
+  }
 }
 
 export function onStatusChange(cb: (health: OrchestratorHealth) => void): () => void {
