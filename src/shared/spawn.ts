@@ -83,8 +83,8 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   try {
     await fs.access(dir);
     throw new Error(`creature "${opts.name}" already exists at ${dir}`);
-  } catch (e: any) {
-    if (e.message.includes('already exists')) throw e;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('already exists')) throw e;
   }
 
   await fs.mkdir(CREATURES_DIR, { recursive: true });
