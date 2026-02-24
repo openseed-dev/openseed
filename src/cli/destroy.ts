@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { creatureDir } from "./paths.js";
@@ -9,6 +9,11 @@ interface DestroyOptions {
 }
 
 export async function destroy(opts: DestroyOptions): Promise<void> {
+  if (!opts.name || !/^[a-z0-9][a-z0-9-]*$/.test(opts.name)) {
+    console.error('invalid creature name (lowercase alphanumeric + hyphens only)');
+    process.exit(1);
+  }
+
   const dir = creatureDir(opts.name);
 
   try {
@@ -27,8 +32,8 @@ export async function destroy(opts: DestroyOptions): Promise<void> {
   }
 
   // Also try direct docker kill as fallback
-  try { execSync(`docker kill creature-${opts.name}`, { stdio: 'ignore' }); } catch {}
-  try { execSync(`docker rm -f creature-${opts.name}`, { stdio: 'ignore' }); } catch {}
+  try { execFileSync('docker', ['kill', `creature-${opts.name}`], { stdio: 'ignore' }); } catch {}
+  try { execFileSync('docker', ['rm', '-f', `creature-${opts.name}`], { stdio: 'ignore' }); } catch {}
 
   console.log(`destroying creature "${opts.name}"...`);
   await fs.rm(dir, { recursive: true, force: true });
