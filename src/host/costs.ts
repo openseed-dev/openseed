@@ -1,3 +1,4 @@
+import { setDependency } from './health.js';
 import {
   readFileSync,
   writeFileSync,
@@ -24,21 +25,18 @@ interface LiteLLMEntry {
 // Loaded LiteLLM pricing data — populated at startup
 let litellmPricing: Record<string, LiteLLMEntry> | null = null;
 
-// Minimal fallback for when LiteLLM data is unavailable
-const FALLBACK_PRICING: Record<string, { input: number; output: number }> = {
-  'claude-opus-4-6':   { input: 5 / 1e6,    output: 25 / 1e6 },
-  'claude-sonnet-4-6': { input: 3 / 1e6,    output: 15 / 1e6 },
-  'claude-haiku-4-5':  { input: 1 / 1e6,    output: 5 / 1e6 },
-  'gpt-4o':            { input: 2.5 / 1e6,  output: 10 / 1e6 },
-  'gpt-4o-mini':       { input: 0.15 / 1e6, output: 0.6 / 1e6 },
-};
-const DEFAULT_PRICING = FALLBACK_PRICING['claude-opus-4-6'];
+// No fallback pricing — LiteLLM data is a required dependency.
+// The health system gates creature operations when pricing is unavailable.
 
 /**
  * Load LiteLLM pricing from cache or fetch fresh.
- * Call this once at startup — non-blocking, best-effort.
+ * Call once at startup. Pricing is a required dependency —
+ * reports status via the health system.
  */
 export async function initPricing(): Promise<void> {
+  const now = () => new Date().toISOString();
+  let freshFromCache = false;
+
   // Try loading from cache first
   try {
     if (existsSync(PRICING_CACHE_FILE)) {
@@ -46,35 +44,45 @@ export async function initPricing(): Promise<void> {
       const ageMs = Date.now() - stat.mtimeMs;
       const raw = await fs.readFile(PRICING_CACHE_FILE, 'utf-8');
       litellmPricing = JSON.parse(raw);
-      if (ageMs < PRICING_REFRESH_INTERVAL_MS) {
-        return; // Cache is fresh
-      }
-      // Cache is stale — refresh in background, but we have data
+      freshFromCache = ageMs < PRICING_REFRESH_INTERVAL_MS;
     }
   } catch {
     // Cache read failed — will fetch
   }
 
-  // Fetch fresh data (non-blocking if we already have cached data)
+  if (litellmPricing && freshFromCache) {
+    const count = Object.keys(litellmPricing).length;
+    setDependency('pricing', { status: 'up', lastCheck: now(), version: `${count} models (cached)` });
+    return;
+  }
+
+  // Fetch fresh data
   const doFetch = async () => {
     try {
       const resp = await fetch(LITELLM_PRICING_URL, { signal: AbortSignal.timeout(15_000) });
-      if (!resp.ok) return;
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json() as Record<string, LiteLLMEntry>;
       litellmPricing = data;
-      // Ensure directory exists
       if (!existsSync(OPENSEED_HOME)) mkdirSync(OPENSEED_HOME, { recursive: true });
       await fs.writeFile(PRICING_CACHE_FILE, JSON.stringify(data));
-    } catch {
-      // Network unavailable — use cache or fallback
+      const count = Object.keys(data).length;
+      setDependency('pricing', { status: 'up', lastCheck: now(), version: `${count} models` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!litellmPricing) {
+        setDependency('pricing', { status: 'down', lastCheck: now(), error: msg.slice(0, 200) });
+      }
+      // If we have stale cache, keep pricing 'up' but log warning
     }
   };
 
   if (litellmPricing) {
-    // Have stale cache — refresh in background
+    // Have stale cache — mark up, refresh in background
+    const count = Object.keys(litellmPricing).length;
+    setDependency('pricing', { status: 'up', lastCheck: now(), version: `${count} models (stale cache, refreshing)` });
     doFetch();
   } else {
-    // No cache — must fetch synchronously before continuing
+    // No cache — must fetch before continuing
     await doFetch();
   }
 }
@@ -113,17 +121,20 @@ function lookupPricing(model: string): { input: number; output: number } | null 
 }
 
 /**
- * Get pricing for a model. Checks LiteLLM data first, then hardcoded fallback.
+ * Get pricing for a model from LiteLLM data.
+ * Returns zero-cost if pricing data is unavailable (health system prevents this at startup).
  */
 export function getPricing(model: string): { input: number; output: number } {
-  // Try LiteLLM lookup
   const litellm = lookupPricing(model);
   if (litellm) return litellm;
 
-  // Try hardcoded fallback
-  if (FALLBACK_PRICING[model]) return FALLBACK_PRICING[model];
+  if (!litellmPricing) {
+    console.warn(`[costs] pricing data not loaded — cost tracking disabled for model: ${model}`);
+    return { input: 0, output: 0 };
+  }
 
-  return DEFAULT_PRICING;
+  console.warn(`[costs] unknown model pricing: ${model} — cost will not be tracked`);
+  return { input: 0, output: 0 };
 }
 
 export interface UsageEntry {
@@ -150,7 +161,7 @@ export class CostTracker {
 
   record(name: string, inputTokens: number, outputTokens: number, model?: string) {
     const entry = this.usage.get(name) || { input_tokens: 0, output_tokens: 0, cost_usd: 0, calls: 0, daily_cost_usd: 0, daily_date: null };
-    const p = model ? getPricing(model) : DEFAULT_PRICING;
+    const p = model ? getPricing(model) : { input: 0, output: 0 };
     const callCost = inputTokens * p.input + outputTokens * p.output;
     entry.input_tokens += inputTokens;
     entry.output_tokens += outputTokens;
