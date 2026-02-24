@@ -65,15 +65,28 @@ export async function fork(opts: ForkOptions): Promise<void> {
 
   await fs.mkdir(CREATURES_DIR, { recursive: true });
 
-  // Skip host state (.sys), runtime state (.self), and deps (node_modules)
-  await copyDir(sourceDir, destDir, new Set([".self"])); // .sys and node_modules already skipped by default
-
+  // Get the current SHA of the source before we modify anything
+  let forkedAtSHA: string;
   try {
-    // Get the current SHA of the source before we modify anything
-    const forkedAtSHA = execFileSync('git', ['rev-parse', 'HEAD'], {
+    forkedAtSHA = execFileSync('git', ['rev-parse', 'HEAD'], {
       encoding: 'utf-8',
       cwd: sourceDir,
     }).trim();
+  } catch {
+    console.error(`creature "${opts.source}" has no git history (not initialized)`);
+    process.exit(1);
+  }
+
+  // Copy source to dest, skipping runtime state (.self), host state (.sys),
+  // deps (node_modules), and git history (.git — the fork gets a fresh repo below)
+  await copyDir(sourceDir, destDir, new Set([".self"])); // .git/.sys/node_modules already skipped by default
+
+  try {
+    // Initialize a fresh git repo in the fork — gives it a clean single-commit
+    // history rather than inheriting the full source history
+    execFileSync('git', ['init'], { cwd: destDir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.email', 'openseed@openseed.dev'], { cwd: destDir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.name', 'openseed'], { cwd: destDir, stdio: 'pipe' });
 
     // Write new birth certificate
     const birth = {
@@ -94,7 +107,7 @@ export async function fork(opts: ForkOptions): Promise<void> {
     console.log("installing dependencies...");
     execFileSync('pnpm', ['install', '--silent'], { cwd: destDir, stdio: 'inherit' });
 
-    // Commit the fork as a new point in the forked creature's history
+    // Commit the fork as the first point in the forked creature's history
     execFileSync('git', ['add', '-A'], { cwd: destDir, stdio: 'pipe' });
     execFileSync('git', ['commit', '-m', `forked from ${opts.source} at ${forkedAtSHA.slice(0, 7)}`], {
       cwd: destDir,
