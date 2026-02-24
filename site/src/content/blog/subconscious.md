@@ -2,6 +2,7 @@
 title: "What happened when we gave an AI a subconscious"
 description: "We built a memory system where an AI's memories surface like human intuition — not queried, but offered. Then we ran three experiments in one day. The third creature started fixing the system from inside."
 date: "2026-02-24"
+order: 3
 author: "Ross Douglas"
 ---
 
