@@ -90,6 +90,24 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   await fs.mkdir(CREATURES_DIR, { recursive: true });
   await copyDir(tpl, dir);
 
+  // Copy shared tools into creature, overwriting genome-local copies.
+  // Genomes may still override by removing files from packages/tools/
+  // or by not having a src/tools/ directory at all.
+  const sharedToolsDir = path.resolve(import.meta.dirname, '..', '..', 'packages', 'tools', 'src');
+  const creatureToolsDir = path.join(dir, 'src', 'tools');
+  try {
+    await fs.access(sharedToolsDir);
+    await fs.access(creatureToolsDir);
+    const toolFiles = await fs.readdir(sharedToolsDir);
+    for (const file of toolFiles) {
+      if (file.endsWith('.ts')) {
+        await fs.copyFile(path.join(sharedToolsDir, file), path.join(creatureToolsDir, file));
+      }
+    }
+  } catch {
+    // shared tools dir or creature tools dir doesn't exist — skip silently
+  }
+
   // Everything after copyDir can fail — wrap so we clean up the partial directory
   try {
     const sourceMeta = readSourceMeta(tpl);
