@@ -46,8 +46,17 @@ export function App() {
 
     const sse = new EventSource('/api/events');
     sse.onmessage = (e) => {
-      const ev = JSON.parse(e.data);
-      handleSSEEvent(ev);
+      try {
+        const ev = JSON.parse(e.data);
+        handleSSEEvent(ev);
+      } catch (err) {
+        console.warn('[sse] failed to parse event:', e.data, err);
+      }
+    };
+    sse.onerror = () => {
+      // EventSource auto-reconnects; refresh state to avoid stale dashboard
+      refresh();
+      loadHealth();
     };
     sseRef.current = sse;
 
