@@ -301,6 +301,21 @@ export class Mind {
   ): Promise<never> {
     const purpose = await this.loadPurpose();
 
+    // Resume sleep if container restarted mid-sleep
+    try {
+      const { wake_at } = JSON.parse(await fs.readFile('.sys/sleep.json', 'utf-8'));
+      const remaining = new Date(wake_at).getTime() - Date.now();
+      if (remaining > 1000) {
+        console.log(`[mind] resuming sleep (${Math.round(remaining / 1000)}s remaining)`);
+        await this.interruptibleSleep(remaining);
+        const reason = this.wakeReason || "timer expired";
+        this.wakeReason = null;
+        if (onWake) await onWake(reason, reason !== "timer expired" ? "external" : "timer");
+        console.log(`[mind] woke: ${reason}`);
+      }
+      await fs.unlink('.sys/sleep.json').catch(() => {});
+    } catch {}
+
     while (true) {
       // --- ORIENT: select or propose a task ---
       const task = await selectTask();
@@ -313,7 +328,9 @@ export class Mind {
           console.log("[mind] no pending tasks, sleeping 60s");
           if (onSleep) await onSleep(60, "frontier exhausted, waiting", 0);
           this.sleepStartedAt = Date.now();
+          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + 60_000).toISOString() }));
           await this.interruptibleSleep(60_000);
+          await fs.unlink('.sys/sleep.json').catch(() => {});
           this.sleepStartedAt = null;
           if (this.wakeReason) {
             if (onWake) await onWake(this.wakeReason, "external");
@@ -578,7 +595,9 @@ ${this.currentTask.attempts > 1 ? `**Prior attempts:** ${this.currentTask.attemp
         await closeBrowser();
         console.log(`[mind] sleeping ${secs}s between cycles`);
         this.sleepStartedAt = Date.now();
+        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + secs * 1000).toISOString() }));
         await this.interruptibleSleep(secs * 1000);
+        await fs.unlink('.sys/sleep.json').catch(() => {});
         const actualSlept = Math.round((Date.now() - this.sleepStartedAt) / 1000);
         this.sleepStartedAt = null;
 

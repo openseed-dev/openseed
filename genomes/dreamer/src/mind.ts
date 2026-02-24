@@ -542,6 +542,21 @@ export class Mind {
     this.purpose = await this.loadPurpose();
     this.systemPrompt = await buildSystemPrompt(this.purpose);
 
+    // Resume sleep if container restarted mid-sleep
+    try {
+      const { wake_at } = JSON.parse(await fs.readFile('.sys/sleep.json', 'utf-8'));
+      const remaining = new Date(wake_at).getTime() - Date.now();
+      if (remaining > 1000) {
+        console.log(`[mind] resuming sleep (${Math.round(remaining / 1000)}s remaining)`);
+        await this.interruptibleSleep(remaining);
+        const reason = this.wakeReason || "timer expired";
+        this.wakeReason = null;
+        if (onWake) await onWake(reason, reason !== "timer expired" ? "external" : "timer");
+        console.log(`[mind] woke: ${reason}`);
+      }
+      await fs.unlink('.sys/sleep.json').catch(() => {});
+    } catch {}
+
     const initialContext = await this.buildInitialContext();
     this.messages = [];
     this.sessionDigest = [];
@@ -580,7 +595,9 @@ export class Mind {
         await closeBrowser();
         console.log(`[mind] forced sleep ${DEEP_SLEEP_PAUSE}s`);
         this.sleepStartedAt = Date.now();
+        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + DEEP_SLEEP_PAUSE * 1000).toISOString() }));
         await this.interruptibleSleep(DEEP_SLEEP_PAUSE * 1000);
+        await fs.unlink('.sys/sleep.json').catch(() => {});
         const forcedSleptS = Math.round((Date.now() - this.sleepStartedAt) / 1000);
         this.sleepStartedAt = null;
 
@@ -823,7 +840,9 @@ export class Mind {
 
         console.log(`[mind] sleeping for ${actualPause}s${consolidated ? " (with consolidation)" : ""}`);
         this.sleepStartedAt = Date.now();
+        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + actualPause * 1000).toISOString() }));
         await this.interruptibleSleep(actualPause * 1000);
+        await fs.unlink('.sys/sleep.json').catch(() => {});
         const actualSleptS = Math.round((Date.now() - this.sleepStartedAt) / 1000);
         this.sleepStartedAt = null;
 

@@ -145,6 +145,22 @@ You can install more; they persist across restarts.`;
     const purpose = await this.loadPurpose();
     const systemPrompt = this.buildSystemPrompt(purpose);
 
+    // Resume sleep if container restarted mid-sleep
+    try {
+      const { wake_at } = JSON.parse(await fs.readFile('.sys/sleep.json', 'utf-8'));
+      const remaining = new Date(wake_at).getTime() - Date.now();
+      if (remaining > 1000) {
+        console.log(`[mind] resuming sleep (${Math.round(remaining / 1000)}s remaining)`);
+        await this.interruptibleSleep(remaining);
+        const reason = this.wakeReason || "timer expired";
+        const source = this.wakeReason ? "external" : "timer";
+        this.wakeReason = null;
+        if (onWake) await onWake(reason, source);
+        console.log(`[mind] woke: ${reason}`);
+      }
+      await fs.unlink('.sys/sleep.json').catch(() => {});
+    } catch {}
+
     while (true) {
       this.messages = [{ role: "user", content: "You just woke up." }];
       this.actionCount = 0;
@@ -281,7 +297,9 @@ You can install more; they persist across restarts.`;
           if (onSleep) await onSleep(sleepSeconds, "", this.actionCount);
 
           console.log(`[mind] sleeping for ${sleepSeconds}s`);
+          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + sleepSeconds * 1000).toISOString() }));
           await this.interruptibleSleep(sleepSeconds * 1000);
+          await fs.unlink('.sys/sleep.json').catch(() => {});
 
           const reason = this.wakeReason || "timer expired";
           const source = this.wakeReason ? "external" : "timer";
