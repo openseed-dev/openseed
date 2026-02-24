@@ -25,7 +25,7 @@ import {
   saveGlobalSpendingCap,
   saveNarratorConfig,
 } from './config.js';
-import { CostTracker } from './costs.js';
+import { CostTracker, initPricing } from './costs.js';
 import { EventStore } from './events.js';
 import { getStatus, onStatusChange, startHealthLoop, stopHealthLoop } from './health.js';
 import { startJanee, stopJanee } from './janee.js';
@@ -76,6 +76,7 @@ export class Orchestrator {
 
   async start() {
     console.log('[orchestrator] starting...');
+    await initPricing();
     await this.writeRunFile();
     this.setupCleanup();
 
