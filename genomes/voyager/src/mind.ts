@@ -35,6 +35,7 @@ const CYCLES_FILE = ".self/cycles.jsonl";
 const CONVERSATION_LOG = ".self/conversation.jsonl";
 const ITERATIONS_FILE = ".sys/iterations.jsonl";
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
+const CYCLE_COUNT_FILE = '.sys/cycle-count';
 
 const CYCLE_BUDGET = 40;
 const CYCLE_WARNING = 30;
@@ -300,6 +301,11 @@ export class Mind {
     onSkill?: SkillCallback,
   ): Promise<never> {
     const purpose = await this.loadPurpose();
+
+    // Restore persisted cycle count
+    try {
+      this.cycleCount = parseInt(await fs.readFile(CYCLE_COUNT_FILE, 'utf-8'), 10) || 0;
+    } catch {}
 
     // Resume sleep if container restarted mid-sleep
     try {
@@ -582,6 +588,7 @@ ${this.currentTask.attempts > 1 ? `**Prior attempts:** ${this.currentTask.attemp
       }
 
       this.cycleCount++;
+      await fs.writeFile(CYCLE_COUNT_FILE, String(this.cycleCount));
 
       // Save checkpoint
       await this.saveCheckpoint();

@@ -13,6 +13,7 @@ import { executeBash } from './tools/bash.js';
 import { janee as executeJanee } from './tools/janee.js';
 
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
+const CYCLE_COUNT_FILE = '.sys/cycle-count';
 
 const provider = createAnthropic({
   baseURL: process.env.ANTHROPIC_BASE_URL
@@ -146,6 +147,11 @@ You can install more; they persist across restarts.`;
     const purpose = await this.loadPurpose();
     const systemPrompt = this.buildSystemPrompt(purpose);
 
+    // Restore persisted cycle count
+    try {
+      this.cycleCount = parseInt(await fs.readFile(CYCLE_COUNT_FILE, 'utf-8'), 10) || 0;
+    } catch {}
+
     // Resume sleep if container restarted mid-sleep
     try {
       const { wake_at } = JSON.parse(await fs.readFile('.sys/sleep.json', 'utf-8'));
@@ -164,7 +170,8 @@ You can install more; they persist across restarts.`;
 
     while (true) {
       this.cycleCount++;
-      this.messages = [{ role: "user", content: `You just woke up. This is cycle ${this.cycleCount} since boot.` }];
+      await fs.writeFile(CYCLE_COUNT_FILE, String(this.cycleCount));
+      this.messages = [{ role: "user", content: `You just woke up. This is cycle ${this.cycleCount}.` }];
       this.actionCount = 0;
       let retryDelay = 1000;
       let retryCount = 0;
