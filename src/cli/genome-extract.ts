@@ -14,7 +14,14 @@ interface ExtractOptions {
   output?: string;
 }
 
+const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+
 export async function genomeExtract(opts: ExtractOptions): Promise<void> {
+  if (!NAME_RE.test(opts.creature)) {
+    console.error(`invalid creature name "${opts.creature}" (lowercase alphanumeric + hyphens only)`);
+    process.exit(1);
+  }
+
   const srcDir = creatureDir(opts.creature);
 
   // Verify creature exists
