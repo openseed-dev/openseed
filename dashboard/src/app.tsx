@@ -53,11 +53,19 @@ export function App() {
         console.warn('[sse] failed to parse event:', e.data, err);
       }
     };
-    sse.onerror = () => {
-      // EventSource auto-reconnects; refresh state to avoid stale dashboard
-      refresh();
-      loadHealth();
-    };
+    sse.onerror = (() => {
+      let lastRefresh = 0;
+      return () => {
+        const now = Date.now();
+        if (now - lastRefresh > 5000) {
+          lastRefresh = now;
+          // EventSource auto-reconnects; refresh state to avoid stale dashboard
+          refresh();
+          loadHealth();
+          loadRecentEvents();
+        }
+      };
+    })();
     sseRef.current = sse;
 
     return () => {
