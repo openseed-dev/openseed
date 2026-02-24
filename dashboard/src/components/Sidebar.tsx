@@ -78,8 +78,8 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
         <option value="claude-sonnet-4-6">claude-sonnet-4-6 ($3/$15)</option>
         <option value="claude-haiku-4-5">claude-haiku-4-5 ($1/$5)</option>
         <option value="gpt-5.2">gpt-5.2 ($1.75/$14)</option>
+        <option value="gpt-5.2-codex">gpt-5.2-codex ($1.75/$14)</option>
         <option value="gpt-5-mini">gpt-5-mini ($0.25/$2)</option>
-        <option value="o4-mini">o4-mini ($1.10/$4.40)</option>
       </select>
       <textarea
         className="bg-white border border-input text-text-primary px-2 py-1.5 rounded text-xs font-sans resize-y min-h-12 focus:outline-none focus:border-ring"

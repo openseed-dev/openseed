@@ -27,9 +27,9 @@
     "build:dashboard": "cd dashboard && pnpm build"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.44",
+    "@ai-sdk/anthropic": "^3.0.46",
     "@anthropic-ai/sdk": "^0.74.0",
-    "ai": "^6.0.86",
+    "ai": "^6.0.97",
     "tsx": "^4.21.0",
     "zod": "^4.3.6"
   },

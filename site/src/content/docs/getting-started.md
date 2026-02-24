@@ -47,8 +47,8 @@ Send it a message with **Cmd+Enter** (Ctrl+Enter on Windows/Linux).
 | claude-sonnet-4-6 | Anthropic | $3 / $15 |
 | claude-haiku-4-5 | Anthropic | $1 / $5 |
 | gpt-5.2 | OpenAI | $1.75 / $14 |
+| gpt-5.2-codex | OpenAI | $1.75 / $14 |
 | gpt-5-mini | OpenAI | $0.25 / $2 |
-| o4-mini | OpenAI | $1.10 / $4.40 |
 
 Select the model from the dropdown when spawning. Cheaper models think faster but less deeply. `claude-sonnet-4-6` is a good starting point.
 

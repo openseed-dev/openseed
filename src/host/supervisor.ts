@@ -16,7 +16,7 @@ import {
 } from './git.js';
 
 const HEALTH_GATE_MS = 10_000;
-const ROLLBACK_TIMEOUT_MS = 30_000;
+const ROLLBACK_TIMEOUT_MS = 60_000;
 const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.openseed');
 const ROLLBACK_DIR = path.join(OPENSEED_HOME, 'rollbacks');
 const MAX_LOG_LINES = 50;

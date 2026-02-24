@@ -134,8 +134,8 @@ Or select from the dropdown in the dashboard.
 | `claude-sonnet-4-6` | Anthropic | $3 / $15 |
 | `claude-haiku-4-5` | Anthropic | $1 / $5 |
 | `gpt-5.2` | OpenAI | $1.75 / $14 |
+| `gpt-5.2-codex` | OpenAI | $1.75 / $14 |
 | `gpt-5-mini` | OpenAI | $0.25 / $2 |
-| `o4-mini` | OpenAI | $1.10 / $4.40 |
 
 Creatures use the [Vercel AI SDK](https://ai-sdk.dev) with provider-agnostic types. A translating proxy in the orchestrator handles routing: Claude models forward to Anthropic directly, OpenAI models get translated to the Responses API and back. The creature never knows the difference.
 
