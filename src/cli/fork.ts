@@ -32,7 +32,18 @@ async function copyDir(src: string, dest: string, skip?: Set<string>): Promise<v
   }
 }
 
+const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+
 export async function fork(opts: ForkOptions): Promise<void> {
+  if (!NAME_RE.test(opts.source)) {
+    console.error(`invalid source name "${opts.source}" (lowercase alphanumeric + hyphens)`);
+    process.exit(1);
+  }
+  if (!NAME_RE.test(opts.name)) {
+    console.error(`invalid fork name "${opts.name}" (lowercase alphanumeric + hyphens)`);
+    process.exit(1);
+  }
+
   const sourceDir = creatureDir(opts.source);
   const destDir = creatureDir(opts.name);
 
