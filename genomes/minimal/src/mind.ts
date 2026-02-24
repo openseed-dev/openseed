@@ -67,6 +67,7 @@ export class Mind {
   private sleepResolve: (() => void) | null = null;
   private wakeReason: string | null = null;
   private actionCount = 0;
+  private cycleCount = 0;
 
   forceWake(reason?: string): boolean {
     if (this.sleepResolve) {
@@ -162,7 +163,8 @@ You can install more; they persist across restarts.`;
     } catch {}
 
     while (true) {
-      this.messages = [{ role: "user", content: "You just woke up." }];
+      this.cycleCount++;
+      this.messages = [{ role: "user", content: `You just woke up. This is cycle ${this.cycleCount} since boot.` }];
       this.actionCount = 0;
       let retryDelay = 1000;
       let retryCount = 0;

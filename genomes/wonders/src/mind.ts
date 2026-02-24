@@ -67,6 +67,8 @@ export class Mind {
   private sleepResolve: (() => void) | null = null;
   private wakeReason: string | null = null;
   private actionCount = 0;
+  private cycleCount = 0;
+  private surfacedMemories: Set<string> = new Set();
   private subconscious = new Subconscious();
 
   forceWake(reason?: string): boolean {
@@ -163,8 +165,10 @@ You can install more; they persist across restarts.`;
     } catch {}
 
     while (true) {
+      this.cycleCount++;
+      this.surfacedMemories = new Set();
       this.subconscious.setCycleStart(new Date());
-      this.messages = [{ role: "user", content: "You just woke up." }];
+      this.messages = [{ role: "user", content: `You just woke up. This is cycle ${this.cycleCount} since boot.` }];
       this.actionCount = 0;
       let retryDelay = 1000;
       let retryCount = 0;
@@ -299,8 +303,14 @@ You can install more; they persist across restarts.`;
           try {
             const memory = await this.subconscious.run(this.messages);
             if (memory) {
-              this.pendingInjections.push(`[No action required, but a memory you migh or might not find useful: ${memory}]`);
-              console.log(`[subconscious] surfaced memory`);
+              const fingerprint = memory.slice(0, 80);
+              if (!this.surfacedMemories.has(fingerprint)) {
+                this.surfacedMemories.add(fingerprint);
+                this.pendingInjections.push(`[No action required, but a memory you might find useful: ${memory}]`);
+                console.log(`[subconscious] surfaced memory (${this.surfacedMemories.size} unique this cycle)`);
+              } else {
+                console.log(`[subconscious] suppressed duplicate memory`);
+              }
             }
           } catch (err) {
             console.error('[subconscious] error:', err);

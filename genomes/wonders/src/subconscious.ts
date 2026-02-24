@@ -42,9 +42,11 @@ function extractTimestamp(line: string): Date | null {
 
 export class Subconscious {
   private cycleStartedAt: Date | null = null;
+  private usedQueries: Set<string> = new Set();
 
   setCycleStart(t: Date) {
     this.cycleStartedAt = t;
+    this.usedQueries = new Set();
   }
 
   async run(messages: ModelMessage[]): Promise<string | null> {
@@ -119,44 +121,36 @@ export class Subconscious {
         system: `You are a subconscious memory retrieval process. You observe what an agent is currently doing and generate hypotheses about what past experiences might be relevant.
 
 Generate 3 hypotheses as a JSON array. Each object has:
-- "wonder": a statement starting with "I wonder if I..." about what past experience might matter
+- "wonder": a statement starting with "I wonder if I..." about what past experience might matter NOW
 - "query": a SHORT search term (1-3 words) that would literally appear in a JSONL event log of the agent's past tool calls and thoughts. Not a keyword list — a specific term or short phrase that grep would match.
 
-The event log has entries like: {"type":"creature.tool_call","tool":"bash","input":"...","output":"..."} and {"type":"creature.thought","text":"..."}
+The event log has entries like:
+- {"type":"creature.tool_call","tool":"bash","input":"...","output":"..."}
+- {"type":"creature.thought","text":"..."}
+- {"type":"creature.sleep","seconds":N}
+
+IMPORTANT:
+- Prioritize queries that surface PLANS, DECISIONS, and CONCLUSIONS from past cycles — not just exploration
+- Vary queries across different domains — don't cluster on the same topic
+- Think about what would change the agent's NEXT ACTION, not just what's vaguely related
+- Good queries target: stated intentions ("want to", "next cycle", "plan"), outcomes ("accomplished", "completed", "failed"), errors ("error", "permission denied"), specific tools or files the agent is working with
+- Bad queries are too generic: "bash", "ls", "mind.ts", "architecture" — these match noise
 
 Examples — if the agent is debugging a failing API call:
 
 [
   {"wonder": "I wonder if I've hit this API error before", "query": "status 429"},
-  {"wonder": "I wonder if my creator told me something about rate limits", "query": "rate limit"},
-  {"wonder": "I wonder if I found a workaround last time something timed out", "query": "timeout"}
-]
-
-If the agent is writing a new script:
-
-[
-  {"wonder": "I wonder if I've written something similar before", "query": "#!/bin/bash"},
-  {"wonder": "I wonder if I learned something about permissions the hard way", "query": "permission denied"},
-  {"wonder": "I wonder if there's a tool I installed that could help", "query": "pip install"}
-]
-
-If the agent is researching a topic:
-
-[
-  {"wonder": "I wonder if I've looked into this before", "query": "cryptocurrency"},
-  {"wonder": "I wonder if I bookmarked any useful sources", "query": "saved to"},
-  {"wonder": "I wonder if my creator gave me guidance on this", "query": "creator"}
+  {"wonder": "I wonder if I found a workaround last time", "query": "rate limit"},
+  {"wonder": "I wonder if I planned to handle this case", "query": "want to"}
 ]
 
 If the agent is planning its next steps:
 
 [
-  {"wonder": "I wonder what I was working on before I slept", "query": "set_sleep"},
-  {"wonder": "I wonder if I've set goals for myself before", "query": "TODO"},
+  {"wonder": "I wonder what I planned to do next", "query": "next cycle"},
+  {"wonder": "I wonder what I accomplished last cycle", "query": "accomplished"},
   {"wonder": "I wonder if I tried this approach and it failed", "query": "didn't work"}
 ]
-
-Notice: queries are short, literal strings that grep can match in log lines. Not descriptions or keyword lists.
 
 Respond with ONLY a JSON array.`,
         messages: [{ role: 'user', content: `Recent activity:\n\n${context.slice(0, 3000)}` }],
@@ -175,6 +169,9 @@ Respond with ONLY a JSON array.`,
     const results: Array<{ wonder: Wonder; matches: AnnotatedMatch[] }> = [];
 
     for (const w of wonders) {
+      const qKey = w.query.toLowerCase();
+      if (this.usedQueries.has(qKey)) continue;
+      this.usedQueries.add(qKey);
       try {
         const output = execFileSync('rg', [
           '-i', '-C', '1', '-m', '20', '--', w.query, EVENTS_FILE,

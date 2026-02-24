@@ -437,6 +437,7 @@ export class Mind {
   private onSelfEval: SelfEvalCallback | null = null;
   private pendingRestart = false;
   private currentActionCount = 0;
+  private cycleCount = 0;
 
   constructor(memory: Memory) {
     this.memory = memory;
@@ -557,6 +558,7 @@ export class Mind {
       await fs.unlink('.sys/sleep.json').catch(() => {});
     } catch {}
 
+    this.cycleCount++;
     const initialContext = await this.buildInitialContext();
     this.messages = [];
     this.sessionDigest = [];
@@ -1468,6 +1470,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
   // --- Wake Up ---
 
   private async wakeUp(actualSleptS: number, requestedS: number, onWake?: WakeCallback): Promise<void> {
+    this.cycleCount++;
     this.sessionDigest = [];
     const observations = await this.readObservations();
     const reason = this.wakeReason;
@@ -1477,7 +1480,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
     const now = new Date().toISOString();
     let wakeMsg = reason
       ? `[${now}] You were woken early (slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)}). Reason: ${reason}\n`
-      : `[${now}] You woke up after sleeping ${this.formatDuration(actualSleptS)}.\n`;
+      : `[${now}] You woke up after sleeping ${this.formatDuration(actualSleptS)}. This is cycle ${this.cycleCount} since boot.\n`;
 
     if (observations) {
       wakeMsg += `\n${observations}\n`;
@@ -1799,7 +1802,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
       context += observations + "\n\n";
     }
     context += "Your learned rules are in the system prompt. Full conversation history is in .self/conversation.jsonl.\n";
-    context += "You just woke up. What do you want to do?\n";
+    context += `You just woke up. This is cycle ${this.cycleCount} since boot. What do you want to do?\n`;
     return context;
   }
 
