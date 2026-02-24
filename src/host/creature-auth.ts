@@ -52,10 +52,14 @@ function getOrchestratorSecret(): string {
     return orchestratorSecret;
   }
 
-  // 3. Generate and persist
+  // 3. Generate and persist (best-effort — if persistence fails, tokens regenerate on restart)
   orchestratorSecret = randomBytes(32).toString('hex');
-  mkdirSync(secretDir, { recursive: true });
-  writeFileSync(secretPath, orchestratorSecret, { mode: 0o600 });
+  try {
+    mkdirSync(secretDir, { recursive: true });
+    writeFileSync(secretPath, orchestratorSecret, { mode: 0o600 });
+  } catch {
+    console.warn('[auth] could not persist orchestrator secret to', secretPath);
+  }
   return orchestratorSecret;
 }
 
@@ -73,8 +77,8 @@ export function deriveCreatureToken(name: string): string {
   return token;
 }
 
-/** Remove a creature's cached token (on destroy). */
-export function revokeCreatureToken(name: string): void {
+/** Evict a creature's cached token (on destroy). The HMAC-derived token itself remains valid — this only clears the cache entry. */
+export function evictCreatureTokenCache(name: string): void {
   tokenCache.delete(name);
 }
 
