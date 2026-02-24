@@ -368,33 +368,50 @@ export class Orchestrator {
       const supervisor = this.supervisors.get(name);
       const dir = path.join(CREATURES_DIR, name);
       if (supervisor) {
-        try {
-          // Read validate from BIRTH.json (set at spawn time, immutable to the creature)
-          // rather than genome.json which the creature can modify.
-          let validate: string | undefined;
-          try {
-            const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
-            validate = birth.validate;
-          } catch {}
-          if (validate) {
-            await execAsync(validate, { cwd: dir, timeout: 30_000 });
-          }
-          await execAsync(`git add -A && git commit -m "creature: self-modification, ${reason.slice(0, 60)}" --allow-empty`, {
-            cwd: dir,
-          });
-          // docker restart: process restarts, container environment preserved
-          await supervisor.restart();
-          console.log(`[${name}] creature-requested restart completed`);
-        } catch (err: any) {
-          const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
-          console.error(`[${name}] creature-requested restart failed: ${errMsg}`);
-          try {
-            await this.sendMessage(name, `[SYSTEM] Your restart request failed. TypeScript validation error:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
-          } catch {}
-        }
+        await this.validateAndRestart(name, dir, supervisor, `self-modification, ${reason.slice(0, 60)}`);
       }
     }
 
+    // Auto-apply code changes on sleep (committed or uncommitted)
+    if (event.type === 'creature.sleep') {
+      const supervisor = this.supervisors.get(name);
+      const dir = path.join(CREATURES_DIR, name);
+      if (supervisor) {
+        try {
+          const uncommitted = execSync('git status --porcelain -- src/', { cwd: dir, encoding: 'utf-8', timeout: 5_000 }).trim();
+          const headSHA = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8', timeout: 5_000 }).trim();
+          const bootSHA = supervisor.getInfo().sha;
+          const hasChanges = uncommitted.length > 0 || (bootSHA && headSHA !== bootSHA);
+          if (hasChanges) {
+            console.log(`[${name}] src/ changes detected on sleep, validating...`);
+            await this.validateAndRestart(name, dir, supervisor, 'code changes applied on sleep');
+          }
+        } catch {}
+      }
+    }
+
+  }
+
+  private async validateAndRestart(name: string, dir: string, supervisor: CreatureSupervisor, reason: string) {
+    try {
+      let validate: string | undefined;
+      try {
+        const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
+        validate = birth.validate;
+      } catch {}
+      if (validate) {
+        await execAsync(validate, { cwd: dir, timeout: 30_000 });
+      }
+      await execAsync(`git add -A && git commit -m "creature: ${reason}" --allow-empty`, { cwd: dir });
+      await supervisor.restart();
+      console.log(`[${name}] ${reason} — restart completed`);
+    } catch (err: any) {
+      const errMsg = err.stderr || err.stdout || err.message || 'unknown error';
+      console.error(`[${name}] restart failed: ${errMsg}`);
+      try {
+        await this.sendMessage(name, `[SYSTEM] Code validation failed:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
+      } catch {}
+    }
   }
 
   async handleCreatureEvent(name: string, event: Event): Promise<void> {

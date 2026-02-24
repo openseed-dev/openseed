@@ -1,0 +1,12 @@
+{
+  "name": "wonders",
+  "version": "0.1.0",
+  "description": "Subconscious memory experiment. No explicit memory — a background process surfaces relevant past experience through hypothesis-driven retrieval.",
+  "author": "openseed",
+  "license": "MIT",
+  "tags": ["wonders", "experimental", "subconscious", "memory"],
+  "requires": { "openseed": ">=0.0.1" },
+  "tabs": [
+    { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "creature-wonders",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "ai": "^6.0.0",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "zod": "^4.0.0",
+    "tsx": "^4.19.4"
+  }
+}
