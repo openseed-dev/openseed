@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 
 import { generateText, type ModelMessage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -19,8 +19,41 @@ interface Wonder {
   query: string;
 }
 
+interface AnnotatedMatch {
+  text: string;
+  age: number | null;
+  ageLabel: string;
+}
+
+function formatAge(ms: number): string {
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hrs = Math.round(min / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
+function extractTimestamp(line: string): Date | null {
+  const m = line.match(/"t"\s*:\s*"([^"]+)"/);
+  return m ? new Date(m[1]) : null;
+}
+
 export class Subconscious {
+  private cycleStartedAt: Date | null = null;
+
+  setCycleStart(t: Date) {
+    this.cycleStartedAt = t;
+  }
+
   async run(messages: ModelMessage[]): Promise<string | null> {
+    // No past events to search — first cycle or no cutoff
+    if (this.cycleStartedAt && !this.hasPastEvents()) {
+      this.log({ step: 'skip', reason: 'no_past_events' });
+      return null;
+    }
+
     const wonders = await this.wonder(messages);
     if (wonders.length === 0) {
       this.log({ step: 'wonder', wonders: [], result: 'no_hypotheses' });
@@ -41,7 +74,7 @@ export class Subconscious {
         query: h.wonder.query,
         wonder: h.wonder.wonder,
         matchCount: h.matches.length,
-        matches: h.matches.map(m => m.slice(0, 200)),
+        matches: h.matches.map(m => m.text.slice(0, 200)),
       })),
       missedQueries: wonders.filter(w => !hits.some(h => h.wonder.query === w.query)).map(w => w.query),
     });
@@ -57,6 +90,17 @@ export class Subconscious {
     });
 
     return surfaced;
+  }
+
+  private hasPastEvents(): boolean {
+    try {
+      const first = readFileSync(EVENTS_FILE, 'utf-8').split('\n')[0];
+      if (!first) return false;
+      const ts = extractTimestamp(first);
+      return ts !== null && ts < this.cycleStartedAt!;
+    } catch {
+      return false;
+    }
   }
 
   private async wonder(messages: ModelMessage[]): Promise<Wonder[]> {
@@ -125,18 +169,30 @@ Respond with ONLY a JSON array.`,
     }
   }
 
-  private search(wonders: Wonder[]): Array<{ wonder: Wonder; matches: string[] }> {
-    const results: Array<{ wonder: Wonder; matches: string[] }> = [];
+  private search(wonders: Wonder[]): Array<{ wonder: Wonder; matches: AnnotatedMatch[] }> {
+    const now = Date.now();
+    const cutoff = this.cycleStartedAt?.getTime() ?? now;
+    const results: Array<{ wonder: Wonder; matches: AnnotatedMatch[] }> = [];
 
     for (const w of wonders) {
       try {
         const output = execFileSync('rg', [
-          '-i', '-C', '1', '-m', '10', '--', w.query, EVENTS_FILE,
+          '-i', '-C', '1', '-m', '20', '--', w.query, EVENTS_FILE,
         ], { encoding: 'utf-8', timeout: 5000 });
 
-        const matches = output.trim().split('\n--\n').filter(Boolean);
+        const rawBlocks = output.trim().split('\n--\n').filter(Boolean);
+
+        const matches: AnnotatedMatch[] = [];
+        for (const block of rawBlocks) {
+          const ts = extractTimestamp(block);
+          if (ts && ts.getTime() >= cutoff) continue;
+          const age = ts ? now - ts.getTime() : null;
+          matches.push({ text: block, age, ageLabel: age !== null ? formatAge(age) : 'unknown time ago' });
+          if (matches.length >= 5) break;
+        }
+
         if (matches.length > 0) {
-          results.push({ wonder: w, matches: matches.slice(0, 5) });
+          results.push({ wonder: w, matches });
         }
       } catch {
         // rg exits 1 for no matches
@@ -148,7 +204,7 @@ Respond with ONLY a JSON array.`,
 
   private async prepare(
     messages: ModelMessage[],
-    hits: Array<{ wonder: Wonder; matches: string[] }>,
+    hits: Array<{ wonder: Wonder; matches: AnnotatedMatch[] }>,
   ): Promise<string | null> {
     const context = messages.slice(-3).map(m => {
       if (typeof m.content === 'string') return m.content;
@@ -156,24 +212,24 @@ Respond with ONLY a JSON array.`,
     }).join('\n---\n');
 
     const hitsSummary = hits.map(h =>
-      `Hypothesis: "${h.wonder.wonder}"\nMatches:\n${h.matches.join('\n---\n')}`
+      `Hypothesis: "${h.wonder.wonder}"\nMatches:\n${h.matches.map(m => `(${m.ageLabel}) ${m.text}`).join('\n---\n')}`
     ).join('\n\n===\n\n');
 
     try {
       const result = await generateText({
         model: provider(FAST_MODEL),
         maxOutputTokens: 300,
-        system: `You curate memories for an agent. You see what it's doing now and memories that matched search queries.
+        system: `You curate memories for an agent. You see what it's doing now and memories from its past cycles (each annotated with how long ago it occurred).
 
 Decide: are any of these memories genuinely useful right now? Not just vaguely related — actually helpful for what the agent is doing.
 
-If yes: frame it as a brief thought (1-3 sentences) as if the agent is remembering something relevant.
+If yes: frame it as a brief thought (1-3 sentences) as if the agent is remembering something relevant. Be accurate about when it happened — don't say "I remember doing this before" if the memory is from the same session or very recent. Use the age annotations to ground your temporal claims.
 If no: respond with exactly NOTHING
 
-Be tolerant of "maybe relevant" — surfacing something uncertain is fine. But don't surface pure noise or keyword coincidences.`,
+Be selective. The bar is "would this change what the agent does next?" not "is this vaguely related?" Surface nothing rather than surface noise.`,
         messages: [{
           role: 'user',
-          content: `Current activity:\n${context.slice(0, 2000)}\n\nMemories found:\n${hitsSummary.slice(0, 3000)}`,
+          content: `Current activity:\n${context.slice(0, 2000)}\n\nMemories from past cycles:\n${hitsSummary.slice(0, 3000)}`,
         }],
       });
 

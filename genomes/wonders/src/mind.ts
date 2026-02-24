@@ -163,6 +163,7 @@ You can install more; they persist across restarts.`;
     } catch {}
 
     while (true) {
+      this.subconscious.setCycleStart(new Date());
       this.messages = [{ role: "user", content: "You just woke up." }];
       this.actionCount = 0;
       let retryDelay = 1000;
@@ -307,10 +308,10 @@ You can install more; they persist across restarts.`;
         }
 
         if (sleepSeconds !== null) {
+          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + sleepSeconds * 1000).toISOString() }));
           if (onSleep) await onSleep(sleepSeconds, "", this.actionCount);
 
           console.log(`[mind] sleeping for ${sleepSeconds}s`);
-          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + sleepSeconds * 1000).toISOString() }));
           await this.interruptibleSleep(sleepSeconds * 1000);
           await fs.unlink('.sys/sleep.json').catch(() => {});
 

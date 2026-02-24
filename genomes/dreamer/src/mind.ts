@@ -576,6 +576,7 @@ export class Mind {
 
         const summary = this.extractSummary(monologueSinceSleep);
         await this.saveCheckpoint(summary, actionsSinceSleep, DEEP_SLEEP_PAUSE);
+        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + DEEP_SLEEP_PAUSE * 1000).toISOString() }));
         if (onSleep) await onSleep(DEEP_SLEEP_PAUSE, "forced consolidation", actionsSinceSleep.length);
 
         await this.consolidate(actionsSinceSleep, onDream);
@@ -595,7 +596,6 @@ export class Mind {
         await closeBrowser();
         console.log(`[mind] forced sleep ${DEEP_SLEEP_PAUSE}s`);
         this.sleepStartedAt = Date.now();
-        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + DEEP_SLEEP_PAUSE * 1000).toISOString() }));
         await this.interruptibleSleep(DEEP_SLEEP_PAUSE * 1000);
         await fs.unlink('.sys/sleep.json').catch(() => {});
         const forcedSleptS = Math.round((Date.now() - this.sleepStartedAt) / 1000);
@@ -801,6 +801,7 @@ export class Mind {
       if (sleepSeconds !== null) {
         const summary = this.extractSummary(monologueSinceSleep);
         await this.saveCheckpoint(summary, actionsSinceSleep, sleepSeconds);
+        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + sleepSeconds * 1000).toISOString() }));
 
         if (onSleep) {
           await onSleep(sleepSeconds, summary, actionsSinceSleep.length);
@@ -840,7 +841,6 @@ export class Mind {
 
         console.log(`[mind] sleeping for ${actualPause}s${consolidated ? " (with consolidation)" : ""}`);
         this.sleepStartedAt = Date.now();
-        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + actualPause * 1000).toISOString() }));
         await this.interruptibleSleep(actualPause * 1000);
         await fs.unlink('.sys/sleep.json').catch(() => {});
         const actualSleptS = Math.round((Date.now() - this.sleepStartedAt) / 1000);

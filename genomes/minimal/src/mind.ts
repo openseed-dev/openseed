@@ -294,10 +294,10 @@ You can install more; they persist across restarts.`;
         this.messages.push({ role: "tool", content: toolResults });
 
         if (sleepSeconds !== null) {
+          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + sleepSeconds * 1000).toISOString() }));
           if (onSleep) await onSleep(sleepSeconds, "", this.actionCount);
 
           console.log(`[mind] sleeping for ${sleepSeconds}s`);
-          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + sleepSeconds * 1000).toISOString() }));
           await this.interruptibleSleep(sleepSeconds * 1000);
           await fs.unlink('.sys/sleep.json').catch(() => {});
 

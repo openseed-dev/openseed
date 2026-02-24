@@ -326,9 +326,9 @@ export class Mind {
           await this.proposeSeedTasks(purpose);
         } else {
           console.log("[mind] no pending tasks, sleeping 60s");
+          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + 60_000).toISOString() }));
           if (onSleep) await onSleep(60, "frontier exhausted, waiting", 0);
           this.sleepStartedAt = Date.now();
-          await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + 60_000).toISOString() }));
           await this.interruptibleSleep(60_000);
           await fs.unlink('.sys/sleep.json').catch(() => {});
           this.sleepStartedAt = null;
@@ -590,12 +590,12 @@ ${this.currentTask.attempts > 1 ? `**Prior attempts:** ${this.currentTask.attemp
       if (sleepRequested) {
         const secs = sleepRequested;
         const summary = `Completed cycle #${this.cycleCount}: ${this.currentTask?.task || "unknown"}`;
+        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + secs * 1000).toISOString() }));
         if (onSleep) await onSleep(secs, summary, this.currentActionCount);
 
         await closeBrowser();
         console.log(`[mind] sleeping ${secs}s between cycles`);
         this.sleepStartedAt = Date.now();
-        await fs.writeFile('.sys/sleep.json', JSON.stringify({ wake_at: new Date(Date.now() + secs * 1000).toISOString() }));
         await this.interruptibleSleep(secs * 1000);
         await fs.unlink('.sys/sleep.json').catch(() => {});
         const actualSlept = Math.round((Date.now() - this.sleepStartedAt) / 1000);
