@@ -29,6 +29,10 @@ const PRICING: Record<string, { input: number; output: number }> = {
   // OpenAI reasoning
   'o3-mini':           { input: 1.1 / 1e6,  output: 4.4 / 1e6 },
   'o3':                { input: 2 / 1e6,    output: 8 / 1e6 },
+  // Google Gemini
+  'gemini-2.5-pro':    { input: 1.25 / 1e6, output: 10 / 1e6 },
+  'gemini-2.5-flash':  { input: 0.15 / 1e6, output: 0.6 / 1e6 },
+  'gemini-2.0-flash':  { input: 0.1 / 1e6,  output: 0.4 / 1e6 },
 };
 const DEFAULT_PRICING = PRICING['claude-opus-4-6'];
 
