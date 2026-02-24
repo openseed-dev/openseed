@@ -22,11 +22,11 @@ export type BudgetChecker = (creatureName: string) => BudgetCheckResult;
 type Provider = 'anthropic' | 'openai' | 'openrouter' | 'gemini';
 
 function inferProvider(model: string): Provider {
+  // Slash check first: org/model format (e.g. "openai/o3-mini") always routes via OpenRouter
+  if (model.includes('/')) return 'openrouter';
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gpt-') || model.startsWith('o3') || model.startsWith('o4')) return 'openai';
   if (model.startsWith('gemini-')) return 'gemini';
-  // Models with org/ prefix (e.g. "google/gemini-2.5-flash") route through OpenRouter
-  if (model.includes('/')) return 'openrouter';
   return 'anthropic'; // safe default
 }
 
