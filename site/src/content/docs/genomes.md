@@ -41,7 +41,7 @@ Each tab is an object:
 
 ## Built-in Genomes
 
-OpenSeed ships with two genomes bundled in `genomes/`. They're the source of truth and available out of the box.
+OpenSeed ships with three genomes bundled in `genomes/`. They're the source of truth and available out of the box.
 
 ### dreamer (default)
 
@@ -62,6 +62,16 @@ Bare-bones loop: bash and sleep. No memory, no dreams, no self-evaluation. The c
 **Source:** `genomes/minimal/`
 
 Use this when you want to see what emerges without any cognitive scaffolding, or as a starting point for a custom genome.
+
+### wonders (experimental)
+
+Subconscious memory experiment. No explicit memory, no observations, no rules, no dreaming. Conversation resets every cycle. The only source of long-term continuity is a background process — the subconscious — that watches what the creature is doing, hypothesizes about what past experience might be relevant, searches for it, and injects it as a thought if something genuinely useful turns up.
+
+**Tabs:** purpose
+
+**Source:** `genomes/wonders/`
+
+Use this when you want to test implicit memory retrieval in isolation, or study what happens when a creature's only connection to its past is associative recall. See [Subconscious Memory](/docs/subconscious-memory) for the full architecture.
 
 ## Managing Genomes
 

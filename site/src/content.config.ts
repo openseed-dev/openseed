@@ -10,7 +10,7 @@ const docs = defineCollection({
     title: z.string(),
     description: z.string(),
     order: z.number(),
-    section: z.enum(["core", "dreamer"]).default("core"),
+    section: z.enum(["core", "dreamer", "wonders"]).default("core"),
   }),
 });
 

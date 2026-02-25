@@ -13,6 +13,7 @@ const allDocs = await getCollection("docs");
 const sortedDocs = allDocs.sort((a, b) => a.data.order - b.data.order);
 const coreDocs = sortedDocs.filter((d) => d.data.section === "core");
 const dreamerDocs = sortedDocs.filter((d) => d.data.section === "dreamer");
+const wondersDocs = sortedDocs.filter((d) => d.data.section === "wonders");
 const currentPath = Astro.url.pathname.replace(/\/$/, "");
 
 function linkClass(href: string) {
@@ -47,6 +48,19 @@ function linkClass(href: string) {
               ))}
             </>
           )}
+
+          {wondersDocs.length > 0 && (
+            <>
+              <div class="pt-4 pb-1 px-3 text-xs uppercase tracking-wider text-text-tertiary">
+                Wonders Genome
+              </div>
+              {wondersDocs.map((doc) => (
+                <a href={`/docs/${doc.id}`} class={linkClass(`/docs/${doc.id}`)}>
+                  {doc.data.title}
+                </a>
+              ))}
+            </>
+          )}
         </nav>
       </aside>
 
@@ -67,6 +81,16 @@ function linkClass(href: string) {
               {doc.data.title}
             </a>
           ))}
+          {wondersDocs.length > 0 && (
+            <>
+              <div class="pt-2 pb-1 text-xs uppercase tracking-wider text-text-tertiary">Wonders Genome</div>
+              {wondersDocs.map((doc) => (
+                <a href={`/docs/${doc.id}`} class="block text-sm py-1 text-text-secondary hover:text-text">
+                  {doc.data.title}
+                </a>
+              ))}
+            </>
+          )}
         </nav>
       </details>
 
