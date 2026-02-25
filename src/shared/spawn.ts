@@ -150,7 +150,8 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
     }
 
     // Ensure the shared board directory exists
-    await fs.mkdir(BOARD_DIR, { recursive: true });
+    await fs.mkdir(path.join(BOARD_DIR, 'posts'), { recursive: true });
+    await fs.mkdir(path.join(BOARD_DIR, 'replies'), { recursive: true });
 
     console.log(`installing dependencies for "${opts.name}"...`);
     await execAsync('pnpm install --silent', { cwd: dir });
