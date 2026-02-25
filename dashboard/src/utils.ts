@@ -1,3 +1,6 @@
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
+
 export function esc(s: string): string {
   const d = document.createElement('div');
   d.textContent = s;
@@ -31,4 +34,14 @@ export function fmtCost(usd: number): string {
 let counter = 0;
 export function uid(): string {
   return 'u' + (++counter) + Math.random().toString(36).slice(2, 6);
+}
+
+/** Sanitized markdown rendering — prevents XSS from creature-generated content. */
+export function renderMarkdown(raw: string): string {
+  try {
+    const html = marked.parse(raw) as string;
+    return DOMPurify.sanitize(html);
+  } catch {
+    return esc(raw);
+  }
 }

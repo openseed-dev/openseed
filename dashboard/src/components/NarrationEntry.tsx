@@ -1,5 +1,4 @@
-import { marked } from 'marked';
-import { timeAgo, esc } from '@/utils';
+import { timeAgo, renderMarkdown } from '@/utils';
 import { useStore } from '@/state';
 import type { NarrationEntry as NEntry } from '@/types';
 
@@ -9,9 +8,7 @@ export function NarrationEntry({ entry }: { entry: NEntry }) {
   const selectCreature = useStore(s => s.selectCreature);
   const setShareData = useStore(s => s.setShareData);
 
-  const html = (() => {
-    try { return marked.parse(entry.text) as string; } catch { return esc(entry.text); }
-  })();
+  const html = renderMarkdown(entry.text);
 
   const mentioned = entry.creatures_mentioned || [];
 
