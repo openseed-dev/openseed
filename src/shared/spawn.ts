@@ -93,6 +93,28 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
   // Everything after copyDir can fail — wrap so we clean up the partial directory
   try {
     const sourceMeta = readSourceMeta(tpl);
+
+    // Copy shared tools into creature, overwriting genome-local copies.
+    // Path: dist/shared/ → dist/ → project-root → packages/tools/src
+    const sharedToolsDir = path.resolve(import.meta.dirname, '..', '..', 'packages', 'tools', 'src');
+    const creatureToolsDir = path.join(dir, 'src', 'tools');
+    const sharedToolsExist = await fs.access(sharedToolsDir).then(() => true).catch(() => false);
+    if (sharedToolsExist) {
+      const creatureToolsExist = await fs.access(creatureToolsDir).then(() => true).catch(() => false);
+      if (creatureToolsExist) {
+        try {
+          const toolFiles = await fs.readdir(sharedToolsDir);
+          for (const file of toolFiles) {
+            if (file.endsWith('.ts')) {
+              await fs.copyFile(path.join(sharedToolsDir, file), path.join(creatureToolsDir, file));
+            }
+          }
+        } catch (toolErr) {
+          console.warn('[spawn] shared tools copy failed:', toolErr instanceof Error ? toolErr.message : toolErr);
+        }
+      }
+    }
+
     let genomeValidate: string | undefined;
     try {
       const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
