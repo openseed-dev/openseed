@@ -52,7 +52,7 @@ function LimitsSection() {
           <Input
             type="number" min={0} step={1} value={cap}
             className="w-[120px]"
-            onChange={(e) => setCap(parseFloat(e.target.value))}
+            onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) setCap(v); }}
             onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
           />
         </div>
@@ -72,7 +72,7 @@ function LimitsSection() {
         </div>
 
         <div className="flex items-center gap-3 mt-2">
-          <Button onClick={save} disabled={saving} size="sm">
+          <Button onClick={save} disabled={saving || isNaN(cap)} size="sm">
             {saving ? 'Saving...' : 'Save'}
           </Button>
           {saved && <span className="text-alive text-[12px]">Saved</span>}
@@ -357,13 +357,13 @@ function NarratorSection() {
           <Input
             type="number" min={1} step={1} value={interval}
             className="w-[120px]"
-            onChange={(e) => setInterval_(parseInt(e.target.value))}
+            onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setInterval_(v); }}
             onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
           />
         </div>
 
         <div className="flex items-center gap-3 mt-2">
-          <Button onClick={save} disabled={saving} size="sm">
+          <Button onClick={save} disabled={saving || isNaN(interval)} size="sm">
             {saving ? 'Saving...' : 'Save'}
           </Button>
           {saved && <span className="text-alive text-[12px]">Saved</span>}

@@ -50,6 +50,7 @@ export async function updateGlobalBudget(daily_usd: number, action: string): Pro
 
 export async function fetchNarratorConfig(): Promise<NarratorConfig> {
   const res = await fetch('/api/narrator/config');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
@@ -59,6 +60,7 @@ export async function updateNarratorConfig(config: Partial<NarratorConfig>): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
   });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
