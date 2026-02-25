@@ -10,7 +10,6 @@ import { promisify } from 'node:util';
 
 import { copyDir } from './fs.js';
 import {
-  BOARD_DIR,
   CREATURES_DIR,
   readSourceMeta,
   requireGenomeDir,
@@ -149,8 +148,6 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
       console.warn('[spawn] could not copy ENVIRONMENT.md template');
     }
 
-    // Ensure the shared board directory exists
-    await fs.mkdir(path.join(BOARD_DIR, 'posts'), { recursive: true });
 
     console.log(`installing dependencies for "${opts.name}"...`);
     await execAsync('pnpm install --silent', { cwd: dir });
