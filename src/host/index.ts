@@ -1,5 +1,6 @@
 import {
   exec,
+  execFile,
   execSync,
 } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -41,9 +42,15 @@ import {
 async function readBirthField(dir: string, field: string): Promise<string | undefined> {
   const hostCopy = path.join(dir, '.host-birth.json');
   const fallback = path.join(dir, 'BIRTH.json');
-  for (const f of [hostCopy, fallback]) {
+  try {
+    const birth = JSON.parse(await fs.readFile(hostCopy, 'utf-8'));
+    return birth[field];
+  } catch {
+    // .host-birth.json missing — creature was spawned before this change.
+    // Fall back to the mutable BIRTH.json (creature can tamper with this).
     try {
-      const birth = JSON.parse(await fs.readFile(f, 'utf-8'));
+      const birth = JSON.parse(await fs.readFile(fallback, 'utf-8'));
+      console.warn(`[readBirthField] .host-birth.json missing for ${path.basename(dir)}, falling back to mutable BIRTH.json`);
       return birth[field];
     } catch {}
   }
@@ -52,6 +59,7 @@ async function readBirthField(dir: string, field: string): Promise<string | unde
 
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const ARCHIVE_DIR = path.join(OPENSEED_HOME, 'archive');
 const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
@@ -411,8 +419,8 @@ export class Orchestrator {
         // Running on the host would allow container escape via BIRTH.json modification.
         // See: https://github.com/openseed-dev/openseed/issues/11
         const containerName = supervisor.getContainerName();
-        await execAsync(
-          `docker exec ${containerName} sh -c ${JSON.stringify(validate)}`,
+        await execFileAsync(
+          'docker', ['exec', containerName, 'sh', '-c', validate],
           { timeout: 30_000 },
         );
       }

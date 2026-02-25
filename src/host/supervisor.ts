@@ -228,6 +228,11 @@ export class CreatureSupervisor {
       '--cpus', '1.5',
       '-p', `${port}:7778`,
       '-v', `${hostDir}:/creature`,
+      // Mount host-side BIRTH.json read-only so creature cannot tamper with it.
+      // Missing for creatures spawned before this change — they fall back to mutable BIRTH.json.
+      ...(fsSync.existsSync(path.join(dir, '.host-birth.json'))
+        ? ['-v', `${hostDir}/.host-birth.json:/creature/.host-birth.json:ro`]
+        : []),
       '-v', `${cname}-node-modules:/creature/node_modules`,
       '-e', `ANTHROPIC_API_KEY=creature:${name}`,
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
