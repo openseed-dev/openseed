@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -87,7 +87,7 @@ export async function genomeExtract(opts: ExtractOptions): Promise<void> {
 
   const extractSha = (() => {
     try {
-      return execSync('git rev-parse HEAD', { cwd: srcDir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: srcDir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
     } catch { return null; }
   })();
 
@@ -106,7 +106,7 @@ export async function genomeExtract(opts: ExtractOptions): Promise<void> {
   // Init fresh git repo
   execSync('git init', { cwd: dest, stdio: 'ignore' });
   execSync('git add -A', { cwd: dest, stdio: 'ignore' });
-  execSync(`git commit -m "extracted from creature ${opts.creature}"`, { cwd: dest, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-m', `extracted from creature ${opts.creature}`], { cwd: dest, stdio: 'ignore' });
 
   // Show the diff between birth genome and extracted code
   const birthGenome = birth.genome || 'dreamer';
@@ -116,7 +116,7 @@ export async function genomeExtract(opts: ExtractOptions): Promise<void> {
     const { BUNDLED_GENOMES_DIR } = await import('../shared/paths.js');
     const originalDir = path.join(BUNDLED_GENOMES_DIR, birthGenome);
     if (fs.existsSync(originalDir)) {
-      diffOutput = execSync(`diff -rq "${originalDir}" "${dest}" --exclude=.git --exclude=node_modules --exclude=.source.json`, {
+      diffOutput = execFileSync('diff', ['-rq', originalDir, dest, '--exclude=.git', '--exclude=node_modules', '--exclude=.source.json'], {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'ignore'],
       });

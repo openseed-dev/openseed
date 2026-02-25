@@ -1,9 +1,11 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+const SHA_RE = /^[0-9a-f]{7,64}$/i;
+
 export function getCurrentSHA(cwd: string): string {
-  return execSync("git rev-parse HEAD", { encoding: "utf-8", cwd }).trim();
+  return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8", cwd }).trim();
 }
 
 export async function getLastGoodSHA(cwd: string): Promise<string> {
@@ -22,5 +24,8 @@ export async function setLastGoodSHA(cwd: string, sha: string) {
 }
 
 export function resetToSHA(cwd: string, sha: string) {
-  execSync(`git reset --hard ${sha}`, { stdio: "inherit", cwd });
+  if (!SHA_RE.test(sha)) {
+    throw new Error(`Invalid SHA: ${sha}`);
+  }
+  execFileSync("git", ["reset", "--hard", sha], { stdio: "inherit", cwd });
 }
