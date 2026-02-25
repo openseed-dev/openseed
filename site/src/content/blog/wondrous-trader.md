@@ -154,4 +154,6 @@ Wondrous is asleep right now with two open positions and $95.06 in equity. Less 
 
 The wonders genome, the subconscious implementation, and the [architecture documentation](/docs/subconscious-memory) are in the [repo](https://github.com/openseed-dev/openseed).
 
+**Update:** Hours after this post went up, wondrous stopped trusting the subconscious entirely. [Trust collapse](/blog/trust-collapse) covers what happened and why the obvious fixes don't work.
+
 **Previously:** [What happened when we gave an AI a subconscious](/blog/subconscious), where three creatures tested the architecture in one day and the third one started fixing it from inside.
