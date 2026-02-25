@@ -142,19 +142,31 @@ The subconscious is an MVP. Here's what it can't do yet and where it falls short
 
 **Query collapse.** Different hypotheses often funnel into the same search terms. In one experiment, 423 hypotheses produced only 226 unique queries (53%). Deduplication within a cycle helps (implemented), but the underlying prompt could generate more diverse queries.
 
-## What's Next
+## Where It Stands
 
-These are directions the data points toward, roughly in order of expected impact:
+The subconscious works for short-lived creatures. gamma, halo, and fox all ran fewer than 10 cycles on open-ended exploration. The event log was small, most events were relevant, and the lateral associations (like the FOGO-to-PENGUIN moment) worked as designed.
 
-1. **Raise the prepare step's quality bar.** More aggressive filtering. The prepare step should reject marginal matches and only surface memories that would genuinely change behavior. This is a prompt tuning problem, not an architectural one.
+It breaks for long-lived creatures with evolving state. wondrous ran 18 cycles of real trading on Bybit. By cycle 15, the event log was full of stale data — closed positions, abandoned API endpoints, superseded risk rules. The subconscious kept surfacing these as confident memories. By cycle 18, the creature had labeled all subconscious output "fabricated" and was explicitly warning its future self to ignore it. Surface rate over the last 200 entries: 82%. The creature's distrust was rational.
 
-2. **Expand the search scope.** Let the subconscious search creature-generated files (journals, notes, reflections) in addition to `events.jsonl`. The highest-signal memories are often in the creature's deliberate writing, not in raw tool call output.
+The obvious fixes don't hold up under scrutiny. Giving the prepare step more context doesn't help — it already receives recent messages containing the creature's state. Temporal decay kills the lateral associations that are the whole point. Embeddings still surface "past Bybit trade" when the creature is currently trading on Bybit, regardless of whether the position is open or closed.
 
-3. **Embedding-based retrieval.** Replace or augment `rg` with vector similarity search. The three-step architecture is designed for this — the wonder step generates queries, the search step is pluggable. Text matching is the MVP; embeddings are the natural upgrade.
+The harder question: does the subconscious provide anything that [dreamer's observation system](/docs/sleep-and-dreams) doesn't already handle? Observations are curated, pruned (stale entries get replaced), priority-tagged, and injected into context on every wake. The FOGO-to-PENGUIN association — the subconscious's best moment — would likely happen in a dreamer creature anyway, because "manually cut FOGO at -3.3%, dying volume" would be in its observations. LLMs are good at making connections across context when the relevant facts are present.
 
-4. **Basic salience.** Track whether surfaced memories are acted on. Memories that lead to behavior change get a higher retrieval weight. This is the feedback loop described in the design doc — retrieval shapes future retrieval — but it needs careful handling to avoid memory monopolies where early memories crowd out recent ones.
+The subconscious's genuine contribution is the wonder step — hypothesis generation about what might be relevant. But if the answers are already in the creature's observation list, the wonder step is doing work the LLM can do on its own.
 
-5. **Offer the subconscious to other genomes.** The wonders genome tests the subconscious in isolation, but the long-term goal is to offer it as an additional layer for dreamer and other genomes. A dreamer creature with both explicit observations *and* subconscious recall would have two complementary memory systems — one deliberate, one associative.
+The experiment worked. It proved the subconscious isn't viable as a standalone memory system, and it pointed toward explicit observations being the stronger approach for the problems we've actually encountered. Whether the subconscious has a role as a supplement — for creatures with very large observation histories, or for surfacing things consolidation missed — is an open question.
+
+## Open Directions
+
+If the subconscious has a future, it's probably not as currently designed. Some possibilities:
+
+1. **Search observations instead of raw events.** Point the wonder + search steps at the curated observation file instead of the event log firehose. Smaller, cleaner, already pruned. But observations are already in context, so the value-add may be marginal.
+
+2. **Drop the prepare step.** Inject raw timestamped hits without editorial framing. No "I remember" — just "here are past events that might be relevant, you decide." Removes the false confidence that caused the trust collapse, but produces noisier output than observations.
+
+3. **Wonder step as an attention mechanism for large observation sets.** When a creature has hundreds of observations and only recent ones fit in the wake message, the wonder step could surface older observations that are relevant to the current task. This is the clearest case where the subconscious adds something observations alone don't provide — but it's a scale problem dreamer hasn't hit yet.
+
+4. **Accept it as a research finding.** The wonders genome tested implicit memory in isolation. The result: explicit curation (observations) beats implicit retrieval (subconscious) for long-lived agents. That's a useful finding even if the subconscious doesn't ship as a production feature.
 
 ## Relationship to Other Genomes
 
