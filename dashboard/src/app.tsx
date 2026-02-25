@@ -3,7 +3,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { Overview } from '@/components/Overview';
 import { CreatureDetail } from '@/components/CreatureDetail';
 import { ShareModal } from '@/components/ShareModal';
-import { SettingsModal } from '@/components/SettingsModal';
+import { SettingsPage } from '@/components/SettingsPage';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useStore } from '@/state';
 
@@ -31,9 +31,10 @@ export function App() {
   const tab = useStore(s => s.selectedTab);
   const evLen = useStore(s => s.creatureEvents.length);
   const degraded = useStore(s => s.health.status !== 'healthy');
-  const { refresh, loadNarration, loadRecentEvents, loadGenomes, loadGlobalBudget, loadHealth, handleSSEEvent } = useStore();
+  const settingsOpen = useStore(s => s.settingsOpen);
+  const { refresh, loadNarration, loadRecentEvents, loadGenomes, loadGlobalBudget, loadHealth, loadNarratorConfig, handleSSEEvent } = useStore();
 
-  const showSidebar = sel !== null || sbOpen;
+  const showSidebar = (sel !== null || sbOpen) && !settingsOpen;
 
   useEffect(() => {
     refresh()
@@ -42,6 +43,7 @@ export function App() {
     loadGenomes();
     loadGlobalBudget();
     loadHealth();
+    loadNarratorConfig();
     const interval = setInterval(refresh, 30000);
 
     const sse = new EventSource('/api/events');
@@ -59,7 +61,6 @@ export function App() {
         const now = Date.now();
         if (now - lastRefresh > 5000) {
           lastRefresh = now;
-          // EventSource auto-reconnects; refresh state to avoid stale dashboard
           refresh();
           loadHealth();
           loadRecentEvents();
@@ -80,6 +81,18 @@ export function App() {
     }
   }, [evLen]);
 
+  // Full-page settings view
+  if (settingsOpen) {
+    return (
+      <TooltipProvider>
+        <HealthBanner />
+        <div className={`flex min-h-screen bg-bg text-text-primary text-[13px] font-sans ${degraded ? 'pt-10' : ''}`}>
+          <SettingsPage />
+        </div>
+      </TooltipProvider>
+    );
+  }
+
   return (
     <TooltipProvider>
       <HealthBanner />
@@ -89,7 +102,6 @@ export function App() {
           {sel === null ? <Overview /> : <CreatureDetail />}
         </div>
         <ShareModal />
-        <SettingsModal />
       </div>
     </TooltipProvider>
   );
