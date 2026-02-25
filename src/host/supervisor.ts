@@ -190,6 +190,11 @@ export class CreatureSupervisor {
     if (this.rollbackTimeout) { clearTimeout(this.rollbackTimeout); this.rollbackTimeout = null; }
   }
 
+  /** Public accessor for container name (used by orchestrator for docker exec). */
+  public getContainerName(): string {
+    return this.containerName();
+  }
+
   private containerName(): string {
     return `creature-${this.name}`;
   }

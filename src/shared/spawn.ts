@@ -112,6 +112,11 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
     };
     await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
 
+    // Write a host-side copy that the creature cannot modify.
+    // The orchestrator reads this copy for model/validate fields.
+    const hostMeta = path.join(dir, '.host-birth.json');
+    await fs.writeFile(hostMeta, JSON.stringify(birth, null, 2) + '\n');
+
     if (opts.purpose) {
       await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
     }

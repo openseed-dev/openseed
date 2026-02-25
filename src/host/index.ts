@@ -37,6 +37,20 @@ import {
   SupervisorConfig,
 } from './supervisor.js';
 
+/** Read a field from the host-side BIRTH.json copy (immune to creature modification). */
+async function readBirthField(dir: string, field: string): Promise<string | undefined> {
+  const hostCopy = path.join(dir, '.host-birth.json');
+  const fallback = path.join(dir, 'BIRTH.json');
+  for (const f of [hostCopy, fallback]) {
+    try {
+      const birth = JSON.parse(await fs.readFile(f, 'utf-8'));
+      return birth[field];
+    } catch {}
+  }
+  return undefined;
+}
+
+
 const execAsync = promisify(exec);
 
 const ARCHIVE_DIR = path.join(OPENSEED_HOME, 'archive');
@@ -268,12 +282,8 @@ export class Orchestrator {
     await store.init();
     this.stores.set(name, store);
 
-    // Read model from BIRTH.json if present
-    let model: string | undefined;
-    try {
-      const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
-      model = birth.model;
-    } catch {}
+    // Read model from host-side BIRTH.json (immune to creature modification)
+    const model = await readBirthField(dir, 'model');
 
     const config: SupervisorConfig = {
       name, dir, port,
@@ -395,13 +405,16 @@ export class Orchestrator {
 
   private async validateAndRestart(name: string, dir: string, supervisor: CreatureSupervisor, reason: string) {
     try {
-      let validate: string | undefined;
-      try {
-        const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
-        validate = birth.validate;
-      } catch {}
+      const validate = await readBirthField(dir, 'validate');
       if (validate) {
-        await execAsync(validate, { cwd: dir, timeout: 30_000 });
+        // SECURITY: Run validation INSIDE the creature's container, not on host.
+        // Running on the host would allow container escape via BIRTH.json modification.
+        // See: https://github.com/openseed-dev/openseed/issues/11
+        const containerName = supervisor.getContainerName();
+        await execAsync(
+          `docker exec ${containerName} sh -c ${JSON.stringify(validate)}`,
+          { timeout: 30_000 },
+        );
       }
       await execAsync(`git add -A && git commit -m "creature: ${reason}" --allow-empty`, { cwd: dir });
       await supervisor.restart();
@@ -459,11 +472,7 @@ export class Orchestrator {
         const info = sup.getInfo();
         return { name, status: info.status, sha: info.sha, port: info.port, sleepReason: info.sleepReason, model: info.model };
       }
-      let model: string | null = null;
-      try {
-        const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
-        model = birth.model || null;
-      } catch {}
+      const model = (await readBirthField(dir, 'model')) || null;
       const status = this.pendingOps.has(name) ? 'spawning' : 'stopped';
       return { name, status, sha: null, port: null, sleepReason: null, model };
     }));
