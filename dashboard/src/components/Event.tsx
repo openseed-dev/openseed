@@ -29,6 +29,7 @@ export function Event({ ev, showCreature }: { ev: CreatureEvent; showCreature?: 
     'creature.wake': 'border-l-[#0284c7]',
     'creature.message': 'border-l-accent-blue',
     'creature.dream': ev.deep ? 'border-l-dream-deep' : 'border-l-dream',
+    'creature.subconscious': 'border-l-[#7c3aed]',
     'creature.progress_check': 'border-l-warn',
     'creature.error': 'border-l-error',
     'creator.evaluation': 'border-l-alive',
@@ -45,6 +46,7 @@ export function Event({ ev, showCreature }: { ev: CreatureEvent; showCreature?: 
     'creature.wake': 'bg-[#f5fbff]',
     'creature.message': 'bg-[#eff6ff]',
     'creature.dream': ev.deep ? 'bg-[#f5f3ff]' : 'bg-[#faf5ff]',
+    'creature.subconscious': 'bg-[#f5f3ff]',
     'creature.progress_check': 'bg-[#fffbf5]',
     'creature.error': 'bg-red-50',
     'creator.evaluation': 'bg-[#f0fdf4]',
@@ -117,6 +119,17 @@ export function Event({ ev, showCreature }: { ev: CreatureEvent; showCreature?: 
           <strong>Priority:</strong> {ev.priority || ''}{'\n\n'}
           <strong>Reflection:</strong>{'\n'}{ev.reflection || ''}
         </Expandable>
+      </>
+    );
+  } else if (t === 'creature.subconscious') {
+    const surfaced = ev.surfaced !== false && ev.memory && ev.memory !== 'NOTHING';
+    body = (
+      <>
+        {cl}
+        <span className="font-bold ml-2 text-[#7c3aed] italic">subconscious</span>
+        {surfaced
+          ? <Expandable summary={<span className="text-text-primary ml-1"> - {summarize(ev.memory || '', 120)}</span>}>{ev.memory || ''}</Expandable>
+          : <span className="text-text-muted ml-1 text-[11px]">NOTHING</span>}
       </>
     );
   } else if (t === 'creature.progress_check') {

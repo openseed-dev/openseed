@@ -146,6 +146,7 @@ You can install more; they persist across restarts.`;
     _onSpecialTool?: any,
     onWake?: WakeCallback,
     onError?: (error: string, retryIn?: number, retries?: number, fatal?: boolean) => Promise<void>,
+    onSubconscious?: (memory: string | null, candidateCount: number) => Promise<void>,
   ) {
     const purpose = await this.loadPurpose();
     const systemPrompt = this.buildSystemPrompt(purpose);
@@ -316,6 +317,7 @@ You can install more; they persist across restarts.`;
                 this.surfacedMemories.add(fingerprint);
                 this.pendingInjections.push(`[No action required, but a memory you might find useful: ${memory}]`);
                 console.log(`[subconscious] surfaced memory (${this.surfacedMemories.size} unique this cycle)`);
+                if (onSubconscious) await onSubconscious(memory, this.surfacedMemories.size);
               } else {
                 console.log(`[subconscious] suppressed duplicate memory`);
               }

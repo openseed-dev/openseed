@@ -139,6 +139,9 @@ class Creature {
         async (error, retryIn, retries) => {
           await this.emit({ type: "creature.error", error, retryIn, retries } as any);
         },
+        async (memory, candidateCount) => {
+          await this.emit({ type: "creature.subconscious", memory: memory || "NOTHING", surfaced: memory !== null, candidateCount } as any);
+        },
       );
     } catch (err) {
       console.error("[creature] cognition crashed:", err);

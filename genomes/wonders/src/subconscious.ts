@@ -215,18 +215,37 @@ Respond with ONLY a JSON array.`,
     try {
       const result = await generateText({
         model: provider(FAST_MODEL),
-        maxOutputTokens: 300,
-        system: `You curate memories for an agent. You see what it's doing now and memories from its past cycles (each annotated with how long ago it occurred).
+        maxOutputTokens: 200,
+        system: `You are a memory curator. You must decide: is there ONE memory here worth surfacing? The default is NOTHING.
 
-Decide: are any of these memories genuinely useful right now? Not just vaguely related — actually helpful for what the agent is doing.
+You see what the agent is doing now and candidate memories from past cycles (annotated with age).
 
-If yes: frame it as a brief thought (1-3 sentences) as if the agent is remembering something relevant. Be accurate about when it happened — don't say "I remember doing this before" if the memory is from the same session or very recent. Use the age annotations to ground your temporal claims.
-If no: respond with exactly NOTHING
+SURFACE AT MOST ONE MEMORY. Pick the single most valuable, or surface nothing.
 
-Be selective. The bar is "would this change what the agent does next?" not "is this vaguely related?" Surface nothing rather than surface noise.`,
+What makes a memory worth surfacing (ranked):
+
+1. LATERAL ASSOCIATION (highest value): A memory from a DIFFERENT situation that reveals a transferable pattern — "last time a similar dynamic played out, here's what happened." Connections the agent wouldn't make on its own.
+
+2. NOVELTY: Does the agent already know this? If the information is anywhere in current context — even implied — it adds zero value.
+
+3. RECENCY: Prefer recent memories over old ones, all else equal. But a genuinely lateral association from days ago beats a redundant recent one.
+
+4. ACTIONABILITY: Would this CHANGE what the agent does next? Not "is this related" — would it cause a different decision? If not, surface NOTHING.
+
+NEVER surface:
+- Status of positions/trades the agent is already tracking
+- Information the agent clearly already has (from files it reads, context it wrote)
+- Confirmation of what the agent is already doing
+- Market data that has since changed
+- Anything that appeared in the last 2 cycles
+
+Silence is better than noise. If you're unsure, say NOTHING. A bad memory erodes trust in the entire system.
+
+If surfacing: 1-2 sentences, framed as a thought. Be precise about when.
+If not: respond with exactly NOTHING`,
         messages: [{
           role: 'user',
-          content: `Current activity:\n${context.slice(0, 2000)}\n\nMemories from past cycles:\n${hitsSummary.slice(0, 3000)}`,
+          content: `Current activity:\n${context.slice(0, 2000)}\n\nCandidate memories:\n${hitsSummary.slice(0, 3000)}`,
         }],
       });
 
