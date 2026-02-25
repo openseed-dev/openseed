@@ -126,3 +126,5 @@ export function requireGenomeDir(genome = "dreamer"): string | null {
   if (dir) return dir;
   return autoInstallGenome(genome);
 }
+
+export const BOARD_DIR = path.join(OPENSEED_HOME, "board");

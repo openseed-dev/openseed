@@ -10,12 +10,15 @@ import { promisify } from 'node:util';
 
 import { copyDir } from './fs.js';
 import {
+  BOARD_DIR,
   CREATURES_DIR,
   readSourceMeta,
   requireGenomeDir,
 } from './paths.js';
 
 const execAsync = promisify(exec);
+
+const ENVIRONMENT_TEMPLATE = path.resolve(import.meta.dirname, 'environment-template.md');
 
 export interface SpawnOptions {
   name: string;
@@ -137,6 +140,17 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
     if (opts.purpose) {
       await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
     }
+
+    // Copy ENVIRONMENT.md into creature directory so it can discover its world
+    try {
+      const envTemplate = await fs.readFile(ENVIRONMENT_TEMPLATE, 'utf-8');
+      await fs.writeFile(path.join(dir, 'ENVIRONMENT.md'), envTemplate);
+    } catch {
+      console.warn('[spawn] could not copy ENVIRONMENT.md template');
+    }
+
+    // Ensure the shared board directory exists
+    await fs.mkdir(BOARD_DIR, { recursive: true });
 
     console.log(`installing dependencies for "${opts.name}"...`);
     await execAsync('pnpm install --silent', { cwd: dir });

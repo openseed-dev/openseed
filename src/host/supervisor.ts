@@ -19,6 +19,7 @@ const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 60_000;
 const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(process.env.HOME || '/tmp', '.openseed');
 const ROLLBACK_DIR = path.join(OPENSEED_HOME, 'rollbacks');
+const BOARD_DIR = path.join(OPENSEED_HOME, 'board');
 const MAX_LOG_LINES = 50;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const MAX_FAILURE_BACKOFF_MS = 30_000;
@@ -224,6 +225,7 @@ export class CreatureSupervisor {
       '-p', `${port}:7778`,
       '-v', `${hostDir}:/creature`,
       '-v', `${cname}-node-modules:/creature/node_modules`,
+      '-v', `${IS_DOCKER ? BOARD_DIR.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH) : BOARD_DIR}:/board`,
       '-e', `ANTHROPIC_API_KEY=creature:${name}`,
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
       '-e', `HOST_URL=${orchestratorUrl}`,
