@@ -20,6 +20,7 @@ function LimitsSection() {
   const [action, setAction] = useState('sleep');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (budget) {
@@ -31,11 +32,14 @@ function LimitsSection() {
   const save = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       await api.updateGlobalBudget(cap, action);
       await loadGlobalBudget();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
@@ -76,6 +80,7 @@ function LimitsSection() {
             {saving ? 'Saving...' : 'Save'}
           </Button>
           {saved && <span className="text-alive text-[12px]">Saved</span>}
+          {saveError && <span className="text-red-400 text-[12px]">{saveError}</span>}
         </div>
       </div>
     </div>
@@ -308,6 +313,7 @@ function NarratorSection() {
   const [interval, setInterval_] = useState(5);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (config) {
@@ -320,11 +326,14 @@ function NarratorSection() {
   const save = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       await api.updateNarratorConfig({ enabled, model, interval_minutes: interval });
       await loadNarratorConfig();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
@@ -367,6 +376,7 @@ function NarratorSection() {
             {saving ? 'Saving...' : 'Save'}
           </Button>
           {saved && <span className="text-alive text-[12px]">Saved</span>}
+          {saveError && <span className="text-red-400 text-[12px]">{saveError}</span>}
         </div>
       </div>
     </div>

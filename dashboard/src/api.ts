@@ -21,6 +21,7 @@ export async function updateCreatureBudget(name: string, daily_usd: number, acti
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ daily_usd, action }),
   });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
@@ -45,6 +46,7 @@ export async function updateGlobalBudget(daily_usd: number, action: string): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ daily_usd, action }),
   });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
