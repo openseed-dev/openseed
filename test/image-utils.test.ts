@@ -35,6 +35,14 @@ function fakeBase64(len: number): string {
   console.log('✓ strips AI SDK image-data parts');
 }
 
+// Test: stripImageData strips AI SDK image-url parts
+{
+  const input = { type: 'image-url', url: 'https://example.com/signed-image?token=secret123' };
+  const result = stripImageData(input);
+  assert.strictEqual(result.url, IMAGE_PLACEHOLDER);
+  console.log('✓ strips AI SDK image-url parts');
+}
+
 // Test: stripImageData strips data URIs in strings
 {
   const input = { url: 'data:image/png;base64,iVBORw0KGgo...' };
@@ -80,6 +88,33 @@ function fakeBase64(len: number): string {
   console.log('✓ handles null/undefined');
 }
 
+// Test: broad heuristic catches unknown image types
+{
+  // Future provider format: type contains 'image', data is long
+  const input = { type: 'custom-image-block', data: fakeBase64(5000), format: 'webp' };
+  const result = stripImageData(input);
+  assert.strictEqual(result.data, IMAGE_PLACEHOLDER);
+  assert.strictEqual(result.format, 'webp');
+  console.log('✓ broad heuristic catches unknown image types with long data');
+}
+
+// Test: broad heuristic catches image types with long source strings
+{
+  const input = { type: 'inline-image', source: fakeBase64(3000), alt: 'screenshot' };
+  const result = stripImageData(input);
+  assert.strictEqual(result.source, IMAGE_PLACEHOLDER);
+  assert.strictEqual(result.alt, 'screenshot');
+  console.log('✓ broad heuristic strips long source fields on image types');
+}
+
+// Test: broad heuristic ignores image types with short data (not actual image data)
+{
+  const input = { type: 'image-reference', data: 'img_abc123', id: '42' };
+  const result = stripImageData(input);
+  assert.strictEqual(result.data, 'img_abc123'); // short — kept
+  console.log('✓ broad heuristic preserves short data on image types');
+}
+
 // Test: containsImageData detects images
 {
   assert.strictEqual(containsImageData({ type: 'image', source: {} }), true);
@@ -89,6 +124,18 @@ function fakeBase64(len: number): string {
   assert.strictEqual(containsImageData('just a normal string'), false);
   assert.strictEqual(containsImageData(fakeBase64(2000)), true);
   console.log('✓ containsImageData works');
+}
+
+// Test: containsImageData detects image-url
+{
+  assert.strictEqual(containsImageData({ type: 'image-url', url: 'https://example.com/img.png' }), true);
+  console.log('✓ containsImageData detects image-url');
+}
+
+// Test: containsImageData catches broad heuristic types
+{
+  assert.strictEqual(containsImageData({ type: 'custom-image-v2', data: 'abc' }), true);
+  console.log('✓ containsImageData catches types containing "image"');
 }
 
 // Test: estimateBase64Bytes
@@ -112,17 +159,38 @@ function fakeBase64(len: number): string {
       type: 'content',
       value: [
         { type: 'text', text: 'Screenshot of example.com (1024x768, 45KB)' },
-        { type: 'image-data', data: fakeBase64(60000), mediaType: 'image/jpeg' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: fakeBase64(60000) } },
       ],
     }),
-    ms: 3200,
   };
   const result = stripImageData(event);
-  // The output is a string, so the base64 inside the JSON string won't be detected
-  // by the object-level detection. This is expected — the output is already stringified.
-  // The real fix is to strip BEFORE stringifying in the event emitter.
+  // The output is a JSON string — stripImageData doesn't parse JSON strings,
+  // so the stripping happens when the parsed content goes through separately
+  assert.strictEqual(result.t, event.t);
   assert.strictEqual(result.tool, 'see');
-  console.log('✓ realistic event test passed');
+  console.log('✓ realistic creature event preserved (JSON strings are opaque)');
 }
 
-console.log('\nAll tests passed! ✅');
+// Test: stripImageData handles deeply nested image in message array
+{
+  const messages = [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What do you see?' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: fakeBase64(80000) } },
+      ],
+    },
+    {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'I see a cat.' }],
+    },
+  ];
+  const result = stripImageData(messages);
+  assert.strictEqual((result[0].content[1] as any).source.data, IMAGE_PLACEHOLDER);
+  assert.strictEqual((result[0].content[0] as any).text, 'What do you see?');
+  assert.strictEqual((result[1].content[0] as any).text, 'I see a cat.');
+  console.log('✓ strips images in deeply nested message arrays');
+}
+
+console.log('\n✅ All image-utils tests passed');
