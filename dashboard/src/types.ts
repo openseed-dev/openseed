@@ -116,7 +116,6 @@ export interface MaskedCapability {
   service: string;
   mode: string;
   ttl: string;
-  autoApprove: boolean;
   requiresReason: boolean;
   rules?: { allow?: string[]; deny?: string[] };
   allowedAgents?: string[];

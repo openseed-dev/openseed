@@ -20,7 +20,6 @@ interface MaskedCapability {
   service: string;
   mode: string;
   ttl: string;
-  autoApprove: boolean;
   requiresReason: boolean;
   rules?: { allow?: string[]; deny?: string[] };
   allowedAgents?: string[];
@@ -82,7 +81,6 @@ function parseConfig(config: any): JaneeConfigView {
         service: cap.service || '',
         mode: cap.mode || 'proxy',
         ttl: cap.ttl || '',
-        autoApprove: !!cap.autoApprove,
         requiresReason: !!cap.requiresReason,
         rules: cap.rules ? {
           allow: cap.rules.allow || [],
