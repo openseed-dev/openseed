@@ -54,6 +54,7 @@ export class CreatureSupervisor {
   private healthyAt: number | null = null;
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private rollbackTimeout: NodeJS.Timeout | null = null;
+  private lastOutputAt: number = 0;
   private expectingExit = false;
   private consecutiveFailures = 0;
   private config: SupervisorConfig;
@@ -329,6 +330,7 @@ export class CreatureSupervisor {
     this.creature.stdout?.on('data', (data: Buffer) => {
       for (const line of data.toString().split('\n').filter(Boolean)) {
         console.log(`[${name}] ${line}`);
+        this.lastOutputAt = Date.now();
         this.recentOutput.push(line);
         if (this.recentOutput.length > MAX_LOG_LINES) this.recentOutput.shift();
       }
@@ -336,6 +338,7 @@ export class CreatureSupervisor {
     this.creature.stderr?.on('data', (data: Buffer) => {
       for (const line of data.toString().split('\n').filter(Boolean)) {
         console.error(`[${name}] ${line}`);
+        this.lastOutputAt = Date.now();
         this.recentOutput.push(`STDERR: ${line}`);
         if (this.recentOutput.length > MAX_LOG_LINES) this.recentOutput.shift();
       }
@@ -381,12 +384,26 @@ export class CreatureSupervisor {
   }
 
   private startRollbackTimer() {
-    if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
-    this.rollbackTimeout = setTimeout(() => {
-      if (!this.healthyAt) {
-        this.handleCreatureFailure('health timeout');
+    const hardDeadline = Date.now() + 5 * 60_000;
+    this.lastOutputAt = Date.now();
+
+    const check = () => {
+      if (this.healthyAt) return;
+
+      const now = Date.now();
+      const idleMs = now - this.lastOutputAt;
+
+      if (now >= hardDeadline) {
+        this.handleCreatureFailure('health timeout (hard deadline)');
+      } else if (idleMs >= ROLLBACK_TIMEOUT_MS) {
+        this.handleCreatureFailure('health timeout (idle)');
+      } else {
+        this.rollbackTimeout = setTimeout(check, Math.min(ROLLBACK_TIMEOUT_MS - idleMs + 1000, hardDeadline - now));
       }
-    }, ROLLBACK_TIMEOUT_MS);
+    };
+
+    if (this.rollbackTimeout) clearTimeout(this.rollbackTimeout);
+    this.rollbackTimeout = setTimeout(check, ROLLBACK_TIMEOUT_MS);
   }
 
   private async checkHealth(): Promise<boolean> {
