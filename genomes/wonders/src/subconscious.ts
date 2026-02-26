@@ -27,12 +27,12 @@ interface AnnotatedMatch {
 
 function formatAge(ms: number): string {
   const sec = Math.round(ms / 1000);
-  if (sec < 60) return `${sec}s ago`;
+  if (sec < 60) return `${sec} seconds ago`;
   const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return `${min} minutes ago`;
   const hrs = Math.round(min / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.round(hrs / 24)}d ago`;
+  if (hrs < 24) return `${hrs} hours ago`;
+  return `${Math.round(hrs / 24)} days ago`;
 }
 
 function extractTimestamp(line: string): Date | null {
@@ -172,31 +172,42 @@ Respond with ONLY a JSON array.`,
       const qKey = w.query.toLowerCase();
       if (this.usedQueries.has(qKey)) continue;
       this.usedQueries.add(qKey);
+
+      const matches: AnnotatedMatch[] = [];
+
       try {
         const output = execFileSync('rg', [
-          '-i', '-C', '1', '-m', '20', '--', w.query, EVENTS_FILE,
+          '-i', '-m', '30', '--', w.query, EVENTS_FILE,
         ], { encoding: 'utf-8', timeout: 5000 });
 
-        const rawBlocks = output.trim().split('\n--\n').filter(Boolean);
-
-        const matches: AnnotatedMatch[] = [];
-        for (const block of rawBlocks) {
-          const ts = extractTimestamp(block);
+        for (const line of output.trim().split('\n').filter(Boolean)) {
+          if (!line.includes('"creature.thought"')) continue;
+          const ts = extractTimestamp(line);
           if (ts && ts.getTime() >= cutoff) continue;
           const age = ts ? now - ts.getTime() : null;
-          matches.push({ text: block, age, ageLabel: age !== null ? formatAge(age) : 'unknown time ago' });
+          const thought = this.extractThoughtText(line);
+          if (!thought) continue;
+          matches.push({ text: thought, age, ageLabel: age !== null ? formatAge(age) : 'unknown time ago' });
           if (matches.length >= 5) break;
         }
+      } catch {}
 
-        if (matches.length > 0) {
-          results.push({ wonder: w, matches });
-        }
-      } catch {
-        // rg exits 1 for no matches
+      if (matches.length > 0) {
+        results.push({ wonder: w, matches });
       }
     }
 
     return results;
+  }
+
+  private extractThoughtText(line: string): string | null {
+    try {
+      const obj = JSON.parse(line);
+      return obj.text || null;
+    } catch {
+      const m = line.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      return m ? m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : null;
+    }
   }
 
   private async prepare(
@@ -215,7 +226,7 @@ Respond with ONLY a JSON array.`,
     try {
       const result = await generateText({
         model: provider(FAST_MODEL),
-        maxOutputTokens: 200,
+        maxOutputTokens: 400,
         system: `You are a memory curator. You must decide: is there ONE memory here worth surfacing? The default is NOTHING.
 
 You see what the agent is doing now and candidate memories from past cycles (annotated with age).
@@ -250,7 +261,7 @@ If not: respond with exactly NOTHING`,
       });
 
       const text = result.text.trim();
-      if (text === 'NOTHING' || text.length < 10) return null;
+      if (text.includes('NOTHING') || text.length < 10) return null;
       return text;
     } catch {
       return null;
