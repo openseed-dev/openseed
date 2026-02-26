@@ -17,6 +17,8 @@ import {
 
 const execAsync = promisify(exec);
 
+const ENVIRONMENT_TEMPLATE = path.resolve(import.meta.dirname, 'environment-template.md');
+
 export interface SpawnOptions {
   name: string;
   purpose?: string;
@@ -137,6 +139,15 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
     if (opts.purpose) {
       await fs.writeFile(path.join(dir, 'PURPOSE.md'), `# Purpose\n\n${opts.purpose}\n`);
     }
+
+    // Copy ENVIRONMENT.md into creature directory so it can discover its world
+    try {
+      const envTemplate = await fs.readFile(ENVIRONMENT_TEMPLATE, 'utf-8');
+      await fs.writeFile(path.join(dir, 'ENVIRONMENT.md'), envTemplate);
+    } catch {
+      console.warn('[spawn] could not copy ENVIRONMENT.md template');
+    }
+
 
     console.log(`installing dependencies for "${opts.name}"...`);
     await execAsync('pnpm install --silent', { cwd: dir });

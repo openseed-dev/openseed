@@ -14,6 +14,7 @@ import {
   resetToSHA,
   setLastGoodSHA,
 } from './git.js';
+import { BOARD_DIR } from '../shared/paths.js';
 
 const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 60_000;
@@ -212,6 +213,13 @@ export class CreatureSupervisor {
       ? dir.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
       : dir;
 
+    const hostBoardDir = IS_DOCKER
+      ? BOARD_DIR.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
+      : BOARD_DIR;
+    if (IS_DOCKER && hostBoardDir === BOARD_DIR) {
+      console.warn(`[${name}] WARNING: board dir path substitution did not change the path — bind mount may fail`);
+    }
+
     const orchestratorUrl = IS_DOCKER
       ? `http://openseed:${orchestratorPort}`
       : `http://host.docker.internal:${orchestratorPort}`;
@@ -224,6 +232,7 @@ export class CreatureSupervisor {
       '-p', `${port}:7778`,
       '-v', `${hostDir}:/creature`,
       '-v', `${cname}-node-modules:/creature/node_modules`,
+      '-v', `${hostBoardDir}:/board`,
       '-e', `ANTHROPIC_API_KEY=creature:${name}`,
       '-e', `ANTHROPIC_BASE_URL=${orchestratorUrl}`,
       '-e', `HOST_URL=${orchestratorUrl}`,
@@ -251,6 +260,9 @@ export class CreatureSupervisor {
 
     let reconnected = false;
     const cname = this.containerName();
+
+    // Ensure board directory exists before bind-mounting into container
+    fsSync.mkdirSync(path.join(BOARD_DIR, "posts"), { recursive: true });
 
     if (this.isContainerRunning()) {
       console.log(`[${name}] reconnecting to running container`);
