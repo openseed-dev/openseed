@@ -29,6 +29,7 @@ import { CostTracker, initPricing } from './costs.js';
 import { EventStore } from './events.js';
 import { getStatus, onStatusChange, startHealthLoop, stopHealthLoop } from './health.js';
 import { startJanee, stopJanee } from './janee.js';
+import { readJaneeConfig } from "./janee-config.js";
 import { Narrator } from './narrator.js';
 import type { BudgetCheckResult } from './proxy.js';
 import { handleLLMProxy } from './proxy.js';
@@ -647,6 +648,13 @@ export class Orchestrator {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: err.message }));
         }
+        return;
+      }
+
+      if (p === "/api/janee/config" && req.method === "GET") {
+        const config = readJaneeConfig();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(config));
         return;
       }
 

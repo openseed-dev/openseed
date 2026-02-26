@@ -103,3 +103,37 @@ export interface UsageData {
   usage: Record<string, { cost_usd?: number; daily_date?: string; daily_cost_usd?: number }>;
   total: number;
 }
+
+export interface MaskedService {
+  name: string;
+  baseUrl: string;
+  authType: string;
+  ownership?: { type: string; agentId?: string; accessPolicy?: string };
+}
+
+export interface MaskedCapability {
+  name: string;
+  service: string;
+  mode: string;
+  ttl: string;
+  autoApprove: boolean;
+  requiresReason: boolean;
+  rules?: { allow?: string[]; deny?: string[] };
+  allowedAgents?: string[];
+  allowCommands?: string[];
+  workDir?: string;
+  timeout?: number;
+}
+
+export interface AgentAccess {
+  agentId: string;
+  capabilities: string[];
+}
+
+export interface JaneeConfigView {
+  available: boolean;
+  server?: { port: number; host: string; defaultAccess?: string };
+  services: MaskedService[];
+  capabilities: MaskedCapability[];
+  agents: AgentAccess[];
+}

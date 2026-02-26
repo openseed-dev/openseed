@@ -99,3 +99,9 @@ export async function spawnCreature(name: string, genome: string, purpose?: stri
     body: JSON.stringify(body),
   });
 }
+
+export async function fetchJaneeConfig(): Promise<import('./types').JaneeConfigView> {
+  const res = await fetch('/api/janee/config');
+  if (!res.ok) return { available: false, services: [], capabilities: [], agents: [] };
+  return res.json();
+}
