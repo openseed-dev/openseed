@@ -370,7 +370,7 @@ export class Orchestrator {
 
     // Handle creature autonomy: request_restart
     if (event.type === 'creature.request_restart') {
-      const reason = (event as any).reason || 'creature requested restart';
+      const reason = event.reason || 'creature requested restart';
       console.log(`[${name}] creature requested restart: ${reason}`);
       const supervisor = this.supervisors.get(name);
       const dir = path.join(CREATURES_DIR, name);
@@ -434,7 +434,7 @@ export class Orchestrator {
     }
 
     if (event.type === 'creature.boot') {
-      const jv = (event as any).janeeVersion;
+      const jv = event.janeeVersion;
       const sup = this.supervisors.get(name);
       if (sup && typeof jv === 'string') sup.janeeVersion = jv;
     }
@@ -494,7 +494,7 @@ export class Orchestrator {
       type: 'budget.exceeded',
       daily_spent: this.costs.getCreatureDailyCost(name),
       daily_cap: getSpendingCap(name).daily_usd,
-    } as any);
+    });
   }
 
   private async checkBudgetResets() {
@@ -505,7 +505,7 @@ export class Orchestrator {
         console.log(`[${name}] daily budget reset, waking creature`);
         try {
           await supervisor.start();
-          await this.emitEvent(name, { t: new Date().toISOString(), type: 'budget.reset' } as any);
+          await this.emitEvent(name, { t: new Date().toISOString(), type: 'budget.reset' });
         } catch (err: any) {
           console.error(`[${name}] failed to wake after budget reset:`, err.message);
         }
@@ -685,13 +685,13 @@ export class Orchestrator {
           res.end(JSON.stringify({ ok: true, name, status: 'spawning' }));
 
           this.pendingOps.add(name);
-          await this.emitEvent(name, { type: 'creature.spawning', t: new Date().toISOString() } as any);
+          await this.emitEvent(name, { type: 'creature.spawning', t: new Date().toISOString() });
           this.spawnCreature(name, dir, purpose, genome, model).then(async () => {
             console.log(`[orchestrator] creature "${name}" ready`);
-            await this.emitEvent(name, { type: 'creature.spawned', t: new Date().toISOString() } as any);
+            await this.emitEvent(name, { type: 'creature.spawned', t: new Date().toISOString() });
           }).catch(async (err) => {
             console.error(`[orchestrator] spawn failed for "${name}":`, err);
-            await this.emitEvent(name, { type: 'creature.spawn_failed', t: new Date().toISOString(), error: err.message } as any);
+            await this.emitEvent(name, { type: 'creature.spawn_failed', t: new Date().toISOString(), error: err.message });
           }).finally(() => {
             this.pendingOps.delete(name);
           });
