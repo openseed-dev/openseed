@@ -104,6 +104,9 @@ export interface UsageData {
   total: number;
 }
 
+// Janee config types — duplicated from src/host/janee-config.ts.
+// These are in separate build contexts (frontend vs backend).
+// Keep both in sync when modifying.
 export interface MaskedService {
   name: string;
   baseUrl: string;

@@ -1,6 +1,10 @@
 /**
  * Read-only access to Janee config.yaml for the dashboard.
  * Masks all secrets/keys before returning.
+ *
+ * NOTE: The types below (MaskedService, MaskedCapability, AgentAccess, JaneeConfigView)
+ * are duplicated in dashboard/src/types.ts for the frontend build context.
+ * Keep both in sync when modifying.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,14 +57,16 @@ export function readJaneeConfig(): JaneeConfigView {
   }
 }
 
-function parseConfig(config: any): JaneeConfigView {
+function parseConfig(config: unknown): JaneeConfigView {
   if (!config || typeof config !== 'object') {
     return { available: false, services: [], capabilities: [], agents: [] };
   }
 
+  const cfg = config as Record<string, any>;
+
   const services: MaskedService[] = [];
-  if (config.services && typeof config.services === 'object') {
-    for (const [name, svc] of Object.entries(config.services as Record<string, any>)) {
+  if (cfg.services && typeof cfg.services === 'object') {
+    for (const [name, svc] of Object.entries(cfg.services as Record<string, any>)) {
       services.push({
         name,
         baseUrl: svc.baseUrl || '',
@@ -75,8 +81,8 @@ function parseConfig(config: any): JaneeConfigView {
   }
 
   const capabilities: MaskedCapability[] = [];
-  if (config.capabilities && typeof config.capabilities === 'object') {
-    for (const [name, cap] of Object.entries(config.capabilities as Record<string, any>)) {
+  if (cfg.capabilities && typeof cfg.capabilities === 'object') {
+    for (const [name, cap] of Object.entries(cfg.capabilities as Record<string, any>)) {
       capabilities.push({
         name,
         service: cap.service || '',
@@ -113,10 +119,10 @@ function parseConfig(config: any): JaneeConfigView {
 
   return {
     available: true,
-    server: config.server ? {
-      port: config.server.port || 3100,
-      host: config.server.host || 'localhost',
-      defaultAccess: config.server.defaultAccess,
+    server: cfg.server ? {
+      port: cfg.server.port || 3100,
+      host: cfg.server.host || 'localhost',
+      defaultAccess: cfg.server.defaultAccess,
     } : undefined,
     services,
     capabilities,

@@ -651,6 +651,8 @@ export class Orchestrator {
         return;
       }
 
+      // Returns masked Janee config (secrets stripped via allowlist).
+      // Auth: relies on orchestrator not being publicly exposed.
       if (p === "/api/janee/config" && req.method === "GET") {
         const config = readJaneeConfig();
         res.writeHead(200, { "Content-Type": "application/json" });
