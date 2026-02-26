@@ -33,6 +33,11 @@ export const IMAGE_PLACEHOLDER = '[image data stripped]';
 export function stripImageData<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === 'string') {
+    // We intentionally don't JSON.parse strings to look for embedded image data.
+    // Tool output in creature.tool_call events is already a string slice (≤1000 chars),
+    // not a structured object, so JSON-encoded images don't survive truncation.
+    // If a caller has structured data, they should pass the parsed object directly.
+
     // Strip data URIs (data:image/...)
     if (obj.startsWith('data:image/')) {
       return IMAGE_PLACEHOLDER as unknown as T;
