@@ -129,7 +129,7 @@ export class CreatureSupervisor {
     console.log(`[${this.name}] remounting: committing container state to image`);
     try { execSync(`docker stop ${cname}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
     try {
-      execSync(`docker commit ${cname} ${cname}`, { stdio: 'ignore', timeout: 60_000 });
+      execSync(`docker commit ${cname} ${cname}`, { stdio: 'ignore', timeout: 120_000 });
     } catch (err) {
       console.error(`[${this.name}] remount: commit failed — container preserved, aborting`, err);
       this.expectingExit = false;
