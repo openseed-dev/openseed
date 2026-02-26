@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { JaneeSection } from '@/components/JaneeSection';
 import { useStore } from '@/state';
 import * as api from '@/api';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -172,6 +173,7 @@ export function SettingsModal() {
   const sections = [
     { id: 'limits', label: 'Limits' },
     { id: 'narrator', label: 'Narrator' },
+    { id: 'janee', label: 'Janee' },
   ];
 
   return (
@@ -193,6 +195,7 @@ export function SettingsModal() {
         <div className="flex-1 p-7 overflow-y-auto">
           {section === 'limits' && <LimitsSection />}
           {section === 'narrator' && <NarratorSection />}
+          {section === 'janee' && <JaneeSection />}
         </div>
       </DialogContent>
     </Dialog>
