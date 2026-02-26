@@ -86,11 +86,11 @@ export function JaneeSection() {
       .catch(() => setError('Could not load Janee config. Is Janee running?'));
   }, []);
 
-  if (error) {
+  if (error || (config && !config.available)) {
     return (
       <div>
         <h3 className="text-[15px] font-semibold text-text-primary mb-1">Janee</h3>
-        <p className="text-[12px] text-text-muted">{error}</p>
+        <p className="text-[12px] text-text-muted">{error || 'Could not load Janee config. Is Janee running?'}</p>
       </div>
     );
   }
