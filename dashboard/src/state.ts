@@ -78,7 +78,7 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
   narrationDisplayCount: 5,
   allMoments: [],
   showMoments: false,
-  sidebarOpen: false,
+  sidebarOpen: localStorage.getItem('sidebarOpen') === 'true',
   settingsOpen: false,
   creatureBudgets: {},
   globalBudget: null,
@@ -259,7 +259,7 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
   },
   setNarrationDisplayCount: (n) => set({ narrationDisplayCount: n }),
   setShowMoments: (v) => set({ showMoments: v }),
-  setSidebarOpen: (v) => set({ sidebarOpen: v }),
+  setSidebarOpen: (v) => { localStorage.setItem('sidebarOpen', String(v)); set({ sidebarOpen: v }); },
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setShareData: (d) => set({ shareData: d }),
 }));
