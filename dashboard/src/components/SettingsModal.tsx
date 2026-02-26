@@ -178,7 +178,7 @@ export function SettingsModal() {
 
   return (
     <Dialog open={open} onOpenChange={setSettingsOpen}>
-      <DialogContent className="max-w-[680px] h-[440px] p-0 gap-0 flex overflow-hidden">
+      <DialogContent className="sm:max-w-[90vw] max-w-[90vw] h-[90vh] p-0 gap-0 flex overflow-hidden">
         <div className="w-[160px] border-r border-border-default bg-bg py-5 px-3 flex flex-col shrink-0">
           <div className="text-[11px] text-text-faint tracking-[0.04em] uppercase px-2 mb-3">Settings</div>
           {sections.map(s => (
