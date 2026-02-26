@@ -114,6 +114,34 @@ export class CreatureSupervisor {
     this.status = 'starting';
     await this.spawnCreature();
   }
+  // Recreate container preserving its writable layer (installed packages,
+  // configs, etc.). Commits the container state into the image, removes the old
+  // container, then creates a fresh one from the updated image — picking up any
+  // new mounts, env vars, or network config. Running processes stop but their
+  // installed artifacts survive.
+  async remount(): Promise<void> {
+    this.expectingExit = true;
+    this.clearTimers();
+    this.healthyAt = null;
+    const cname = this.containerName();
+
+    console.log(`[${this.name}] remounting: committing container state to image`);
+    try { execSync(`docker stop ${cname}`, { stdio: 'ignore', timeout: 15_000 }); } catch {}
+    try {
+      execSync(`docker commit ${cname} ${cname}`, { stdio: 'ignore', timeout: 60_000 });
+    } catch (err) {
+      console.error(`[${this.name}] remount: commit failed — container preserved, aborting`, err);
+      this.expectingExit = false;
+      throw err;
+    }
+    try { execSync(`docker rm -f ${cname}`, { stdio: 'ignore' }); } catch {}
+
+    this.creature = null;
+    this.currentSHA = getCurrentSHA(this.dir);
+    this.status = 'starting';
+    await this.spawnCreature();
+  }
+
 
   // Full rebuild: destroys container (writable layer lost). Developer-only.
   async rebuild(): Promise<void> {
