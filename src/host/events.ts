@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { Event } from '../shared/types.js';
+import { stripImageData } from '../shared/image-utils.js';
 
 export class EventStore {
   private eventsFile: string;
@@ -23,8 +24,14 @@ export class EventStore {
   }
 
   async append(event: Event) {
-    const line = JSON.stringify(event) + "\n";
+    // Strip any base64 image data before persisting to disk.
+    // Images in tool results (e.g. from a `see` tool) can be multi-MB;
+    // serializing them to event logs wastes disk and makes logs unreadable.
+    const sanitized = stripImageData(event);
+    const line = JSON.stringify(sanitized) + "\n";
     await fs.appendFile(this.eventsFile, line, "utf-8");
+    // Notify listeners with the original event (they may need images for
+    // real-time dashboard display, thumbnails, etc.)
     this.listeners.forEach((fn) => fn(event));
   }
 
