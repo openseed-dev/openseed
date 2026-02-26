@@ -46,6 +46,18 @@ export function CreatureDetail() {
   const refresh = useStore(s => s.refresh);
   const degraded = useStore(s => s.health.status !== 'healthy');
   const eventsEndRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const doAction = async (action: string, needsConfirm?: string) => {
+    if (needsConfirm && !confirm(needsConfirm)) return;
+    setBusy(action);
+    try {
+      await api.creatureAction(name, action as any);
+      refresh();
+    } finally {
+      setBusy(null);
+    }
+  };
 
   useEffect(() => {
     if (tab === 'log') {
@@ -71,14 +83,15 @@ export function CreatureDetail() {
           {c?.janeeVersion && <> · <span className="text-text-muted text-[11px]">janee {c.janeeVersion}</span></>}
         </div>
         <BudgetInfo />
-        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors" onClick={() => api.creatureAction(name, 'wake')}>wake</button>
-        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded} title={degraded ? 'Orchestrator degraded' : undefined} onClick={() => { api.creatureAction(name, 'restart'); refresh(); }}>restart</button>
-        <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded} title={degraded ? 'Orchestrator degraded' : undefined} onClick={() => { api.creatureAction(name, 'rebuild'); refresh(); }}>rebuild</button>
-        <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors" onClick={() => {
-          if (confirm(`Archive creature "${name}"? It will be stopped and moved to the archive.`)) {
-            api.creatureAction(name, 'archive').then(() => { refresh(); selectCreature(null); });
-          }
-        }}>archive</button>
+        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={!!busy} onClick={() => doAction('wake')}>{busy === 'wake' ? 'waking...' : 'wake'}</button>
+        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded || !!busy} title={degraded ? 'Orchestrator degraded' : undefined} onClick={() => doAction('restart')}>{busy === 'restart' ? 'restarting...' : 'restart'}</button>
+        <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded || !!busy} title={degraded ? 'Orchestrator degraded' : undefined} onClick={() => doAction('rebuild', `Rebuild "${name}"? This destroys the container writable layer.`)}>{busy === 'rebuild' ? 'rebuilding...' : 'rebuild'}</button>
+        <button className="bg-white border border-[#d0d0d0] text-text-secondary px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#f5f5f5] hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={degraded || !!busy} title={degraded ? 'Orchestrator degraded' : 'Recreate container preserving installed packages'} onClick={() => doAction('remount', `Remount "${name}"? Preserves installed packages but restarts the container.`)}>{busy === 'remount' ? 'remounting...' : 'remount'}</button>
+        <button className="bg-white border border-warn text-warn-light px-1.5 py-0.5 rounded text-[11px] cursor-pointer hover:bg-[#fffbf5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled={!!busy} onClick={async () => {
+          if (!confirm(`Archive creature "${name}"? It will be stopped and moved to the archive.`)) return;
+          setBusy('archive');
+          try { await api.creatureAction(name, 'archive'); refresh(); selectCreature(null); } finally { setBusy(null); }
+        }}>{busy === 'archive' ? 'archiving...' : 'archive'}</button>
       </div>
 
       {/* Tab bar */}

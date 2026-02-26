@@ -72,7 +72,7 @@ export async function fetchGenomes(): Promise<GenomeInfo[]> {
   return res.json();
 }
 
-export async function creatureAction(name: string, action: 'start' | 'stop' | 'restart' | 'rebuild' | 'wake' | 'archive', method = 'POST'): Promise<void> {
+export async function creatureAction(name: string, action: 'start' | 'stop' | 'restart' | 'rebuild' | 'remount' | 'wake' | 'archive', method = 'POST'): Promise<void> {
   await fetch(`/api/creatures/${name}/${action}`, { method });
 }
 

@@ -320,6 +320,12 @@ export class Orchestrator {
     await supervisor.restart();
   }
 
+  async remountCreature(name: string): Promise<void> {
+    const supervisor = this.supervisors.get(name);
+    if (!supervisor) throw new Error(`creature "${name}" is not running`);
+    await supervisor.remount();
+  }
+
   async spawnCreature(name: string, _dir: string, purpose?: string, genome = 'dreamer', model?: string): Promise<void> {
     console.log(`[orchestrator] spawning "${name}"...`);
     const result = await spawnCreature({ name, purpose, genome, model });
@@ -795,6 +801,21 @@ export class Orchestrator {
               cwd: dir, timeout: 120_000, maxBuffer: 10 * 1024 * 1024,
             });
             await supervisor.rebuild();
+            res.writeHead(200); res.end('ok');
+          } catch (err: any) { res.writeHead(400); res.end(err.message); }
+          return;
+        }
+
+        if (action === 'remount' && req.method === 'POST') {
+          const health = getStatus();
+          if (health.status !== 'healthy') {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Orchestrator degraded — cannot remount creatures', dependencies: health.dependencies }));
+            return;
+          }
+          try {
+            console.log(`[${name}] developer-initiated remount`);
+            await this.remountCreature(name);
             res.writeHead(200); res.end('ok');
           } catch (err: any) { res.writeHead(400); res.end(err.message); }
           return;
