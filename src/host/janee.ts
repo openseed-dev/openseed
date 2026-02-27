@@ -188,3 +188,10 @@ export function stopJanee(): void {
 export function isJaneeAvailable(): boolean {
   return janeeAvailable;
 }
+
+/** Send SIGHUP to the running Janee process to reload config from disk. */
+export function reloadJaneeConfig(): boolean {
+  if (!janeeProcess?.pid) return false;
+  janeeProcess.kill('SIGHUP');
+  return true;
+}
