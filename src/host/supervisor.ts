@@ -96,6 +96,7 @@ export class CreatureSupervisor {
     this.status = 'sleeping';
     this.sleepReason = 'budget';
     this.creature = null;
+    evictCreatureTokenCache(this.name);
   }
 
   async restart(): Promise<void> {
@@ -123,6 +124,7 @@ export class CreatureSupervisor {
     this.healthyAt = null;
     this.destroyContainer();
     this.creature = null;
+    evictCreatureTokenCache(this.name);
     this.currentSHA = getCurrentSHA(this.dir);
     this.status = 'starting';
     await this.spawnCreature();
@@ -391,6 +393,7 @@ export class CreatureSupervisor {
     if (!this.isDockerAvailable()) {
       console.log(`[${this.name}] Docker unavailable, stopping (not rolling back)`);
       this.status = 'stopped';
+      evictCreatureTokenCache(this.name);
       this.creature = null;
       await this.emit({ t: new Date().toISOString(), type: 'host.infra_failure', reason: 'Docker unavailable' });
       return;
@@ -436,6 +439,7 @@ export class CreatureSupervisor {
     if (this.consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
       console.log(`[${this.name}] ${this.consecutiveFailures} consecutive failures, giving up`);
       this.status = 'stopped';
+      evictCreatureTokenCache(this.name);
       this.creature = null;
       return;
     }
