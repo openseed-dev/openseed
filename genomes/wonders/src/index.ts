@@ -140,7 +140,7 @@ class Creature {
           await this.emit({ type: "creature.error", error, retryIn, retries } as any);
         },
         async (memory, candidateCount) => {
-          await this.emit({ type: "creature.subconscious", memory: memory || "NOTHING", surfaced: memory !== null, candidateCount } as any);
+          await this.emit({ type: "creature.subconscious", memory, surfaced: true, candidateCount });
         },
       );
     } catch (err) {

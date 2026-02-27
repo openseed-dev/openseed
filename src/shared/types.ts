@@ -34,7 +34,8 @@ export type CreatureLifecycleEvent =
   | { t: string; type: "creature.request_restart"; reason: string }
   | { t: string; type: "creature.spawning" }
   | { t: string; type: "creature.spawned" }
-  | { t: string; type: "creature.spawn_failed"; error: string };
+  | { t: string; type: "creature.spawn_failed"; error: string }
+  | { t: string; type: "creature.subconscious"; memory: string; surfaced: true; candidateCount: number };
 
 // Genome-specific events. The host relays these but doesn't interpret them.
 // Using a template literal type ensures TypeScript can narrow the Event union

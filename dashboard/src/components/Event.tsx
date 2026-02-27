@@ -122,14 +122,11 @@ export function Event({ ev, showCreature }: { ev: CreatureEvent; showCreature?: 
       </>
     );
   } else if (t === 'creature.subconscious') {
-    const surfaced = ev.surfaced !== false && ev.memory && ev.memory !== 'NOTHING';
     body = (
       <>
         {cl}
         <span className="font-bold ml-2 text-[#7c3aed] italic">subconscious</span>
-        {surfaced
-          ? <Expandable summary={<span className="text-text-primary ml-1"> - {summarize(ev.memory || '', 120)}</span>}>{ev.memory || ''}</Expandable>
-          : <span className="text-text-muted ml-1 text-[11px]">NOTHING</span>}
+        <Expandable summary={<span className="text-text-primary ml-1"> - {summarize(ev.memory || '', 120)}</span>}>{ev.memory || ''}</Expandable>
       </>
     );
   } else if (t === 'creature.progress_check') {
