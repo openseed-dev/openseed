@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { existsSync, unlinkSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { lookupPricing, getPricing, CostTracker, _setLitellmPricing } from './costs.js';
 import type { LiteLLMEntry } from './costs.js';
 
@@ -103,19 +106,31 @@ describe('getPricing', () => {
 describe('CostTracker', () => {
   let tracker: CostTracker;
 
+  // CostTracker reads/writes usage.json at the module-level OPENSEED_HOME path.
+  // Clean it before each test so tests don't leak state through the filesystem.
+  const usageFile = path.join(
+    process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(os.homedir(), '.openseed'),
+    'usage.json'
+  );
+
   beforeEach(() => {
+    // Remove any leftover usage file from previous test
+    try { unlinkSync(usageFile); } catch { /* doesn't exist — fine */ }
+
     _setLitellmPricing({
       'test-model': {
         input_cost_per_token: 0.000001,
         output_cost_per_token: 0.000002,
       } as LiteLLMEntry,
     });
-    // CostTracker constructor tries to read a file; it gracefully handles missing files
     tracker = new CostTracker();
   });
 
   afterEach(() => {
+    tracker.destroy();
     _setLitellmPricing(null);
+    // Clean up any usage file written during the test
+    try { unlinkSync(usageFile); } catch { /* fine */ }
   });
 
   it('starts with zero for unknown creature', () => {

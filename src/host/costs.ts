@@ -150,13 +150,30 @@ export class CostTracker {
   private usage: Map<string, UsageEntry> = new Map();
   private dirty = false;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private _onExit: (() => void) | null = null;
+  private _onSigint: (() => void) | null = null;
+  private _onSigterm: (() => void) | null = null;
 
   constructor() {
     this.load();
     this.timer = setInterval(() => this.save(), 30_000);
-    process.on('exit', () => this.saveSync());
-    process.on('SIGINT', () => { this.saveSync(); process.exit(0); });
-    process.on('SIGTERM', () => { this.saveSync(); process.exit(0); });
+    this.timer.unref();
+    this._onExit = () => this.saveSync();
+    this._onSigint = () => { this.saveSync(); process.exit(0); };
+    this._onSigterm = () => { this.saveSync(); process.exit(0); };
+    process.on('exit', this._onExit);
+    process.on('SIGINT', this._onSigint);
+    process.on('SIGTERM', this._onSigterm);
+  }
+
+  destroy() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    if (this._onExit) { process.removeListener('exit', this._onExit); this._onExit = null; }
+    if (this._onSigint) { process.removeListener('SIGINT', this._onSigint); this._onSigint = null; }
+    if (this._onSigterm) { process.removeListener('SIGTERM', this._onSigterm); this._onSigterm = null; }
   }
 
   record(name: string, inputTokens: number, outputTokens: number, model?: string) {
