@@ -37,6 +37,12 @@ const LARGE_STRING_THRESHOLD = 50 * 1024;
 export function stripImageData<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === 'string') {
+    // Safety valve first — bail out before any regex on huge strings.
+    // A 50KB+ JSON blob would trigger a full-string regex scan below;
+    // check length first to keep this O(1) for large non-image strings.
+    if (obj.length > LARGE_STRING_THRESHOLD) {
+      return `${obj.slice(0, 200)}... [truncated ${obj.length} chars]` as unknown as T;
+    }
     // Strip data URIs (data:image/...)
     if (obj.startsWith('data:image/')) {
       return IMAGE_PLACEHOLDER as unknown as T;
@@ -44,12 +50,6 @@ export function stripImageData<T>(obj: T): T {
     // A base64 string over 1KB is almost certainly image data
     if (obj.length > 1024 && /^[A-Za-z0-9+/=]+$/.test(obj)) {
       return IMAGE_PLACEHOLDER as unknown as T;
-    }
-    // Safety valve: truncate any string over 50KB. This catches cases like
-    // JSON-serialized image data inside tool output strings that we can't
-    // structurally detect without parsing.
-    if (obj.length > LARGE_STRING_THRESHOLD) {
-      return `${obj.slice(0, 200)}... [truncated ${obj.length} chars]` as unknown as T;
     }
     return obj;
   }
