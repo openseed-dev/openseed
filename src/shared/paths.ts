@@ -1,7 +1,26 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+/**
+ * Validate a genome source string to prevent shell injection.
+ * Allows: alphanumeric, hyphens, underscores, dots, forward slashes (for owner/repo paths).
+ * Rejects: semicolons, backticks, $, pipes, ampersands, newlines, spaces, etc.
+ */
+function validateGenomeSource(source: string): void {
+  if (!source || source.length > 200) {
+    throw new Error(`invalid genome source: too long or empty`);
+  }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*$/.test(source)) {
+    throw new Error(`invalid genome source "${source}": contains disallowed characters`);
+  }
+  // Block path traversal
+  if (source.includes('..')) {
+    throw new Error(`invalid genome source "${source}": path traversal not allowed`);
+  }
+}
+
 
 export const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || path.join(os.homedir(), ".openseed");
 export const CREATURES_DIR = path.join(OPENSEED_HOME, "creatures");
@@ -86,6 +105,7 @@ export function readSourceMeta(dir: string): { repo: string; sha: string } | nul
 
 /** Try to auto-install a genome from GitHub. Returns the installed path or null. */
 export function autoInstallGenome(genome: string): string | null {
+  validateGenomeSource(genome);
   const { cloneUrl, name, subdir } = parseGenomeSource(genome);
   const dest = installedGenomeDir(name);
 
@@ -96,8 +116,8 @@ export function autoInstallGenome(genome: string): string | null {
     if (subdir) {
       const tmpDir = dest + ".tmp";
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
-      execSync(`git clone --depth 1 --filter=blob:none --sparse ${cloneUrl} ${tmpDir}`, { stdio: "pipe" });
-      execSync(`git sparse-checkout set ${subdir}`, { cwd: tmpDir, stdio: "pipe" });
+      execFileSync("git", ["clone", "--depth", "1", "--filter=blob:none", "--sparse", cloneUrl, tmpDir], { stdio: "pipe" });
+      execFileSync("git", ["sparse-checkout", "set", subdir], { cwd: tmpDir, stdio: "pipe" });
       const extracted = path.join(tmpDir, subdir);
       if (!fs.existsSync(path.join(extracted, "genome.json"))) {
         throw new Error(`no genome.json found at ${subdir}`);
@@ -106,7 +126,7 @@ export function autoInstallGenome(genome: string): string | null {
       writeSourceMeta(dest, cloneUrl, tmpDir);
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } else {
-      execSync(`git clone --depth 1 ${cloneUrl} ${dest}`, { stdio: "pipe" });
+      execFileSync("git", ["clone", "--depth", "1", cloneUrl, dest], { stdio: "pipe" });
       writeSourceMeta(dest, cloneUrl);
     }
 
@@ -122,6 +142,7 @@ export function autoInstallGenome(genome: string): string | null {
 
 /** Full resolution: installed → bundled → auto-install from GitHub. Returns path or null. */
 export function requireGenomeDir(genome = "dreamer"): string | null {
+  validateGenomeSource(genome);
   const dir = resolveGenomeDir(genome);
   if (dir) return dir;
   return autoInstallGenome(genome);
