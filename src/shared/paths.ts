@@ -20,6 +20,9 @@ function validateGenomeSource(source: string): void {
     if (!/^https:\/\/github\.com\/[a-zA-Z0-9][a-zA-Z0-9._\-\/]*(\.git)?$/.test(source)) {
       throw new Error(`invalid genome URL "${source}": only https://github.com/owner/repo supported`);
     }
+    if (source.includes('..')) {
+      throw new Error(`invalid genome URL "${source}": path traversal not allowed`);
+    }
     return;
   }
 
@@ -27,6 +30,9 @@ function validateGenomeSource(source: string): void {
   if (source.startsWith('git@')) {
     if (!/^git@github\.com:[a-zA-Z0-9][a-zA-Z0-9._\-\/]*(\.git)?$/.test(source)) {
       throw new Error(`invalid genome URL "${source}": only git@github.com:owner/repo supported`);
+    }
+    if (source.includes('..')) {
+      throw new Error(`invalid genome URL "${source}": path traversal not allowed`);
     }
     return;
   }
