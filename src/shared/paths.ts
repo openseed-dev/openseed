@@ -5,13 +5,33 @@ import path from 'node:path';
 
 /**
  * Validate a genome source string to prevent shell injection.
- * Allows: alphanumeric, hyphens, underscores, dots, forward slashes (for owner/repo paths).
+ * Allows:
+ *   - Shorthand / owner/repo paths: alphanumeric, hyphens, underscores, dots, forward slashes
+ *   - Full GitHub URLs: https://github.com/owner/repo or git@github.com:owner/repo
  * Rejects: semicolons, backticks, $, pipes, ampersands, newlines, spaces, etc.
  */
 function validateGenomeSource(source: string): void {
   if (!source || source.length > 200) {
     throw new Error(`invalid genome source: too long or empty`);
   }
+
+  // Full HTTPS URL — validate the host is github.com and the path portion is safe
+  if (source.startsWith('https://')) {
+    if (!/^https:\/\/github\.com\/[a-zA-Z0-9][a-zA-Z0-9._\-\/]*(\.git)?$/.test(source)) {
+      throw new Error(`invalid genome URL "${source}": only https://github.com/owner/repo supported`);
+    }
+    return;
+  }
+
+  // Git SSH URL — validate the host is github.com and the path portion is safe
+  if (source.startsWith('git@')) {
+    if (!/^git@github\.com:[a-zA-Z0-9][a-zA-Z0-9._\-\/]*(\.git)?$/.test(source)) {
+      throw new Error(`invalid genome URL "${source}": only git@github.com:owner/repo supported`);
+    }
+    return;
+  }
+
+  // Shorthand paths (e.g., "dreamer", "owner/repo", "owner/repo/subdir")
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*$/.test(source)) {
     throw new Error(`invalid genome source "${source}": contains disallowed characters`);
   }
