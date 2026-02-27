@@ -28,8 +28,17 @@ import {
 import { CostTracker, initPricing } from './costs.js';
 import { EventStore } from './events.js';
 import { getStatus, onStatusChange, startHealthLoop, stopHealthLoop } from './health.js';
-import { startJanee, stopJanee } from './janee.js';
-import { readJaneeConfig } from "./janee-config.js";
+import { startJanee, stopJanee, reloadJaneeConfig } from './janee.js';
+import {
+  readJaneeConfig,
+  addService as janeeAddService,
+  updateService as janeeUpdateService,
+  deleteService as janeeDeleteService,
+  addCapability as janeeAddCapability,
+  updateCapability as janeeUpdateCapability,
+  deleteCapability as janeeDeleteCapability,
+  updateCapabilityAgents as janeeUpdateCapabilityAgents,
+} from './janee-config.js';
 import { Narrator } from './narrator.js';
 import type { BudgetCheckResult } from './proxy.js';
 import { handleLLMProxy } from './proxy.js';
@@ -651,10 +660,90 @@ export class Orchestrator {
         return;
       }
 
-      if (p === "/api/janee/config" && req.method === "GET") {
+      if (p === '/api/janee/config' && req.method === 'GET') {
         const config = readJaneeConfig();
-        res.writeHead(200, { "Content-Type": "application/json" });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(config));
+        return;
+      }
+
+      // -- Janee config mutations --
+      // Note: no mutex on load→mutate→save; fine for single-user dashboard.
+
+      const janeeReply = (result: any) => {
+        const reloaded = reloadJaneeConfig();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ...result, reloaded }));
+      };
+      const janeeFail = (err: any, code = 400) => {
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      };
+
+      if (p === '/api/janee/services' && req.method === 'POST') {
+        try {
+          const body = JSON.parse(await readBody(req));
+          const name = (body.name || '').trim();
+          const baseUrl = (body.baseUrl || '').trim();
+          if (!name) throw new Error('name is required');
+          if (!baseUrl) throw new Error('baseUrl is required');
+          janeeReply(janeeAddService(name, baseUrl, body.auth || { type: body.authType || 'bearer' }));
+        } catch (err: any) { janeeFail(err); }
+        return;
+      }
+
+      if (p.match(/^\/api\/janee\/services\/[^/]+$/) && req.method === 'PUT') {
+        try {
+          const name = decodeURIComponent(p.slice('/api/janee/services/'.length));
+          const body = JSON.parse(await readBody(req));
+          janeeReply(janeeUpdateService(name, body));
+        } catch (err: any) { janeeFail(err); }
+        return;
+      }
+
+      if (p.match(/^\/api\/janee\/services\/[^/]+$/) && req.method === 'DELETE') {
+        try {
+          const name = decodeURIComponent(p.slice('/api/janee/services/'.length));
+          janeeReply(janeeDeleteService(name));
+        } catch (err: any) { janeeFail(err); }
+        return;
+      }
+
+      if (p === '/api/janee/capabilities' && req.method === 'POST') {
+        try {
+          const body = JSON.parse(await readBody(req));
+          const name = (body.name || '').trim();
+          if (!name) throw new Error('name is required');
+          if (!body.service) throw new Error('service is required');
+          const { name: _, ...capConfig } = body;
+          janeeReply(janeeAddCapability(name, capConfig));
+        } catch (err: any) { janeeFail(err); }
+        return;
+      }
+
+      if (p.match(/^\/api\/janee\/capabilities\/[^/]+$/) && req.method === 'PUT') {
+        try {
+          const name = decodeURIComponent(p.slice('/api/janee/capabilities/'.length));
+          const body = JSON.parse(await readBody(req));
+          janeeReply(janeeUpdateCapability(name, body));
+        } catch (err: any) { janeeFail(err); }
+        return;
+      }
+
+      if (p.match(/^\/api\/janee\/capabilities\/[^/]+$/) && req.method === 'DELETE') {
+        try {
+          const name = decodeURIComponent(p.slice('/api/janee/capabilities/'.length));
+          janeeReply(janeeDeleteCapability(name));
+        } catch (err: any) { janeeFail(err); }
+        return;
+      }
+
+      if (p.match(/^\/api\/janee\/capabilities\/[^/]+\/agents$/) && req.method === 'PUT') {
+        try {
+          const capName = decodeURIComponent(p.split('/api/janee/capabilities/')[1].split('/agents')[0]);
+          const body = JSON.parse(await readBody(req));
+          janeeReply(janeeUpdateCapabilityAgents(capName, body.agents || []));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 

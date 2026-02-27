@@ -105,3 +105,46 @@ export async function fetchJaneeConfig(): Promise<import('./types').JaneeConfigV
   if (!res.ok) return { available: false, services: [], capabilities: [], agents: [] };
   return res.json();
 }
+
+// -- Janee config mutations (all return fresh JaneeConfigView) --
+
+async function janeeMutate(url: string, method: string, body?: unknown): Promise<import('./types').JaneeConfigView> {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || 'Request failed');
+  }
+  return res.json();
+}
+
+export function addJaneeService(name: string, baseUrl: string, authType: string) {
+  return janeeMutate('/api/janee/services', 'POST', { name, baseUrl, authType });
+}
+
+export function updateJaneeService(name: string, patch: { baseUrl?: string; authType?: string }) {
+  return janeeMutate(`/api/janee/services/${encodeURIComponent(name)}`, 'PUT', patch);
+}
+
+export function deleteJaneeService(name: string) {
+  return janeeMutate(`/api/janee/services/${encodeURIComponent(name)}`, 'DELETE');
+}
+
+export function addJaneeCapability(name: string, config: { service: string; ttl?: string; mode?: string; allowedAgents?: string[] }) {
+  return janeeMutate('/api/janee/capabilities', 'POST', { name, ...config });
+}
+
+export function updateJaneeCapability(name: string, patch: Record<string, unknown>) {
+  return janeeMutate(`/api/janee/capabilities/${encodeURIComponent(name)}`, 'PUT', patch);
+}
+
+export function deleteJaneeCapability(name: string) {
+  return janeeMutate(`/api/janee/capabilities/${encodeURIComponent(name)}`, 'DELETE');
+}
+
+export function updateCapabilityAgents(capName: string, agents: string[]) {
+  return janeeMutate(`/api/janee/capabilities/${encodeURIComponent(capName)}/agents`, 'PUT', { agents });
+}

@@ -25,12 +25,12 @@
     "destroy": "tsx src/cli/index.ts destroy",
     "fork": "tsx src/cli/index.ts fork",
     "build:dashboard": "cd dashboard && pnpm build",
-    "restart": "./scripts/restart.sh",
     "restart": "./scripts/restart.sh"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
     "@anthropic-ai/sdk": "^0.74.0",
+    "@true-and-useful/janee": "file:../../janee",
     "ai": "^6.0.86",
     "tsx": "^4.21.0",
     "zod": "^4.3.6"

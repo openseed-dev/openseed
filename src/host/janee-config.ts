@@ -1,21 +1,29 @@
 /**
- * Read-only access to Janee config.yaml for the dashboard.
- * Masks all secrets/keys before returning.
+ * Janee config access layer for the dashboard.
+ * Uses Janee's own library for read/write, masks secrets before returning.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import jsYaml from 'js-yaml';
+import {
+  loadYAMLConfig,
+  saveYAMLConfig,
+  hasYAMLConfig,
+  addServiceYAML,
+  addCapabilityYAML,
+  type JaneeYAMLConfig,
+  type ServiceConfig,
+  type CapabilityConfig,
+  type AuthConfig,
+} from '@true-and-useful/janee';
 
-const JANEE_HOME = process.env.JANEE_HOME || path.join(process.env.HOME || '/root', '.janee');
+// ── Public view types (sent to dashboard, secrets stripped) ──
 
-interface MaskedService {
+export interface MaskedService {
   name: string;
   baseUrl: string;
   authType: string;
   ownership?: { type: string; agentId?: string; accessPolicy?: string };
 }
 
-interface MaskedCapability {
+export interface MaskedCapability {
   name: string;
   service: string;
   mode: string;
@@ -28,7 +36,7 @@ interface MaskedCapability {
   timeout?: number;
 }
 
-interface AgentAccess {
+export interface AgentAccess {
   agentId: string;
   capabilities: string[];
 }
@@ -41,60 +49,35 @@ export interface JaneeConfigView {
   agents: AgentAccess[];
 }
 
-export function readJaneeConfig(): JaneeConfigView {
-  const configPath = path.join(JANEE_HOME, 'config.yaml');
-  try {
-    const raw = fs.readFileSync(configPath, 'utf-8');
-    const parsed = jsYaml.load(raw);
-    return parseConfig(parsed);
-  } catch {
-    return { available: false, services: [], capabilities: [], agents: [] };
-  }
-}
+const EMPTY: JaneeConfigView = { available: false, services: [], capabilities: [], agents: [] };
 
-function parseConfig(config: any): JaneeConfigView {
-  if (!config || typeof config !== 'object') {
-    return { available: false, services: [], capabilities: [], agents: [] };
-  }
+// ── Read (mask secrets) ──
 
-  const services: MaskedService[] = [];
-  if (config.services && typeof config.services === 'object') {
-    for (const [name, svc] of Object.entries(config.services as Record<string, any>)) {
-      services.push({
-        name,
-        baseUrl: svc.baseUrl || '',
-        authType: svc.auth?.type || 'unknown',
-        ownership: svc.ownership ? {
-          type: svc.ownership.type || 'cli',
-          agentId: svc.ownership.agentId,
-          accessPolicy: svc.ownership.accessPolicy,
-        } : undefined,
-      });
-    }
-  }
+function maskConfig(config: JaneeYAMLConfig): JaneeConfigView {
+  const services: MaskedService[] = Object.entries(config.services).map(([name, svc]) => ({
+    name,
+    baseUrl: svc.baseUrl,
+    authType: svc.auth.type,
+    ownership: svc.ownership ? {
+      type: svc.ownership.accessPolicy || 'all-agents',
+      agentId: svc.ownership.createdBy,
+      accessPolicy: svc.ownership.accessPolicy,
+    } : undefined,
+  }));
 
-  const capabilities: MaskedCapability[] = [];
-  if (config.capabilities && typeof config.capabilities === 'object') {
-    for (const [name, cap] of Object.entries(config.capabilities as Record<string, any>)) {
-      capabilities.push({
-        name,
-        service: cap.service || '',
-        mode: cap.mode || 'proxy',
-        ttl: cap.ttl || '',
-        requiresReason: !!cap.requiresReason,
-        rules: cap.rules ? {
-          allow: cap.rules.allow || [],
-          deny: cap.rules.deny || [],
-        } : undefined,
-        allowedAgents: cap.allowedAgents,
-        allowCommands: cap.allowCommands,
-        workDir: cap.workDir,
-        timeout: cap.timeout,
-      });
-    }
-  }
+  const capabilities: MaskedCapability[] = Object.entries(config.capabilities).map(([name, cap]) => ({
+    name,
+    service: cap.service,
+    mode: cap.mode || 'proxy',
+    ttl: cap.ttl,
+    requiresReason: !!cap.requiresReason,
+    rules: cap.rules ? { allow: cap.rules.allow || [], deny: cap.rules.deny || [] } : undefined,
+    allowedAgents: cap.allowedAgents,
+    allowCommands: cap.allowCommands,
+    workDir: cap.workDir,
+    timeout: cap.timeout,
+  }));
 
-  // Derive agent access from capabilities
   const agentMap = new Map<string, string[]>();
   for (const cap of capabilities) {
     if (cap.allowedAgents) {
@@ -112,12 +95,89 @@ function parseConfig(config: any): JaneeConfigView {
   return {
     available: true,
     server: config.server ? {
-      port: config.server.port || 3100,
-      host: config.server.host || 'localhost',
+      port: config.server.port,
+      host: config.server.host,
       defaultAccess: config.server.defaultAccess,
     } : undefined,
     services,
     capabilities,
     agents,
   };
+}
+
+export function readJaneeConfig(): JaneeConfigView {
+  try {
+    if (!hasYAMLConfig()) return EMPTY;
+    return maskConfig(loadYAMLConfig());
+  } catch {
+    return EMPTY;
+  }
+}
+
+// ── Mutations (all return fresh masked view) ──
+
+function loadConfig(): JaneeYAMLConfig {
+  return loadYAMLConfig();
+}
+
+export function addService(name: string, baseUrl: string, auth: AuthConfig): JaneeConfigView {
+  addServiceYAML(name, baseUrl, auth);
+  return readJaneeConfig();
+}
+
+export function updateService(name: string, patch: { baseUrl?: string; authType?: AuthConfig['type'] }): JaneeConfigView {
+  const config = loadConfig();
+  const svc = config.services[name];
+  if (!svc) throw new Error(`Service "${name}" not found`);
+  if (patch.baseUrl !== undefined) svc.baseUrl = patch.baseUrl;
+  if (patch.authType !== undefined) svc.auth.type = patch.authType;
+  saveYAMLConfig(config);
+  return readJaneeConfig();
+}
+
+export function deleteService(name: string): JaneeConfigView {
+  const config = loadConfig();
+  if (!config.services[name]) throw new Error(`Service "${name}" not found`);
+  delete config.services[name];
+  // Remove capabilities that referenced this service
+  for (const [capName, cap] of Object.entries(config.capabilities)) {
+    if (cap.service === name) delete config.capabilities[capName];
+  }
+  saveYAMLConfig(config);
+  return readJaneeConfig();
+}
+
+export function addCapability(name: string, capConfig: CapabilityConfig): JaneeConfigView {
+  addCapabilityYAML(name, capConfig);
+  return readJaneeConfig();
+}
+
+const CAP_FIELDS = ['service', 'ttl', 'mode', 'requiresReason', 'rules', 'allowedAgents', 'allowCommands', 'workDir', 'timeout'] as const;
+
+export function updateCapability(name: string, patch: Partial<CapabilityConfig>): JaneeConfigView {
+  const config = loadConfig();
+  const cap = config.capabilities[name];
+  if (!cap) throw new Error(`Capability "${name}" not found`);
+  for (const key of CAP_FIELDS) {
+    if (key in patch) (cap as any)[key] = (patch as any)[key];
+  }
+  saveYAMLConfig(config);
+  return readJaneeConfig();
+}
+
+export function deleteCapability(name: string): JaneeConfigView {
+  const config = loadConfig();
+  if (!config.capabilities[name]) throw new Error(`Capability "${name}" not found`);
+  delete config.capabilities[name];
+  saveYAMLConfig(config);
+  return readJaneeConfig();
+}
+
+export function updateCapabilityAgents(capName: string, agents: string[]): JaneeConfigView {
+  const config = loadConfig();
+  const cap = config.capabilities[capName];
+  if (!cap) throw new Error(`Capability "${capName}" not found`);
+  cap.allowedAgents = agents.length > 0 ? agents : undefined;
+  saveYAMLConfig(config);
+  return readJaneeConfig();
 }
