@@ -17,7 +17,10 @@ export type HostEvent =
   | { t: string; type: "host.promote"; sha: string }
   | { t: string; type: "host.rollback"; from: string; to: string; reason: string }
   | { t: string; type: "host.infra_failure"; reason: string }
-  | { t: string; type: "orchestrator.status" } & OrchestratorHealth;
+  | { t: string; type: "orchestrator.status" } & OrchestratorHealth
+  | { t: string; type: "budget.exceeded"; daily_spent: number; daily_cap: number }
+  | { t: string; type: "budget.reset" }
+  | { t: string; type: "narrator.entry"; text: string; blocks?: Record<string, string>; creatures_mentioned: string[] };
 
 // Universal creature lifecycle events (orchestrator interprets these)
 export type CreatureLifecycleEvent =
@@ -28,11 +31,16 @@ export type CreatureLifecycleEvent =
   | { t: string; type: "creature.wake"; reason: string; source: "manual" | "timer" | "external" }
   | { t: string; type: "creature.message"; text: string; source: "user" | "system" }
   | { t: string; type: "creature.error"; error: string; retryIn?: number; retries?: number; fatal?: boolean }
-  | { t: string; type: "creature.request_restart"; reason: string };
+  | { t: string; type: "creature.request_restart"; reason: string }
+  | { t: string; type: "creature.spawning" }
+  | { t: string; type: "creature.spawned" }
+  | { t: string; type: "creature.spawn_failed"; error: string };
 
 // Genome-specific events. The host relays these but doesn't interpret them.
-// Genomes can emit any event type with any fields.
-export type GenomeEvent = { t: string; type: string; [key: string]: unknown };
+// Using a template literal type ensures TypeScript can narrow the Event union
+// on the `type` discriminant — `genome.*` types won't overlap with known
+// host.* or creature.* event types.
+export type GenomeEvent = { t: string; type: `genome.${string}`; [key: string]: unknown };
 
 export type Event = HostEvent | CreatureLifecycleEvent | GenomeEvent;
 
