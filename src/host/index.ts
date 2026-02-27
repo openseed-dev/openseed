@@ -668,106 +668,82 @@ export class Orchestrator {
       }
 
       // -- Janee config mutations --
+      // Note: no mutex on load→mutate→save; fine for single-user dashboard.
+
+      const janeeReply = (result: any) => {
+        const reloaded = reloadJaneeConfig();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ...result, reloaded }));
+      };
+      const janeeFail = (err: any, code = 400) => {
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      };
 
       if (p === '/api/janee/services' && req.method === 'POST') {
         try {
           const body = JSON.parse(await readBody(req));
-          const result = janeeAddService(body.name, body.baseUrl, body.auth || { type: body.authType || 'bearer' });
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          const name = (body.name || '').trim();
+          const baseUrl = (body.baseUrl || '').trim();
+          if (!name) throw new Error('name is required');
+          if (!baseUrl) throw new Error('baseUrl is required');
+          janeeReply(janeeAddService(name, baseUrl, body.auth || { type: body.authType || 'bearer' }));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 
-      if (p.startsWith('/api/janee/services/') && req.method === 'PUT') {
+      if (p.match(/^\/api\/janee\/services\/[^/]+$/) && req.method === 'PUT') {
         try {
-          const name = decodeURIComponent(p.split('/')[4]);
+          const name = decodeURIComponent(p.slice('/api/janee/services/'.length));
           const body = JSON.parse(await readBody(req));
-          const result = janeeUpdateService(name, body);
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          janeeReply(janeeUpdateService(name, body));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 
-      if (p.startsWith('/api/janee/services/') && req.method === 'DELETE') {
+      if (p.match(/^\/api\/janee\/services\/[^/]+$/) && req.method === 'DELETE') {
         try {
-          const name = decodeURIComponent(p.split('/')[4]);
-          const result = janeeDeleteService(name);
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          const name = decodeURIComponent(p.slice('/api/janee/services/'.length));
+          janeeReply(janeeDeleteService(name));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 
       if (p === '/api/janee/capabilities' && req.method === 'POST') {
         try {
           const body = JSON.parse(await readBody(req));
-          const { name, ...capConfig } = body;
-          const result = janeeAddCapability(name, capConfig);
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          const name = (body.name || '').trim();
+          if (!name) throw new Error('name is required');
+          if (!body.service) throw new Error('service is required');
+          const { name: _, ...capConfig } = body;
+          janeeReply(janeeAddCapability(name, capConfig));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 
       if (p.match(/^\/api\/janee\/capabilities\/[^/]+$/) && req.method === 'PUT') {
         try {
-          const name = decodeURIComponent(p.split('/')[4]);
+          const name = decodeURIComponent(p.slice('/api/janee/capabilities/'.length));
           const body = JSON.parse(await readBody(req));
-          const result = janeeUpdateCapability(name, body);
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          janeeReply(janeeUpdateCapability(name, body));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 
       if (p.match(/^\/api\/janee\/capabilities\/[^/]+$/) && req.method === 'DELETE') {
         try {
-          const name = decodeURIComponent(p.split('/')[4]);
-          const result = janeeDeleteCapability(name);
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          const name = decodeURIComponent(p.slice('/api/janee/capabilities/'.length));
+          janeeReply(janeeDeleteCapability(name));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 
       if (p.match(/^\/api\/janee\/capabilities\/[^/]+\/agents$/) && req.method === 'PUT') {
         try {
-          const capName = decodeURIComponent(p.split('/')[4]);
+          const capName = decodeURIComponent(p.split('/api/janee/capabilities/')[1].split('/agents')[0]);
           const body = JSON.parse(await readBody(req));
-          const result = janeeUpdateCapabilityAgents(capName, body.agents || []);
-          reloadJaneeConfig();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (err: any) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        }
+          janeeReply(janeeUpdateCapabilityAgents(capName, body.agents || []));
+        } catch (err: any) { janeeFail(err); }
         return;
       }
 

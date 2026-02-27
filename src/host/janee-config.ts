@@ -152,11 +152,15 @@ export function addCapability(name: string, capConfig: CapabilityConfig): JaneeC
   return readJaneeConfig();
 }
 
+const CAP_FIELDS = ['service', 'ttl', 'mode', 'requiresReason', 'rules', 'allowedAgents', 'allowCommands', 'workDir', 'timeout'] as const;
+
 export function updateCapability(name: string, patch: Partial<CapabilityConfig>): JaneeConfigView {
   const config = loadConfig();
   const cap = config.capabilities[name];
   if (!cap) throw new Error(`Capability "${name}" not found`);
-  Object.assign(cap, patch);
+  for (const key of CAP_FIELDS) {
+    if (key in patch) (cap as any)[key] = (patch as any)[key];
+  }
   saveYAMLConfig(config);
   return readJaneeConfig();
 }
