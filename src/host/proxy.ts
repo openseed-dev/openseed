@@ -19,9 +19,9 @@ export type BudgetChecker = (creatureName: string) => BudgetCheckResult;
 // Creatures always speak Anthropic format. The proxy detects the model
 // and routes to the right upstream, translating if needed.
 
-type Provider = 'anthropic' | 'openai' | 'openrouter' | 'gemini';
+export type Provider = 'anthropic' | 'openai' | 'openrouter' | 'gemini';
 
-function inferProvider(model: string): Provider {
+export function inferProvider(model: string): Provider {
   // Slash check first: org/model format (e.g. "openai/o3-mini") always routes via OpenRouter
   if (model.includes('/')) return 'openrouter';
   if (model.startsWith('claude-')) return 'anthropic';
@@ -32,7 +32,7 @@ function inferProvider(model: string): Provider {
 
 // --- Anthropic-to-OpenAI translation ---
 
-function translateToolsToOpenAI(tools: any[]): any[] {
+export function translateToolsToOpenAI(tools: any[]): any[] {
   if (!tools?.length) return [];
   return tools.map(t => ({
     type: 'function' as const,
@@ -42,7 +42,7 @@ function translateToolsToOpenAI(tools: any[]): any[] {
   }));
 }
 
-function translateMessagesToOpenAI(messages: any[], system?: string | any[]): { instructions: string | undefined; input: any[] } {
+export function translateMessagesToOpenAI(messages: any[], system?: string | any[]): { instructions: string | undefined; input: any[] } {
   // Anthropic sends system as either a string or array of content blocks
   let instructions: string | undefined;
   if (Array.isArray(system)) {
@@ -101,7 +101,7 @@ function translateMessagesToOpenAI(messages: any[], system?: string | any[]): { 
   return { instructions, input };
 }
 
-function translateResponseToAnthropic(openaiResp: any): any {
+export function translateResponseToAnthropic(openaiResp: any): any {
   const content: any[] = [];
   let hasToolUse = false;
 
@@ -221,7 +221,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 // --- Anthropic-to-OpenAI Chat Completions translation (for OpenRouter) ---
 
-function translateMessagesToChat(messages: any[], system?: string | any[]): { systemMessage: string | undefined; chatMessages: any[] } {
+export function translateMessagesToChat(messages: any[], system?: string | any[]): { systemMessage: string | undefined; chatMessages: any[] } {
   let systemMessage: string | undefined;
   if (Array.isArray(system)) {
     systemMessage = system.map((b: any) => b.text || '').filter(Boolean).join('\n');
@@ -286,7 +286,7 @@ function translateMessagesToChat(messages: any[], system?: string | any[]): { sy
   return { systemMessage, chatMessages };
 }
 
-function translateToolsToChat(tools: any[]): any[] {
+export function translateToolsToChat(tools: any[]): any[] {
   if (!tools?.length) return [];
   return tools.map(t => ({
     type: 'function' as const,
@@ -298,7 +298,7 @@ function translateToolsToChat(tools: any[]): any[] {
   }));
 }
 
-function translateChatResponseToAnthropic(chatResp: any): any {
+export function translateChatResponseToAnthropic(chatResp: any): any {
   const content: any[] = [];
   let hasToolUse = false;
 
@@ -402,7 +402,7 @@ async function forwardToOpenRouter(body: any): Promise<{ status: number; body: s
 
 // --- Anthropic-to-Gemini translation ---
 
-function translateMessagesToGemini(messages: any[], system?: string | any[]): { systemInstruction: any | undefined; contents: any[] } {
+export function translateMessagesToGemini(messages: any[], system?: string | any[]): { systemInstruction: any | undefined; contents: any[] } {
   let systemInstruction: any | undefined;
   if (Array.isArray(system)) {
     const text = system.map((b: any) => b.text || '').filter(Boolean).join('\n');
@@ -465,7 +465,7 @@ function translateMessagesToGemini(messages: any[], system?: string | any[]): { 
   return { systemInstruction, contents };
 }
 
-function translateToolsToGemini(tools: any[]): any[] {
+export function translateToolsToGemini(tools: any[]): any[] {
   if (!tools?.length) return [];
   return [{
     functionDeclarations: tools.map(t => ({
@@ -476,7 +476,7 @@ function translateToolsToGemini(tools: any[]): any[] {
   }];
 }
 
-function translateGeminiResponseToAnthropic(geminiResp: any, model: string): any {
+export function translateGeminiResponseToAnthropic(geminiResp: any, model: string): any {
   const content: any[] = [];
   let hasToolUse = false;
 

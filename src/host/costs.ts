@@ -15,7 +15,7 @@ const PRICING_CACHE_FILE = path.join(OPENSEED_HOME, 'litellm-pricing.json');
 const LITELLM_PRICING_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const PRICING_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-interface LiteLLMEntry {
+export interface LiteLLMEntry {
   input_cost_per_token?: number;
   output_cost_per_token?: number;
   litellm_provider?: string;
@@ -91,7 +91,7 @@ export async function initPricing(): Promise<void> {
  * Look up pricing for a model from LiteLLM data.
  * Tries exact match, then common prefixed variants (e.g. "gemini/model", "openrouter/provider/model").
  */
-function lookupPricing(model: string): { input: number; output: number } | null {
+export function lookupPricing(model: string): { input: number; output: number } | null {
   if (!litellmPricing) return null;
 
   // Try exact match first
@@ -239,4 +239,9 @@ export class CostTracker {
       // Can't save — will retry
     }
   }
+}
+
+/** @internal — for testing only. Injects mock pricing data. */
+export function _setLitellmPricing(data: Record<string, LiteLLMEntry> | null): void {
+  litellmPricing = data;
 }

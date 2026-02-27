@@ -25,7 +25,9 @@
     "destroy": "tsx src/cli/index.ts destroy",
     "fork": "tsx src/cli/index.ts fork",
     "build:dashboard": "cd dashboard && pnpm build",
-    "restart": "./scripts/restart.sh"
+    "restart": "./scripts/restart.sh",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }
