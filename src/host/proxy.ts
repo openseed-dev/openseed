@@ -6,6 +6,19 @@ import type {
 import type { CostTracker } from './costs.js';
 import { sendErrorResponse } from './http-error-handler.js';
 
+
+// --- Image block translation helpers ---
+
+function anthropicImageToDataUrl(source: any): string | null {
+  if (source?.type === 'base64' && source.data && source.media_type) {
+    return `data:${source.media_type};base64,${source.data}`;
+  }
+  if (source?.type === 'url' && source.url) {
+    return source.url;
+  }
+  return null;
+}
+
 export interface BudgetCheckResult {
   allowed: boolean;
   action: 'sleep' | 'warn' | 'off';
@@ -75,6 +88,11 @@ function translateMessagesToOpenAI(messages: any[], system?: string | any[]): { 
             });
           } else if (block.type === 'text') {
             input.push({ role: 'user', content: [{ type: 'input_text', text: block.text }] });
+          } else if (block.type === 'image') {
+            const url = anthropicImageToDataUrl(block.source);
+            if (url) {
+              input.push({ role: 'user', content: [{ type: 'input_image', image_url: url }] });
+            }
           }
         }
       }
@@ -238,8 +256,16 @@ function translateMessagesToChat(messages: any[], system?: string | any[]): { sy
       if (typeof content === 'string') {
         chatMessages.push({ role: 'user', content });
       } else if (Array.isArray(content)) {
+        // Accumulate all non-tool blocks into a single user message to avoid
+        // consecutive same-role messages (rejected by OpenAI/OpenRouter).
+        const userParts: any[] = [];
         for (const block of content) {
           if (block.type === 'tool_result') {
+            // Flush accumulated user parts before the tool result
+            if (userParts.length) {
+              chatMessages.push({ role: 'user', content: userParts.length === 1 && userParts[0].type === 'text' ? userParts[0].text : [...userParts] });
+              userParts.length = 0;
+            }
             const outputText = typeof block.content === 'string'
               ? block.content
               : Array.isArray(block.content)
@@ -251,8 +277,17 @@ function translateMessagesToChat(messages: any[], system?: string | any[]): { sy
               content: outputText,
             });
           } else if (block.type === 'text') {
-            chatMessages.push({ role: 'user', content: block.text });
+            userParts.push({ type: 'text', text: block.text });
+          } else if (block.type === 'image') {
+            const url = anthropicImageToDataUrl(block.source);
+            if (url) {
+              userParts.push({ type: 'image_url', image_url: { url } });
+            }
           }
+        }
+        // Flush remaining user parts
+        if (userParts.length) {
+          chatMessages.push({ role: 'user', content: userParts.length === 1 && userParts[0].type === 'text' ? userParts[0].text : [...userParts] });
         }
       }
     } else if (msg.role === 'assistant') {
@@ -436,6 +471,19 @@ function translateMessagesToGemini(messages: any[], system?: string | any[]): { 
             });
           } else if (block.type === 'text') {
             parts.push({ text: block.text });
+          } else if (block.type === 'image') {
+            if (block.source?.type === 'base64' && block.source.data && block.source.media_type) {
+              parts.push({
+                inlineData: {
+                  mimeType: block.source.media_type,
+                  data: block.source.data,
+                },
+              });
+            }
+            // Gemini doesn't support URL-based images directly; warn and skip
+            if (block.source?.type === 'url') {
+              console.warn('[proxy] Gemini: dropping URL-based image block (not supported inline)');
+            }
           }
         }
         if (parts.length) contents.push({ role: 'user', parts });
