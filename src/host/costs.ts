@@ -15,7 +15,7 @@ const PRICING_CACHE_FILE = path.join(OPENSEED_HOME, 'litellm-pricing.json');
 const LITELLM_PRICING_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const PRICING_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-interface LiteLLMEntry {
+export interface LiteLLMEntry {
   input_cost_per_token?: number;
   output_cost_per_token?: number;
   litellm_provider?: string;
@@ -91,7 +91,7 @@ export async function initPricing(): Promise<void> {
  * Look up pricing for a model from LiteLLM data.
  * Tries exact match, then common prefixed variants (e.g. "gemini/model", "openrouter/provider/model").
  */
-function lookupPricing(model: string): { input: number; output: number } | null {
+export function lookupPricing(model: string): { input: number; output: number } | null {
   if (!litellmPricing) return null;
 
   // Try exact match first
@@ -150,13 +150,30 @@ export class CostTracker {
   private usage: Map<string, UsageEntry> = new Map();
   private dirty = false;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private _onExit: (() => void) | null = null;
+  private _onSigint: (() => void) | null = null;
+  private _onSigterm: (() => void) | null = null;
 
   constructor() {
     this.load();
     this.timer = setInterval(() => this.save(), 30_000);
-    process.on('exit', () => this.saveSync());
-    process.on('SIGINT', () => { this.saveSync(); process.exit(0); });
-    process.on('SIGTERM', () => { this.saveSync(); process.exit(0); });
+    this.timer.unref();
+    this._onExit = () => this.saveSync();
+    this._onSigint = () => { this.saveSync(); process.exit(0); };
+    this._onSigterm = () => { this.saveSync(); process.exit(0); };
+    process.on('exit', this._onExit);
+    process.on('SIGINT', this._onSigint);
+    process.on('SIGTERM', this._onSigterm);
+  }
+
+  destroy() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    if (this._onExit) { process.removeListener('exit', this._onExit); this._onExit = null; }
+    if (this._onSigint) { process.removeListener('SIGINT', this._onSigint); this._onSigint = null; }
+    if (this._onSigterm) { process.removeListener('SIGTERM', this._onSigterm); this._onSigterm = null; }
   }
 
   record(name: string, inputTokens: number, outputTokens: number, model?: string) {
@@ -239,4 +256,9 @@ export class CostTracker {
       // Can't save — will retry
     }
   }
+}
+
+/** @internal — for testing only. Injects mock pricing data. */
+export function _setLitellmPricing(data: Record<string, LiteLLMEntry> | null): void {
+  litellmPricing = data;
 }
