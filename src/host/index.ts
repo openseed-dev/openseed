@@ -1,5 +1,6 @@
 import {
   exec,
+  execFile,
   execSync,
 } from 'node:child_process';
 import {
@@ -79,6 +80,7 @@ import {
 } from './supervisor.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const ARCHIVE_DIR = path.join(OPENSEED_HOME, 'archive');
 const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
@@ -287,7 +289,7 @@ export class Orchestrator {
     try {
       if (!this.hasDockerImage(name)) {
         console.log(`[orchestrator] no docker image for ${name}, building...`);
-        await execAsync(`docker build -t creature-${name} .`, { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
+        await execFileAsync('docker', ['build', '-t', `creature-${name}`, '.'], { cwd: dir, maxBuffer: 10 * 1024 * 1024 });
       }
 
       const autoIterate = !(opts?.manual);
@@ -383,9 +385,9 @@ export class Orchestrator {
       await this.stopCreature(name);
     }
     // Docker cleanup: remove container and image but keep files
-    try { await execAsync(`docker kill creature-${name}`); } catch {}
-    try { await execAsync(`docker rm -f creature-${name}`); } catch {}
-    try { await execAsync(`docker rmi creature-${name}`); } catch {}
+    try { await execFileAsync('docker', ['kill', `creature-${name}`]); } catch {}
+    try { await execFileAsync('docker', ['rm', '-f', `creature-${name}`]); } catch {}
+    try { await execFileAsync('docker', ['rmi', `creature-${name}`]); } catch {}
 
     await fs.mkdir(ARCHIVE_DIR, { recursive: true });
     const dest = path.join(ARCHIVE_DIR, name);
@@ -447,14 +449,14 @@ export class Orchestrator {
       // running it on the host — which was a shell injection vulnerability (#11).
       const containerName = `creature-${name}`;
       try {
-        const { stdout: hasScript } = await execAsync(
-          `docker exec ${containerName} test -f /creature/validate.sh && echo yes || echo no`,
+        const hasScript = await execFileAsync(
+          'docker', ['exec', containerName, 'test', '-f', '/creature/validate.sh'],
           { timeout: 5_000 },
-        );
-        if (hasScript.trim() === 'yes') {
+        ).then(() => true).catch(() => false);
+        if (hasScript) {
           console.log(`[${name}] running validate.sh inside container`);
-          await execAsync(
-            `docker exec ${containerName} bash /creature/validate.sh`,
+          await execFileAsync(
+            'docker', ['exec', containerName, 'bash', '/creature/validate.sh'],
             { timeout: 30_000 },
           );
         }
@@ -1111,7 +1113,7 @@ export class Orchestrator {
             if (!supervisor) throw new Error(`creature "${name}" is not running`);
             const dir = path.join(CREATURES_DIR, name);
             console.log(`[${name}] developer-initiated rebuild`);
-            await execAsync(`docker build -t creature-${name} .`, {
+            await execFileAsync('docker', ['build', '-t', `creature-${name}`, '.'], {
               cwd: dir, timeout: 120_000, maxBuffer: 10 * 1024 * 1024,
             });
             await supervisor.rebuild();
