@@ -411,13 +411,28 @@ export class Orchestrator {
 
   private async validateAndRestart(name: string, dir: string, supervisor: CreatureSupervisor, reason: string) {
     try {
-      let validate: string | undefined;
+      // Run validate.sh inside the container if it exists.
+      // This replaces the old approach of reading BIRTH.json's validate field and
+      // running it on the host — which was a shell injection vulnerability (#11).
+      const containerName = `creature-${name}`;
       try {
-        const birth = JSON.parse(await fs.readFile(path.join(dir, 'BIRTH.json'), 'utf-8'));
-        validate = birth.validate;
-      } catch {}
-      if (validate) {
-        await execAsync(validate, { cwd: dir, timeout: 30_000 });
+        const { stdout: hasScript } = await execAsync(
+          `docker exec ${containerName} test -f /creature/validate.sh && echo yes || echo no`,
+          { timeout: 5_000 },
+        );
+        if (hasScript.trim() === 'yes') {
+          console.log(`[${name}] running validate.sh inside container`);
+          await execAsync(
+            `docker exec ${containerName} bash /creature/validate.sh`,
+            { timeout: 30_000 },
+          );
+        }
+      } catch (validationErr: any) {
+        // Validation script failed — don't restart, report to creature
+        const errMsg = validationErr.stderr || validationErr.stdout || validationErr.message || 'unknown error';
+        console.error(`[${name}] validate.sh failed: ${errMsg}`);
+        await this.sendMessage(name, `[SYSTEM] Code validation failed:\n${errMsg.slice(0, 500)}\nFix the errors and try again.`, 'system');
+        return; // Don't restart on validation failure
       }
       await execAsync(`git add -A && git commit -m "creature: ${reason}" --allow-empty`, { cwd: dir });
       await supervisor.restart();

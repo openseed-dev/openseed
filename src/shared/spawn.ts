@@ -117,11 +117,16 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
       }
     }
 
-    let genomeValidate: string | undefined;
+    // Copy validate.sh from genome template if it exists.
+    // Validation now runs inside the container (not from BIRTH.json on the host).
     try {
-      const gj = JSON.parse(readFileSync(path.join(tpl, 'genome.json'), 'utf-8'));
-      if (typeof gj.validate === 'string') genomeValidate = gj.validate;
-    } catch {}
+      const validateSrc = path.join(tpl, 'validate.sh');
+      readFileSync(validateSrc); // check existence
+      await fs.copyFile(validateSrc, path.join(dir, 'validate.sh'));
+      await fs.chmod(path.join(dir, 'validate.sh'), 0o755);
+    } catch {
+      // No validate.sh in genome — that's fine
+    }
 
     const birth = {
       id: crypto.randomUUID(),
@@ -132,7 +137,7 @@ export async function spawnCreature(opts: SpawnOptions): Promise<SpawnResult> {
       ...(sourceMeta ? { genome_repo: sourceMeta.repo, genome_sha: sourceMeta.sha } : {}),
       parent: null as string | null,
       ...(opts.model ? { model: opts.model } : {}),
-      ...(genomeValidate ? { validate: genomeValidate } : {}),
+      // validate field removed — validation now uses validate.sh inside container
     };
     await fs.writeFile(path.join(dir, 'BIRTH.json'), JSON.stringify(birth, null, 2) + '\n');
 
