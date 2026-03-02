@@ -20,6 +20,7 @@ import {
   executeBrowser,
 } from './tools/browser.js';
 import { janee as executeJanee } from './tools/janee.js';
+import { see as executeSee } from './tools/see.js';
 
 const MAX_CONTEXT_CHARS = 100_000;
 const KEEP_RECENT_MESSAGES = 20;
@@ -134,6 +135,13 @@ Example — push and open a PR:
       reason: z.string().describe("Why you need this request (audit trail)").optional(),
     }),
   }),
+  see: tool({
+    description: `Look at an image. Provide a URL or local file path and the image will be loaded into your context so you can see it.\n\nExamples:\n  see({ url: "https://example.com/screenshot.png" })\n  see({ path: "/tmp/chart.png" })`,
+    inputSchema: z.object({
+      url: z.string().describe("URL of the image to view").optional(),
+      path: z.string().describe("Local file path of the image to view").optional(),
+    }),
+  }),
 };
 
 async function buildSystemPrompt(purpose: string): Promise<string> {
@@ -199,7 +207,7 @@ You can install more; they persist.
 
 ## Your Tools
 
-You have bash, browser, set_sleep, and janee as tools. Use them freely. You will see the results
+You have bash, browser, see, set_sleep, and janee as tools. Use them freely. You will see the results
 of each tool call before deciding your next action.
 
 **bash** - full power of a Unix machine. Write scripts, install packages, spin up servers,
@@ -243,6 +251,10 @@ price movements, webhooks, whatever your purpose demands.
 Use it to interact with GitHub, Stripe, or any configured service. Janee injects the real
 credentials on your behalf. Check what's available with \`list_services\`, then use \`execute\`
 to make requests. If Janee isn't configured, the tool tells you so — fall back to raw env vars.
+
+**see** - look at an image from a URL or local file path. The image is loaded into your
+context so you can visually inspect screenshots, charts, diagrams, etc. Use it to review
+visual output of your work or understand images referenced in issues.
 
 If you think "I can't do X because I'm a bot", you're wrong. You have bash on a real machine
 and a real browser. If a tool isn't installed, install it. If a library is missing, add it.
@@ -768,17 +780,37 @@ export class Mind {
           await onToolResult(tc.toolName, args, execResult, ms);
         }
 
-        const resultContent = execResult.ok
-          ? JSON.stringify(execResult.data).slice(0, 4000)
-          : `Error: ${execResult.error}`;
+        // Special handling for see tool: include image content block
+        if (tc.toolName === 'see' && execResult.ok && (execResult.data as any)?.image) {
+          const seeData = execResult.data as any;
+          // Strip image data from the action record to keep logs clean
+          actionsSinceSleep[actionsSinceSleep.length - 1].result = {
+            ok: true,
+            data: { text: seeData.text, image: '[base64 image omitted]' },
+          };
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input,
+            output: [
+              { type: 'text', value: seeData.text || 'Image loaded' },
+              { type: 'image', source: seeData.image.source },
+            ],
+          } as any);
+        } else {
+          const resultContent = execResult.ok
+            ? JSON.stringify(execResult.data).slice(0, 4000)
+            : `Error: ${execResult.error}`;
 
-        toolResults.push({
-          type: "tool-result",
-          toolCallId: tc.toolCallId,
-          toolName: tc.toolName,
-          input,
-          output: { type: 'text', value: resultContent },
-        });
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input,
+            output: { type: 'text', value: resultContent },
+          });
+        }
       }
 
       // Progress check
@@ -1685,6 +1717,17 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
         case "janee": {
           const result = await executeJanee(args as any);
           return { ok: true, data: result };
+        }
+
+        case "see": {
+          const seeResult = await executeSee(args as { url?: string; path?: string });
+          if (!seeResult.ok) {
+            return { ok: false, error: seeResult.error };
+          }
+          return {
+            ok: true,
+            data: seeResult,
+          };
         }
 
         default:
