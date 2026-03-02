@@ -774,6 +774,7 @@ export class Orchestrator {
           const genome = (body.genome || 'dreamer').trim();
           const model = (body.model || '').trim() || undefined;
           if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
+          if (genome !== "dreamer" && !/^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*$/.test(genome)) throw new Error(`invalid genome name`);
           const dir = path.join(CREATURES_DIR, name);
           try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e) { if (e instanceof Error && e.message.includes('already exists')) throw e; }
 
