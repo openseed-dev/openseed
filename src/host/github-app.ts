@@ -276,6 +276,10 @@ export async function activateInstallation(slug: string, installationId: string)
     ttl: '1h',
     mode: 'exec',
     allowCommands: ['git', 'gh'],
+    env: {
+      GH_TOKEN: '{{credential}}',
+      GITHUB_TOKEN: '{{credential}}',
+    },
   });
 
   reloadJaneeConfig();
