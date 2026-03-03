@@ -1,4 +1,15 @@
-import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo, UsageData, OrchestratorHealth } from './types';
+import type {
+  BudgetInfo,
+  CreatureEvent,
+  CreatureInfo,
+  GenomeInfo,
+  GlobalBudget,
+  MindData,
+  NarrationEntry,
+  NarratorConfig,
+  OrchestratorHealth,
+  UsageData,
+} from './types';
 
 async function requireOk(res: Response): Promise<Response> {
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -152,4 +163,38 @@ export function deleteJaneeCapability(name: string) {
 
 export function updateCapabilityAgents(capName: string, agents: string[]) {
   return janeeMutate(`/api/janee/capabilities/${encodeURIComponent(capName)}/agents`, 'PUT', { agents });
+}
+
+// -- GitHub Apps --
+
+export async function fetchGitHubApps(): Promise<import('./types').GitHubAppInfo[]> {
+  const res = await fetch('/api/github-apps').then(requireOk);
+  return res.json();
+}
+
+export async function createGitHubApp(name: string, owner?: string): Promise<{ state: string; redirectPath: string }> {
+  const res = await fetch('/api/github-apps', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, owner }),
+  }).then(requireOk);
+  return res.json();
+}
+
+export async function fetchGitHubAppInstallations(slug: string): Promise<import('./types').GitHubInstallation[]> {
+  const res = await fetch(`/api/github-apps/${encodeURIComponent(slug)}/installations`).then(requireOk);
+  return res.json();
+}
+
+export async function activateGitHubApp(slug: string, installationId: number): Promise<{ serviceName: string }> {
+  const res = await fetch(`/api/github-apps/${encodeURIComponent(slug)}/activate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ installationId }),
+  }).then(requireOk);
+  return res.json();
+}
+
+export async function deleteGitHubApp(slug: string): Promise<void> {
+  await fetch(`/api/github-apps/${encodeURIComponent(slug)}`, { method: 'DELETE' }).then(requireOk);
 }

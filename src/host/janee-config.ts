@@ -3,15 +3,14 @@
  * Uses Janee's own library for read/write, masks secrets before returning.
  */
 import {
+  addCapabilityYAML,
+  addServiceYAML,
+  type AuthConfig,
+  type CapabilityConfig,
+  hasYAMLConfig,
+  type JaneeYAMLConfig,
   loadYAMLConfig,
   saveYAMLConfig,
-  hasYAMLConfig,
-  addServiceYAML,
-  addCapabilityYAML,
-  type JaneeYAMLConfig,
-  type ServiceConfig,
-  type CapabilityConfig,
-  type AuthConfig,
 } from '@true-and-useful/janee';
 
 // ── Public view types (sent to dashboard, secrets stripped) ──

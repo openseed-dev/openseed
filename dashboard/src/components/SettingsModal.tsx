@@ -1,15 +1,27 @@
-import { useState, useEffect } from 'react';
-import { JaneeSection } from '@/components/JaneeSection';
-import { useStore } from '@/state';
+import {
+  useEffect,
+  useState,
+} from 'react';
+
 import * as api from '@/api';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { GitHubAppsSection } from '@/components/GitHubAppsSection';
+import { JaneeSection } from '@/components/JaneeSection';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { useStore } from '@/state';
 
 function LimitsSection() {
   const budget = useStore(s => s.globalBudget);
@@ -174,6 +186,7 @@ export function SettingsModal() {
     { id: 'limits', label: 'Limits' },
     { id: 'narrator', label: 'Narrator' },
     { id: 'janee', label: 'Janee' },
+    { id: 'github', label: 'GitHub Apps' },
   ];
 
   return (
@@ -196,6 +209,7 @@ export function SettingsModal() {
           {section === 'limits' && <LimitsSection />}
           {section === 'narrator' && <NarratorSection />}
           {section === 'janee' && <JaneeSection />}
+          {section === 'github' && <GitHubAppsSection />}
         </div>
       </DialogContent>
     </Dialog>

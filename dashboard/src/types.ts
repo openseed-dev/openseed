@@ -136,3 +136,19 @@ export interface JaneeConfigView {
   capabilities: MaskedCapability[];
   agents: AgentAccess[];
 }
+
+export interface GitHubAppInfo {
+  id: number;
+  slug: string;
+  name: string;
+  owner?: { login: string };
+  html_url?: string;
+  created_at?: string;
+}
+
+export interface GitHubInstallation {
+  id: number;
+  account: { login: string };
+  repository_selection: 'all' | 'selected';
+  html_url?: string;
+}

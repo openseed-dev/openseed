@@ -2,7 +2,10 @@ import {
   exec,
   execSync,
 } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+} from 'node:fs';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -25,20 +28,41 @@ import {
   saveGlobalSpendingCap,
   saveNarratorConfig,
 } from './config.js';
-import { CostTracker, initPricing } from './costs.js';
-import { EventStore } from './events.js';
-import { getStatus, onStatusChange, startHealthLoop, stopHealthLoop } from './health.js';
-import { startJanee, stopJanee, reloadJaneeConfig } from './janee.js';
 import {
-  readJaneeConfig,
-  addService as janeeAddService,
-  updateService as janeeUpdateService,
-  deleteService as janeeDeleteService,
+  CostTracker,
+  initPricing,
+} from './costs.js';
+import { EventStore } from './events.js';
+import {
+  activateInstallation,
+  deleteApp as deleteGitHubApp,
+  fetchInstallations as fetchGitHubAppInstallations,
+  handleCallback as handleGitHubCallback,
+  handleRedirect as handleGitHubRedirect,
+  loadApps as loadGitHubApps,
+  startFlow as startGitHubFlow,
+} from './github-app.js';
+import {
+  getStatus,
+  onStatusChange,
+  startHealthLoop,
+  stopHealthLoop,
+} from './health.js';
+import {
   addCapability as janeeAddCapability,
-  updateCapability as janeeUpdateCapability,
+  addService as janeeAddService,
   deleteCapability as janeeDeleteCapability,
+  deleteService as janeeDeleteService,
+  readJaneeConfig,
+  updateCapability as janeeUpdateCapability,
   updateCapabilityAgents as janeeUpdateCapabilityAgents,
+  updateService as janeeUpdateService,
 } from './janee-config.js';
+import {
+  reloadJaneeConfig,
+  startJanee,
+  stopJanee,
+} from './janee.js';
 import { Narrator } from './narrator.js';
 import type { BudgetCheckResult } from './proxy.js';
 import { handleLLMProxy } from './proxy.js';
@@ -655,6 +679,101 @@ export class Orchestrator {
           res.end(JSON.stringify(genomes));
         } catch (err: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      // -- GitHub App routes --
+
+      if (p === '/api/github-apps' && req.method === 'GET') {
+        try {
+          const apps = await loadGitHubApps();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(apps));
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      if (p === '/api/github-apps' && req.method === 'POST') {
+        try {
+          const body = JSON.parse(await readBody(req));
+          const name = (body.name || '').trim();
+          const owner = (body.owner || '@me').trim();
+          if (!name) throw new Error('name is required');
+          if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) throw new Error('invalid app name');
+          const state = startGitHubFlow(name, owner);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ state, redirectPath: `/api/github-app/redirect?state=${encodeURIComponent(state)}` }));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      if (p === '/api/github-app/redirect' && req.method === 'GET') {
+        const state = url.searchParams.get('state') || '';
+        const html = handleGitHubRedirect(state, this.port);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+        return;
+      }
+
+      if (p === '/api/github-app/callback' && req.method === 'GET') {
+        const code = url.searchParams.get('code') || '';
+        const state = url.searchParams.get('state') || '';
+        if (!code || !state) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end('<h1>Error</h1><p>Missing code or state parameter.</p>');
+          return;
+        }
+        const result = await handleGitHubCallback(code, state);
+        res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(result.html);
+        return;
+      }
+
+      if (p.match(/^\/api\/github-apps\/[^/]+\/installations$/) && req.method === 'GET') {
+        const slug = decodeURIComponent(p.split('/api/github-apps/')[1].split('/installations')[0]);
+        try {
+          const installations = await fetchGitHubAppInstallations(slug);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(installations));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      if (p.match(/^\/api\/github-apps\/[^/]+\/activate$/) && req.method === 'POST') {
+        const slug = decodeURIComponent(p.split('/api/github-apps/')[1].split('/activate')[0]);
+        try {
+          const body = JSON.parse(await readBody(req));
+          const installationId = String(body.installationId || '').trim();
+          if (!installationId) throw new Error('installationId is required');
+          const result = await activateInstallation(slug, installationId);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      if (p.match(/^\/api\/github-apps\/[^/]+$/) && req.method === 'DELETE') {
+        const slug = decodeURIComponent(p.slice('/api/github-apps/'.length));
+        try {
+          await deleteGitHubApp(slug);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: err.message }));
         }
         return;
