@@ -8,7 +8,10 @@
  * Janee is REQUIRED for authenticated API access. If it dies, the orchestrator
  * attempts auto-restart with exponential backoff.
  */
-import { ChildProcess, spawn } from 'node:child_process';
+import {
+  ChildProcess,
+  spawn,
+} from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fsSync from 'node:fs';
 import net from 'node:net';
@@ -92,6 +95,7 @@ function scheduleRestart() {
     restartTimer = null;
     const portOk = await isPortFree(JANEE_PORT);
     if (!portOk) {
+      if (await adoptExistingJanee()) return;
       console.log(`[janee] port ${JANEE_PORT} still in use, retrying...`);
       scheduleRestart();
       return;
@@ -99,6 +103,20 @@ function scheduleRestart() {
     const ok = await startJanee();
     if (!ok) scheduleRestart();
   }, delay);
+}
+
+async function adoptExistingJanee(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${JANEE_PORT}/v1/health`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      janeeAvailable = true;
+      autoRestartEnabled = false;
+      restartAttempts = 0;
+      console.log(`[janee] adopted existing instance on port ${JANEE_PORT}`);
+      return true;
+    }
+  } catch { /* not janee */ }
+  return false;
 }
 
 /** Start Janee if config exists. Returns true on success, false if skipped. */
@@ -111,6 +129,9 @@ export async function startJanee(): Promise<boolean> {
 
   const portOk = await isPortFree(JANEE_PORT);
   if (!portOk) {
+    // Port taken — check if a healthy Janee is already running there
+    const adopted = await adoptExistingJanee();
+    if (adopted) return true;
     console.log(`[janee] port ${JANEE_PORT} already in use — will retry`);
     autoRestartEnabled = true;
     scheduleRestart();
