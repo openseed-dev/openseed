@@ -576,13 +576,20 @@ ${this.currentTask.attempts > 1 ? `**Prior attempts:** ${this.currentTask.attemp
           const hasImage = execResult.ok && (execResult.data as any)?.image && (execResult.data as any)?.image?.source;
           if (hasImage) {
             const imgData = execResult.data as { snapshot?: string; image: { type: 'image'; source: any }; imageText?: string; text?: string };
+            let imageText = imgData.snapshot || imgData.imageText || imgData.text || 'Image captured';
+
+            // Cycle budget warning (also applies on image actions)
+            if (this.currentActionCount === CYCLE_WARNING) {
+              imageText += `\n\n[SYSTEM] You have ${CYCLE_BUDGET - CYCLE_WARNING} actions left in this cycle. If you have a working solution, commit it as a skill. If not, consider calling complete_cycle.`;
+            }
+
             toolResults.push({
               type: "tool-result",
               toolCallId: tc.toolCallId,
               toolName: tc.toolName,
               input,
               output: [
-                { type: 'text', value: imgData.snapshot || imgData.imageText || imgData.text || 'Image captured' },
+                { type: 'text', value: imageText },
                 { type: 'image', source: imgData.image.source },
               ],
             } as any);
