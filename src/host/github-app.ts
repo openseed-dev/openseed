@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   addCapabilityYAML,
   addServiceYAML,
+  loadYAMLConfig,
+  saveYAMLConfig,
 } from '@true-and-useful/janee';
 
 import { OPENSEED_HOME } from '../shared/paths.js';
@@ -84,10 +86,11 @@ function createManifest(name: string, callbackUrl: string): Record<string, unkno
 }
 
 function manifestFormUrl(owner: string, state: string): string {
-  if (!owner || owner === '@me') {
+  const clean = owner?.replace(/^@/, '');
+  if (!clean || clean === 'me') {
     return `https://github.com/settings/apps/new?state=${encodeURIComponent(state)}`;
   }
-  return `https://github.com/organizations/${encodeURIComponent(owner)}/settings/apps/new?state=${encodeURIComponent(state)}`;
+  return `https://github.com/organizations/${encodeURIComponent(clean)}/settings/apps/new?state=${encodeURIComponent(state)}`;
 }
 
 // ── Disk storage ──
@@ -296,6 +299,31 @@ export async function deleteApp(slug: string): Promise<void> {
   } catch (err: any) {
     console.warn(`[github-app] could not delete from GitHub: ${err.message}`);
   }
+
+  // Clean up Janee service + capabilities created during activation
+  const safeServiceName = `gh-${slug}`.replace(/[^a-z0-9-]/g, '-');
+  try {
+    const config = loadYAMLConfig();
+    let changed = false;
+    for (const capName of [`${safeServiceName}-proxy`, `${safeServiceName}-exec`]) {
+      if (config.capabilities[capName]) {
+        delete config.capabilities[capName];
+        changed = true;
+      }
+    }
+    if (config.services[safeServiceName]) {
+      delete config.services[safeServiceName];
+      changed = true;
+    }
+    if (changed) {
+      saveYAMLConfig(config);
+      reloadJaneeConfig();
+      console.log(`[github-app] removed Janee service/capabilities: ${safeServiceName}`);
+    }
+  } catch (err: any) {
+    console.warn(`[github-app] could not clean up Janee config: ${err.message}`);
+  }
+
   await removeAppFiles(slug);
   console.log(`[github-app] removed local files: ${slug}`);
 }
