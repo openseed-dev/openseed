@@ -269,8 +269,18 @@ export async function executeBrowser(
         const fullPage = params.fullPage as boolean | undefined;
         let buffer: Buffer;
         if (selector) {
-          const el = await page.locator(selector).first();
+          const el = page.locator(selector).first();
+          const count = await el.count();
+          if (count === 0) {
+            // Wait briefly in case element is loading
+            try {
+              await page.waitForSelector(selector, { timeout: 5000 });
+            } catch {
+              return { ok: false, error: `Selector not found: "${selector}". Check the selector and ensure the element exists on the page.`, snapshot: await getPageSnapshot(page) };
+            }
+          }
           buffer = await el.screenshot({ type: "png", timeout: 10000 });
+
         } else {
           buffer = await page.screenshot({ type: "png", fullPage: fullPage ?? false });
         }
