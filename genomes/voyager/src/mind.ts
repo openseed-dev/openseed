@@ -16,6 +16,7 @@ import {
   executeBrowser,
 } from './tools/browser.js';
 import { janee as executeJanee } from './tools/janee.js';
+import { see as executeSee, type SeeResult } from './tools/see.js';
 import {
   commitSkill as commitSkillToLibrary,
   skillInventory,
@@ -131,6 +132,13 @@ Example — push and open a PR:
       body: z.string().describe("Request body as JSON string for POST/PUT").optional(),
       command: z.array(z.string()).describe("Command as array of strings for exec action (e.g. ['git', 'push'])").optional(),
       reason: z.string().describe("Why you need this request (audit trail)").optional(),
+    }),
+  }),
+  see: tool({
+    description: `Look at an image. Provide a URL or local file path and the image will be loaded into your context so you can see it.\n\nExamples:\n  see({ url: "https://example.com/screenshot.png" })\n  see({ path: "/tmp/chart.png" })`,
+    inputSchema: z.object({
+      url: z.string().describe("URL of the image to view").optional(),
+      path: z.string().describe("Local file path of the image to view").optional(),
     }),
   }),
 };
@@ -574,13 +582,28 @@ ${this.currentTask.attempts > 1 ? `**Prior attempts:** ${this.currentTask.attemp
             toolOutput += `\n\n[SYSTEM] You have ${CYCLE_BUDGET - CYCLE_WARNING} actions left in this cycle. If you have a working solution, commit it as a skill. If not, consider calling complete_cycle.`;
           }
 
-          toolResults.push({
-            type: "tool-result",
-            toolCallId: tc.toolCallId,
-            toolName: tc.toolName,
-            input,
-            output: { type: "text", value: toolOutput },
-          });
+          // Special handling for see tool: include image content block
+          if (tc.toolName === 'see' && execResult.ok && (execResult.data as SeeResult)?.image) {
+            const seeData = execResult.data as SeeResult;
+            toolResults.push({
+              type: "tool-result",
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input,
+              output: [
+                { type: 'text', value: seeData.text || 'Image loaded' },
+                { type: 'image', source: seeData.image!.source },
+              ],
+            } as any);
+          } else {
+            toolResults.push({
+              type: "tool-result",
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input,
+              output: { type: "text", value: toolOutput },
+            });
+          }
         }
 
         this.messages.push(...result.response.messages);
@@ -690,6 +713,14 @@ Return your tasks using the propose_tasks tool.`;
       return { ok: true, data: result };
     }
 
+
+    if (name === "see") {
+      const seeResult = await executeSee(args as { url?: string; path?: string });
+      if (!seeResult.ok) {
+        return { ok: false, error: seeResult.error };
+      }
+      return { ok: true, data: seeResult };
+    }
     return { ok: false, error: `Unknown tool: ${name}` };
   }
 

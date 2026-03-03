@@ -11,6 +11,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { executeBash } from './tools/bash.js';
 import { janee as executeJanee } from './tools/janee.js';
+import { see as executeSee, type SeeResult } from './tools/see.js';
 import { Subconscious } from './subconscious.js';
 
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
@@ -54,6 +55,15 @@ Actions:
       command: z.array(z.string()).optional().describe("Command as array of strings (for exec)"),
       cwd: z.string().optional().describe("Working directory for exec commands"),
       reason: z.string().optional().describe("Why you need this"),
+    }),
+  }),
+  see: tool({
+    description: `Look at an image. Provide a URL or local file path and the image will be loaded into your context as a vision block.
+Supports JPEG, PNG, GIF, WebP.
+Use this to inspect screenshots, diagrams, photos, or any visual content.`,
+    inputSchema: z.object({
+      url: z.string().optional().describe("Image URL (http/https/data URI)"),
+      path: z.string().optional().describe("Local file path to an image"),
     }),
   }),
 };
@@ -264,6 +274,37 @@ You can install more; they persist across restarts.`;
             });
             if (onToolResult) {
               await onToolResult("janee", args, { ok: true, data: result }, ms);
+            }
+            continue;
+          }
+
+          if (tc.toolName === "see") {
+            const start = Date.now();
+            const seeResult = await executeSee(args as { url?: string; path?: string });
+            const ms = Date.now() - start;
+            this.actionCount++;
+            if (seeResult.ok && seeResult.image) {
+              toolResults.push({
+                type: "tool-result",
+                toolCallId: tc.toolCallId,
+                toolName: tc.toolName,
+                input: args,
+                output: [
+                  { type: 'text', value: seeResult.text || 'Image loaded' },
+                  { type: 'image', source: seeResult.image.source },
+                ],
+              } as any);
+            } else {
+              toolResults.push({
+                type: "tool-result",
+                toolCallId: tc.toolCallId,
+                toolName: tc.toolName,
+                input: args,
+                output: { type: 'text', value: seeResult.error || 'Failed to load image' },
+              });
+            }
+            if (onToolResult) {
+              await onToolResult("see", args, { ok: seeResult.ok, data: seeResult, error: seeResult.error }, ms);
             }
             continue;
           }
