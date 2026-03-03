@@ -14,6 +14,7 @@ import { executeBash } from './tools/bash.js';
 import {
   closeBrowser,
   executeBrowser,
+  type BrowserResult,
 } from './tools/browser.js';
 import { janee as executeJanee } from './tools/janee.js';
 import { see as executeSee, type SeeResult } from './tools/see.js';
@@ -66,7 +67,7 @@ new_tab {url?}, info, close.
 
 Every action returns a text snapshot: URL, title, visible text, interactive elements.`,
     inputSchema: z.object({
-      action: z.enum(["goto", "click", "fill", "type", "press", "snapshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"]),
+      action: z.enum(["goto", "click", "fill", "type", "press", "snapshot", "screenshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"]),
       url: z.string().optional(),
       selector: z.string().optional(),
       text: z.string().optional(),
@@ -571,37 +572,39 @@ ${this.currentTask.attempts > 1 ? `**Prior attempts:** ${this.currentTask.attemp
             await onToolResult(tc.toolName, input, execResult, ms);
           }
 
-          const resultContent = execResult.ok
-            ? JSON.stringify(execResult.data).slice(0, 4000)
-            : `Error: ${execResult.error}`;
+          // Check for image content (browser screenshot or see tool)
+          const hasImage = execResult.ok && (execResult.data as any)?.image && (execResult.data as any)?.image?.source;
+          if (hasImage) {
+            const imgData = execResult.data as { snapshot?: string; image: { type: 'image'; source: any }; imageText?: string; text?: string };
+            let imageText = imgData.snapshot || imgData.imageText || imgData.text || 'Image captured';
 
-          let toolOutput = resultContent;
-
-          // Cycle budget warning
-          if (this.currentActionCount === CYCLE_WARNING) {
-            toolOutput += `\n\n[SYSTEM] You have ${CYCLE_BUDGET - CYCLE_WARNING} actions left in this cycle. If you have a working solution, commit it as a skill. If not, consider calling complete_cycle.`;
-          }
-
-          // Special handling for see tool: include image content block
-          if (tc.toolName === 'see' && execResult.ok && (execResult.data as SeeResult)?.image) {
-            const seeData = execResult.data as SeeResult;
-            // Preserve cycle budget warning even when returning image blocks
-            const textParts = [seeData.text || 'Image loaded'];
-            if (toolOutput !== resultContent) {
-              // toolOutput has appended system messages (e.g. cycle warning)
-              textParts.push(toolOutput.slice(resultContent.length));
+            // Cycle budget warning (also applies on image actions)
+            if (this.currentActionCount === CYCLE_WARNING) {
+              imageText += `\n\n[SYSTEM] You have ${CYCLE_BUDGET - CYCLE_WARNING} actions left in this cycle. If you have a working solution, commit it as a skill. If not, consider calling complete_cycle.`;
             }
+
             toolResults.push({
               type: "tool-result",
               toolCallId: tc.toolCallId,
               toolName: tc.toolName,
               input,
               output: [
-                { type: 'text', value: textParts.join('\n') },
-                { type: 'image', source: seeData.image!.source },
+                { type: 'text', value: imageText },
+                { type: 'image', source: imgData.image.source },
               ],
             } as any);
           } else {
+            const resultContent = execResult.ok
+              ? JSON.stringify(execResult.data).slice(0, 4000)
+              : `Error: ${execResult.error}`;
+
+            let toolOutput = resultContent;
+
+            // Cycle budget warning
+            if (this.currentActionCount === CYCLE_WARNING) {
+              toolOutput += `\n\n[SYSTEM] You have ${CYCLE_BUDGET - CYCLE_WARNING} actions left in this cycle. If you have a working solution, commit it as a skill. If not, consider calling complete_cycle.`;
+            }
+
             toolResults.push({
               type: "tool-result",
               toolCallId: tc.toolCallId,
@@ -711,7 +714,11 @@ Return your tasks using the propose_tasks tool.`;
       const browserResult = await executeBrowser(args.action, args);
       if (!browserResult.ok) return { ok: false, error: browserResult.error };
       const output = browserResult.snapshot || (browserResult.data ? String(browserResult.data) : "ok");
-      return { ok: true, data: { snapshot: browserResult.snapshot, data: browserResult.data } };
+      return { ok: true, data: {
+        snapshot: browserResult.snapshot,
+        data: browserResult.data,
+        ...(browserResult.image ? { image: browserResult.image, imageText: browserResult.imageText } : {}),
+      } };
     }
 
     if (name === "janee") {

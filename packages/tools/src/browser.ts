@@ -133,6 +133,17 @@ export interface BrowserResult {
   snapshot?: string;
   error?: string;
   data?: unknown;
+  /** Anthropic-format image content block (from screenshot action) */
+  image?: {
+    type: 'image';
+    source: {
+      type: 'base64';
+      media_type: string;
+      data: string;
+    };
+  };
+  /** Text description of the screenshot */
+  imageText?: string;
 }
 
 export async function executeBrowser(
@@ -252,6 +263,30 @@ export async function executeBrowser(
         };
       }
 
+      case "screenshot": {
+        const page = await getActivePage();
+        const selector = params.selector as string | undefined;
+        const fullPage = params.fullPage as boolean | undefined;
+        let buffer: Buffer;
+        if (selector) {
+          const el = await page.locator(selector).first();
+          buffer = await el.screenshot({ type: "png", timeout: 10000 });
+        } else {
+          buffer = await page.screenshot({ type: "png", fullPage: fullPage ?? false });
+        }
+        const data = buffer.toString("base64");
+        const sizeKB = (buffer.length / 1024).toFixed(0);
+        return {
+          ok: true,
+          snapshot: await getPageSnapshot(page),
+          image: {
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: "image/png", data },
+          },
+          imageText: `Screenshot captured (PNG, ${sizeKB}KB)${selector ? ` of element: ${selector}` : fullPage ? " (full page)" : " (viewport)"}`,
+        };
+      }
+
       case "close": {
         if (context) {
           try { await context.close(); } catch {}
@@ -262,7 +297,7 @@ export async function executeBrowser(
       }
 
       default:
-        return { ok: false, error: `Unknown action: ${action}. Available: goto, click, fill, type, press, snapshot, evaluate, wait, tabs, switch_tab, new_tab, info, close` };
+        return { ok: false, error: `Unknown action: ${action}. Available: goto, click, fill, type, press, snapshot, screenshot, evaluate, wait, tabs, switch_tab, new_tab, info, close` };
     }
   } catch (err) {
     if (err instanceof Error && (err.message.includes("Target closed") || err.message.includes("Connection closed"))) {
@@ -300,6 +335,7 @@ Actions:
 - tabs : list open tabs
 - switch_tab { index } : switch to a different tab
 - new_tab { url? } : open a new tab
+- screenshot { selector?, fullPage? } : capture a PNG screenshot (returns image for vision). Optionally target a specific element or capture full page.
 - info : get the raw CDP endpoint URL for direct access (use when built-in actions aren't enough)
 - close : shut down the browser (profile is preserved on disk)
 
@@ -319,7 +355,7 @@ Example flow:
       action: {
         type: "string",
         description: "The browser action to perform",
-        enum: ["goto", "click", "fill", "type", "press", "snapshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"],
+        enum: ["goto", "click", "fill", "type", "press", "snapshot", "screenshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"],
       },
       url: { type: "string", description: "URL for goto/new_tab" },
       selector: { type: "string", description: "CSS/text/role selector for click/fill/type/wait" },
@@ -327,6 +363,7 @@ Example flow:
       key: { type: "string", description: "Key name for press (Enter, Tab, Escape, etc.)" },
       script: { type: "string", description: "JavaScript for evaluate" },
       index: { type: "number", description: "Tab index for switch_tab" },
+      fullPage: { type: "boolean", description: "Capture full scrollable page (for screenshot action)" },
       ms: { type: "number", description: "Milliseconds for wait" },
     },
     required: ["action"],

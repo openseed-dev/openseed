@@ -18,6 +18,7 @@ import { executeBash } from './tools/bash.js';
 import {
   closeBrowser,
   executeBrowser,
+  type BrowserResult,
 } from './tools/browser.js';
 import { janee as executeJanee } from './tools/janee.js';
 import { see as executeSee, type SeeResult } from './tools/see.js';
@@ -82,12 +83,13 @@ Actions:
 
 Every action returns a text snapshot of the page: URL, title, visible text, and interactive elements.`,
     inputSchema: z.object({
-      action: z.enum(["goto", "click", "fill", "type", "press", "snapshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"]).describe("The browser action to perform"),
+      action: z.enum(["goto", "click", "fill", "type", "press", "snapshot", "screenshot", "evaluate", "wait", "tabs", "switch_tab", "new_tab", "info", "close"]).describe("The browser action to perform"),
       url: z.string().describe("URL for goto/new_tab").optional(),
       selector: z.string().describe("CSS/text/role selector for click/fill/type/wait").optional(),
       text: z.string().describe("Text for fill/type").optional(),
       key: z.string().describe("Key name for press (Enter, Tab, Escape, etc.)").optional(),
       script: z.string().describe("JavaScript for evaluate").optional(),
+      fullPage: z.boolean().describe("For screenshot action: capture full page instead of viewport (default: false)").optional(),
       index: z.number().describe("Tab index for switch_tab").optional(),
       ms: z.number().describe("Milliseconds for wait").optional(),
     }),
@@ -796,6 +798,23 @@ export class Mind {
             output: [
               { type: 'text', value: seeData.text || 'Image loaded' },
               { type: 'image', source: seeData.image!.source },
+            ],
+          } as any);
+        } else if (tc.toolName === 'browser' && execResult.ok && (execResult.data as any)?.image) {
+          const browserData = execResult.data as { snapshot?: string; image: { type: 'image'; source: any }; imageText?: string };
+          // Strip image data from action log to keep logs clean
+          actionsSinceSleep[actionsSinceSleep.length - 1].result = {
+            ok: true,
+            data: { snapshot: browserData.snapshot, imageText: browserData.imageText, image: '[base64 image omitted]' },
+          };
+          toolResults.push({
+            type: "tool-result",
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input,
+            output: [
+              { type: 'text', value: browserData.snapshot || browserData.imageText || 'Screenshot captured' },
+              { type: 'image', source: browserData.image.source },
             ],
           } as any);
         } else {
@@ -1710,6 +1729,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
             data: {
               snapshot: result.snapshot,
               ...(result.data !== undefined ? { data: result.data } : {}),
+              ...(result.image ? { image: result.image, imageText: result.imageText } : {}),
             },
           };
         }
