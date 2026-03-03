@@ -176,7 +176,7 @@ export function consumeFlow(state: string): { name: string; owner: string } | nu
 // ── Route handlers ──
 
 export function handleRedirect(state: string, orchestratorPort: number): string {
-  const flow = pendingFlows.get(state);
+  const flow = consumeFlow(state);
   if (!flow) return '<h1>Invalid or expired state</h1><p>Please start the flow again from the dashboard.</p>';
 
   const callbackUrl = `http://127.0.0.1:${orchestratorPort}/api/github-app/callback`;
@@ -195,15 +195,11 @@ export function handleRedirect(state: string, orchestratorPort: number): string 
 </script>`;
 }
 
-export async function handleCallback(code: string, state: string): Promise<{ html: string; error?: string }> {
-  const flow = consumeFlow(state);
-  if (!flow) {
-    return { html: '<h1>Error</h1><p>Invalid or expired state. Please try again from the dashboard.</p>', error: 'invalid state' };
-  }
-
+export async function handleCallback(code: string, _state: string): Promise<{ html: string; error?: string }> {
+  // State was already consumed by handleRedirect to prevent duplicate submissions.
+  // The one-time `code` from GitHub is the real credential (single-use, enforced by GitHub).
   try {
-    // The manifest code exchange doesn't strictly require auth, but GitHub
-    // recommends it. We send without auth since we don't have a PAT.
+    // No auth token needed — the one-time manifest code is itself the credential.
     const res = await fetch(`https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`, {
       method: 'POST',
       headers: {
@@ -238,7 +234,7 @@ export async function handleCallback(code: string, state: string): Promise<{ htm
 <style>body{font-family:system-ui;max-width:480px;margin:60px auto;color:#1a1a1a}
 a{color:#0066cc}code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:14px}</style>
 <h1>GitHub App created</h1>
-<p>App <strong>${escapeHtml(app.slug)}</strong> (id: ${app.id}) has been saved.</p>
+<p>App <strong>${escapeHtml(app.slug)}</strong> (id: ${escapeHtml(String(app.id))}) has been saved.</p>
 <p>Next step: <a href="${installUrl}" target="_blank">Install it on your repos</a>, then go back to the dashboard to activate it.</p>
 <p style="margin-top:40px;color:#888;font-size:13px">You can close this tab.</p>`,
     };

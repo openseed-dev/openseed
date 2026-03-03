@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -20,6 +21,15 @@ function CreateAppForm({ onCreated, onCancel }: {
   const [owner, setOwner] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -29,18 +39,18 @@ function CreateAppForm({ onCreated, onCancel }: {
     try {
       const { redirectPath } = await api.createGitHubApp(trimmed, owner.trim() || undefined);
       window.open(redirectPath, '_blank');
-      // Poll for the app to appear (user will complete flow in the new tab)
-      const poll = setInterval(async () => {
+      pollRef.current = setInterval(async () => {
         try {
           const apps = await api.fetchGitHubApps();
           if (apps.some(a => a.name === trimmed || a.slug?.startsWith(trimmed.toLowerCase()))) {
-            clearInterval(poll);
+            if (pollRef.current) clearInterval(pollRef.current);
             onCreated();
           }
         } catch { /* keep polling */ }
       }, 3000);
-      // Stop polling after 10 minutes
-      setTimeout(() => clearInterval(poll), 10 * 60 * 1000);
+      timeoutRef.current = setTimeout(() => {
+        if (pollRef.current) clearInterval(pollRef.current);
+      }, 10 * 60 * 1000);
     } catch (err: any) {
       setError(err.message);
       setBusy(false);
