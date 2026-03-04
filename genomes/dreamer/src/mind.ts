@@ -1318,9 +1318,12 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
       if (Array.isArray(content)) {
         for (const tr of content as any[]) {
           const name = tr.toolName || "tool";
-          const val = tr.output?.value || tr.result || "";
+          const raw = tr.output?.value;
+          const val = typeof raw === "string" ? raw
+            : Array.isArray(raw) ? (raw.find((p: any) => p.type === "text")?.text || "(media)")
+            : tr.result || "";
           const firstLine = String(val).split("\n")[0].slice(0, 150);
-          if (tr.output?.value?.startsWith("Error:") || tr.output?.value?.startsWith("EXIT ")) {
+          if (typeof val === "string" && (val.startsWith("Error:") || val.startsWith("EXIT "))) {
             lines.push(`${name} -> FAIL: ${firstLine}`);
           } else {
             lines.push(`${name} -> ${firstLine}`);
