@@ -57,23 +57,27 @@ export class EventStore {
       const { size } = await fd.stat();
       if (size === 0) return [];
 
+      // Read from the tail, collecting raw buffers until we have enough
+      // newlines. We decode only after concatenation so multibyte UTF-8
+      // sequences split across chunk boundaries are handled correctly.
       const CHUNK = 64 * 1024; // 64KB
       let offset = size;
-      const lines: string[] = [];
-      let remainder = "";
+      const bufs: Buffer[] = [];
+      let newlineCount = 0;
 
-      while (offset > 0 && lines.length < n) {
+      while (offset > 0 && newlineCount <= n) {
         const chunkSize = Math.min(CHUNK, offset);
         offset -= chunkSize;
         const buf = Buffer.alloc(chunkSize);
         await fd.read(buf, 0, chunkSize, offset);
-        const chunk = buf.toString("utf-8") + remainder;
-        const parts = chunk.split("\n");
-        remainder = parts.shift()!;
-        lines.unshift(...parts.filter((l) => l.trim()));
+        bufs.unshift(buf);
+        for (let i = 0; i < buf.length; i++) {
+          if (buf[i] === 0x0a) newlineCount++;
+        }
       }
-      if (remainder.trim()) lines.unshift(remainder);
 
+      const text = Buffer.concat(bufs).toString("utf-8");
+      const lines = text.split("\n").filter((l) => l.trim());
       return lines.slice(-n).map((l) => JSON.parse(l));
     } finally {
       await fd.close();
