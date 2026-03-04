@@ -11,6 +11,7 @@
     { "id": "purpose", "label": "purpose", "file": "PURPOSE.md", "type": "markdown" },
     { "id": "diary", "label": "diary", "file": "self/diary.md", "type": "markdown" },
     { "id": "observations", "label": "observations", "file": ".self/observations.md", "type": "text" },
+    { "id": "briefing", "label": "briefing", "file": ".self/briefing.md", "type": "markdown" },
     { "id": "rules", "label": "rules", "file": ".self/rules.md", "type": "text" },
     { "id": "dreams", "label": "dreams", "file": ".self/dreams.jsonl", "type": "jsonl", "limit": 10 },
     { "id": "self-eval", "label": "self-eval", "file": ".self/creator-log.jsonl", "type": "jsonl", "limit": 10 }
