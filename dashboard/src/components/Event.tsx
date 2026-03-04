@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { ts, summarize } from '@/utils';
+
 import type { CreatureEvent } from '@/types';
+import {
+  summarize,
+  ts,
+} from '@/utils';
 
 function Expandable({ summary, children }: { summary: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -10,6 +14,14 @@ function Expandable({ summary, children }: { summary: React.ReactNode; children:
       {open && <div className="mt-1.5 p-2 bg-[#f5f5f5] rounded whitespace-pre-wrap break-all text-xs text-text-secondary">{children}</div>}
     </>
   );
+}
+
+function fmtDuration(s: number): string {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
 export function Event({ ev, showCreature }: { ev: CreatureEvent; showCreature?: boolean }) {
@@ -75,7 +87,7 @@ export function Event({ ev, showCreature }: { ev: CreatureEvent; showCreature?: 
       <>
         {cl}
         <span className="font-bold ml-2 text-dormant">sleep</span>
-        <span className="text-text-muted text-[11px] ml-1.5">{ev.seconds || 30}s / {ev.actions || 0} actions</span>
+        <span className="text-text-muted text-[11px] ml-1.5">{fmtDuration(ev.seconds || 30)} / {ev.actions || 0} actions</span>
         <Expandable summary={<span className="text-text-primary ml-1"> - {summarize(ev.text || '', 120)}</span>}>
           {ev.text || ''}
         </Expandable>

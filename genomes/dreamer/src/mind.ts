@@ -18,10 +18,12 @@ import { executeBash } from './tools/bash.js';
 import {
   closeBrowser,
   executeBrowser,
-  type BrowserResult,
 } from './tools/browser.js';
 import { janee as executeJanee } from './tools/janee.js';
-import { see as executeSee, type SeeResult } from './tools/see.js';
+import {
+  see as executeSee,
+  type SeeResult,
+} from './tools/see.js';
 
 const MAX_CONTEXT_CHARS = 100_000;
 const KEEP_RECENT_MESSAGES = 20;
@@ -30,12 +32,13 @@ const CONVERSATION_LOG = ".self/conversation.jsonl";
 const OBSERVATIONS_FILE = ".self/observations.md";
 const DREAMS_FILE = ".self/dreams.jsonl";
 const RULES_FILE = ".self/rules.md";
+const BRIEFING_FILE = ".self/briefing.md";
 const CREATOR_LOG = ".self/creator-log.jsonl";
 const RULES_CAP = 15;
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 const CYCLE_COUNT_FILE = '.sys/cycle-count';
 const MAX_EVAL_TURNS = 100;
-const MAX_CONSOLIDATION_TURNS = 10;
+const MAX_CONSOLIDATION_TURNS = 30;
 
 const provider = createAnthropic({
   baseURL: process.env.ANTHROPIC_BASE_URL
@@ -782,10 +785,9 @@ export class Mind {
           await onToolResult(tc.toolName, args, execResult, ms);
         }
 
-        // Special handling for see tool: include image content block
+        // Special handling for see tool: include image via AI SDK content format
         if (tc.toolName === 'see' && execResult.ok && (execResult.data as SeeResult)?.image) {
           const seeData = execResult.data as SeeResult;
-          // Strip image data from the action record to keep logs clean
           actionsSinceSleep[actionsSinceSleep.length - 1].result = {
             ok: true,
             data: { text: seeData.text, image: '[base64 image omitted]' },
@@ -795,14 +797,16 @@ export class Mind {
             toolCallId: tc.toolCallId,
             toolName: tc.toolName,
             input,
-            output: [
-              { type: 'text', value: seeData.text || 'Image loaded' },
-              { type: 'image', source: seeData.image!.source },
-            ],
-          } as any);
+            output: {
+              type: 'content',
+              value: [
+                { type: 'text', text: seeData.text || 'Image loaded' },
+                { type: 'image-data', data: seeData.image!.source.data, mediaType: seeData.image!.source.media_type },
+              ],
+            } as any,
+          });
         } else if (tc.toolName === 'browser' && execResult.ok && (execResult.data as any)?.image) {
-          const browserData = execResult.data as { snapshot?: string; image: { type: 'image'; source: any }; imageText?: string };
-          // Strip image data from action log to keep logs clean
+          const browserData = execResult.data as { snapshot?: string; image: { type: 'image'; source: { data: string; media_type: string } }; imageText?: string };
           actionsSinceSleep[actionsSinceSleep.length - 1].result = {
             ok: true,
             data: { snapshot: browserData.snapshot, imageText: browserData.imageText, image: '[base64 image omitted]' },
@@ -812,11 +816,14 @@ export class Mind {
             toolCallId: tc.toolCallId,
             toolName: tc.toolName,
             input,
-            output: [
-              { type: 'text', value: browserData.snapshot || browserData.imageText || 'Screenshot captured' },
-              { type: 'image', source: browserData.image.source },
-            ],
-          } as any);
+            output: {
+              type: 'content',
+              value: [
+                { type: 'text', text: browserData.snapshot || browserData.imageText || 'Screenshot captured' },
+                { type: 'image-data', data: browserData.image.source.data, mediaType: browserData.image.source.media_type },
+              ],
+            } as any,
+          });
         } else {
           const resultContent = execResult.ok
             ? JSON.stringify(execResult.data).slice(0, 4000)
@@ -1026,6 +1033,7 @@ export class Mind {
           reflection: z.string().describe('One paragraph: did the creature make real progress or tread water? What should it prioritize when it wakes?'),
           rule_adds: z.array(z.string()).describe('New rules to add (format: "- ALWAYS: ..." or "- NEVER: ..."). Only if genuinely needed. Empty array if none.'),
           rule_removes: z.array(z.string()).describe('Existing rules to remove (paste the exact rule text). Empty array if none.'),
+          briefing: z.string().optional().describe('Updated situational briefing — a concise summary of where things stand, maintained across sessions. Read .self/briefing.md first if it exists and update it. Observations capture individual facts; the briefing captures the coherent big picture. Could be project state, portfolio positions, search progress, relationship map — whatever matters for this creature. Replace stale info, don\'t append. Keep under 80 lines. Empty string if nothing worth briefing.'),
         }),
       }),
     };
@@ -1060,6 +1068,7 @@ Your job:
 3. Identify what's worth remembering. Capture SUBSTANCE not just events — if the creature had a discussion, note what was said. If it got feedback, note what the feedback was. If it made a commitment, note the specifics.
 4. Evaluate behavioral patterns — was the creature efficient? Did it rabbit-hole? Did it follow its own rules? Did it check notifications?
 5. Propose rule changes only when justified by concrete evidence from this session
+6. Update the situational briefing — read .self/briefing.md with bash (if it exists), then provide an updated version via the briefing field in done(). This is the creature's big-picture context that persists across sessions. Observations are individual facts; the briefing is the coherent picture those facts form. Update it to reflect the current state of whatever the creature is working on. Replace stale content, keep it concise (~50-80 lines). If there's nothing worth briefing, leave it empty.
 
 Observation priorities:
 - RED: commitments, bans, credentials, deadlines, key wins, creator feedback, anything the creature MUST remember
@@ -1078,6 +1087,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
     let reflection = "No reflection.";
     let ruleAdds: string[] = [];
     let ruleRemoves: string[] = [];
+    let briefingContent = "";
 
     while (!finished && turns < MAX_CONSOLIDATION_TURNS) {
       turns++;
@@ -1117,6 +1127,7 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
           reflection = args.reflection || "No reflection.";
           ruleAdds = Array.isArray(args.rule_adds) ? args.rule_adds : [];
           ruleRemoves = Array.isArray(args.rule_removes) ? args.rule_removes : [];
+          briefingContent = args.briefing || "";
           finished = true;
           toolResults.push({
             type: "tool-result",
@@ -1172,6 +1183,11 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
 
     if (observations) {
       await this.appendObservations(observations);
+    }
+
+    if (briefingContent) {
+      await fs.writeFile(BRIEFING_FILE, briefingContent + "\n", "utf-8");
+      console.log(`[mind] briefing updated (${briefingContent.split("\n").length} lines)`);
     }
 
     const obsCount = (observations.match(/^(RED|YLW|GRN)/gm) || []).length;
@@ -1532,6 +1548,10 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
     await fs.writeFile(CYCLE_COUNT_FILE, String(this.cycleCount));
     this.sessionDigest = [];
     const observations = await this.readObservations();
+    let briefing = "";
+    try {
+      briefing = (await fs.readFile(BRIEFING_FILE, "utf-8")).trim();
+    } catch {}
     const reason = this.wakeReason;
     this.wakeReason = null;
     if (!reason && onWake) await onWake("Sleep timer expired", "timer");
@@ -1540,6 +1560,10 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
     let wakeMsg = reason
       ? `[${now}] You were woken early (slept ${this.formatDuration(actualSleptS)} of requested ${this.formatDuration(requestedS)}). Reason: ${reason}\n`
       : `[${now}] You woke up after sleeping ${this.formatDuration(actualSleptS)}. This is cycle ${this.cycleCount}.\n`;
+
+    if (briefing) {
+      wakeMsg += `\n## Briefing\n\n${briefing}\n`;
+    }
 
     if (observations) {
       wakeMsg += `\n${observations}\n`;
@@ -1862,8 +1886,16 @@ Use ${time} as the timestamp for observations. Be specific and concrete — "dis
       }
     }
 
+    let briefing = "";
+    try {
+      briefing = (await fs.readFile(BRIEFING_FILE, "utf-8")).trim();
+    } catch {}
+
     let context = "";
     if (lastCheckpoint) context += lastCheckpoint + "\n";
+    if (briefing) {
+      context += "## Briefing\n\n" + briefing + "\n\n";
+    }
     if (workflows.length > 0) {
       context += "## Active Workflows\n\nThese are approaches you adopted. Use them instead of old habits:\n";
       for (const w of workflows) context += `- ${w}\n`;
