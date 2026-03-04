@@ -14,14 +14,19 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import {
+  listMailboxes,
+  markRead,
+  readInbox,
+  sendMessage,
+} from '../shared/mail.js';
+import {
   BUNDLED_GENOMES_DIR,
   CREATURES_DIR,
   GENOMES_DIR,
-  OPENSEED_HOME,
   MAIL_DIR,
+  OPENSEED_HOME,
 } from '../shared/paths.js';
 import { spawnCreature } from '../shared/spawn.js';
-import { sendMessage, readInbox, markRead, listMailboxes } from '../shared/mail.js';
 import { Event } from '../shared/types.js';
 import {
   getSpendingCap,
@@ -979,14 +984,14 @@ export class Orchestrator {
                 const wakeRes = await fetch(creatureUrl(to, recipientSup.port, '/wake'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ reason: `mail from ${name}` }),
+                  body: JSON.stringify({ reason: `mail from ${name}${subjectLine} — check /mail/inbox/` }),
                 });
                 const wakeBody = await wakeRes.text();
                 if (wakeBody === 'woken') {
-                  await this.emitEvent(to, { t: new Date().toISOString(), type: 'creature.wake', reason: `mail from ${name}`, source: 'mail' });
+                  await this.emitEvent(to, { t: new Date().toISOString(), type: 'creature.wake', reason: `mail from ${name}${subjectLine}`, source: 'mail' });
                 } else {
                   // Creature is already running — inject a low-priority system notification
-                  await this.sendMessage(to, `[MAIL] New message from ${name}${subjectLine}. Check your inbox at a natural pause.`, 'system');
+                  await this.sendMessage(to, `[MAIL] New message from ${name}${subjectLine}. Check your inbox at a natural pause: ls /mail/inbox/`, 'system');
                 }
               } catch { /* recipient not reachable, mail is still saved */ }
             }
