@@ -252,6 +252,7 @@ export class CreatureSupervisor {
     const mailbox = path.join(MAIL_DIR, name);
     fsSync.mkdirSync(path.join(mailbox, 'inbox'), { recursive: true });
     fsSync.mkdirSync(path.join(mailbox, 'sent'), { recursive: true });
+    fsSync.mkdirSync(path.join(mailbox, 'archived'), { recursive: true });
     const hostMailbox = IS_DOCKER
       ? mailbox.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
       : mailbox;

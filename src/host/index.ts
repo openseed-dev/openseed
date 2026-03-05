@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import {
+  archiveMessages,
   listMailboxes,
   markRead,
   readInbox,
@@ -1028,6 +1029,16 @@ export class Orchestrator {
           try {
             await markRead(MAIL_DIR, name, [msgId]);
             res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+          } catch (e: any) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
+          return;
+        }
+
+        if (action.startsWith('mail/') && action.endsWith('/archive') && req.method === 'POST') {
+          const msgId = action.slice(5, -8);
+          if (!/^[a-f0-9-]{36}$/.test(msgId)) { res.writeHead(400); res.end(JSON.stringify({ error: 'invalid message id' })); return; }
+          try {
+            const count = await archiveMessages(MAIL_DIR, name, [msgId]);
+            res.writeHead(200); res.end(JSON.stringify({ ok: true, archived: count }));
           } catch (e: any) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
           return;
         }

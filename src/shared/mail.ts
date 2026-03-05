@@ -40,6 +40,7 @@ export async function ensureMailbox(
   const base = path.join(mailDir, creature);
   await fs.mkdir(path.join(base, "inbox"), { recursive: true });
   await fs.mkdir(path.join(base, "sent"), { recursive: true });
+  await fs.mkdir(path.join(base, "archived"), { recursive: true });
 }
 
 /** Send a message from one creature to another. */
@@ -135,6 +136,33 @@ export async function markRead(
   }
 
   return marked;
+}
+
+/** Move messages from inbox to archived. */
+export async function archiveMessages(
+  mailDir: string,
+  creature: string,
+  ids: string[],
+): Promise<number> {
+  validateCreatureName(creature);
+  const inboxDir = path.join(mailDir, creature, "inbox");
+  const archiveDir = path.join(mailDir, creature, "archived");
+  await fs.mkdir(archiveDir, { recursive: true });
+  let archived = 0;
+
+  for (const id of ids) {
+    if (!/^[a-f0-9-]{36}$/.test(id)) continue;
+    const src = path.join(inboxDir, `${id}.json`);
+    const dest = path.join(archiveDir, `${id}.json`);
+    try {
+      await fs.rename(src, dest);
+      archived++;
+    } catch {
+      // File doesn't exist or already archived
+    }
+  }
+
+  return archived;
 }
 
 /** List all mailboxes with unread counts. */
