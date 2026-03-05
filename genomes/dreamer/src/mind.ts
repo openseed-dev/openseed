@@ -1,6 +1,9 @@
 import {
   appendFileSync,
+  mkdirSync,
   readFileSync,
+  rmSync,
+  writeFileSync,
 } from 'node:fs';
 import fs from 'node:fs/promises';
 
@@ -35,6 +38,8 @@ const RULES_FILE = ".self/rules.md";
 const BRIEFING_FILE = ".self/briefing.md";
 const CREATOR_LOG = ".self/creator-log.jsonl";
 const RULES_CAP = 15;
+const TOOL_RESULT_CAP = 4000;
+const SPILL_DIR = "/tmp/tool-output";
 const MODEL = process.env.LLM_MODEL || "claude-opus-4-6";
 const CYCLE_COUNT_FILE = '.sys/cycle-count';
 const MAX_EVAL_TURNS = 100;
@@ -587,6 +592,8 @@ export class Mind {
       await fs.unlink('.sys/sleep.json').catch(() => {});
     } catch {}
 
+    try { rmSync(SPILL_DIR, { recursive: true, force: true }); } catch {}
+
     this.cycleCount++;
     await fs.writeFile(CYCLE_COUNT_FILE, String(this.cycleCount));
     const initialContext = await this.buildInitialContext();
@@ -831,9 +838,21 @@ export class Mind {
             } as any,
           });
         } else {
-          const resultContent = execResult.ok
-            ? JSON.stringify(execResult.data).slice(0, 4000)
+          const fullResult = execResult.ok
+            ? JSON.stringify(execResult.data)
             : `Error: ${execResult.error}`;
+
+          let resultContent: string;
+          if (fullResult.length > TOOL_RESULT_CAP) {
+            const id = Math.random().toString(16).slice(2, 8);
+            mkdirSync(SPILL_DIR, { recursive: true });
+            const spillPath = `${SPILL_DIR}/${tc.toolName}-${id}.txt`;
+            writeFileSync(spillPath, fullResult);
+            resultContent = fullResult.slice(0, TOOL_RESULT_CAP)
+              + `\n\n[TRUNCATED — showing ${TOOL_RESULT_CAP} of ${fullResult.length} chars. Full output: ${spillPath} — use cat, head, tail, or grep to read it]`;
+          } else {
+            resultContent = fullResult;
+          }
 
           toolResults.push({
             type: "tool-result",
