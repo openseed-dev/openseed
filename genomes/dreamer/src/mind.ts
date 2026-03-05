@@ -844,12 +844,15 @@ export class Mind {
 
           let resultContent: string;
           if (fullResult.length > TOOL_RESULT_CAP) {
-            const id = Math.random().toString(16).slice(2, 8);
-            mkdirSync(SPILL_DIR, { recursive: true });
-            const spillPath = `${SPILL_DIR}/${tc.toolName}-${id}.txt`;
-            writeFileSync(spillPath, fullResult);
-            resultContent = fullResult.slice(0, TOOL_RESULT_CAP)
-              + `\n\n[TRUNCATED — showing ${TOOL_RESULT_CAP} of ${fullResult.length} chars. Full output: ${spillPath} — use cat, head, tail, or grep to read it]`;
+            let spillNote = `\n\n[TRUNCATED — showing ${TOOL_RESULT_CAP} of ${fullResult.length} chars]`;
+            try {
+              const id = Math.random().toString(16).slice(2, 8);
+              mkdirSync(SPILL_DIR, { recursive: true });
+              const spillPath = `${SPILL_DIR}/${tc.toolName}-${id}.txt`;
+              writeFileSync(spillPath, fullResult);
+              spillNote = `\n\n[TRUNCATED — showing ${TOOL_RESULT_CAP} of ${fullResult.length} chars. Full output: ${spillPath} — use cat, head, tail, or grep to read it]`;
+            } catch {}
+            resultContent = fullResult.slice(0, TOOL_RESULT_CAP) + spillNote;
           } else {
             resultContent = fullResult;
           }
