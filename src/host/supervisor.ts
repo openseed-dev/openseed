@@ -328,11 +328,16 @@ export class CreatureSupervisor {
       });
       reconnected = true;
     } else if (this.containerExists()) {
-      // Check if config changed (e.g. model) — if so, recreate instead of reusing
+      // If config changed (e.g. model), commit container state then recreate
       const containerModel = this.getContainerEnv(cname, 'LLM_MODEL');
       const wantModel = this.config.model || '';
       if (containerModel !== wantModel) {
-        console.log(`[${name}] config changed (model: ${containerModel || '(none)'} → ${wantModel || '(default)'}), recreating container`);
+        console.log(`[${name}] config changed (model: ${containerModel || '(none)'} → ${wantModel || '(default)'}), remounting`);
+        try {
+          execSync(`docker commit ${cname} ${cname}`, { stdio: 'ignore', timeout: 120_000 });
+        } catch (err) {
+          console.error(`[${name}] commit failed before remount, container preserved`, err);
+        }
         try { execSync(`docker rm -f ${cname}`, { stdio: 'ignore' }); } catch {}
         this.creature = this.createContainer(cname, dir, port, orchestratorPort, autoIterate, name);
       } else {
