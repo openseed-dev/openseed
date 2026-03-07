@@ -115,9 +115,6 @@ export function readJaneeConfig(): JaneeConfigView {
 
 // ── Mutations (all return fresh masked view) ──
 
-function loadConfig(): JaneeYAMLConfig {
-  return loadYAMLConfig();
-}
 
 export function addService(name: string, baseUrl: string, auth: AuthConfig): JaneeConfigView {
   addServiceYAML(name, baseUrl, auth);
@@ -125,7 +122,7 @@ export function addService(name: string, baseUrl: string, auth: AuthConfig): Jan
 }
 
 export function updateService(name: string, patch: { baseUrl?: string; authType?: AuthConfig['type'] }): JaneeConfigView {
-  const config = loadConfig();
+  const config = loadYAMLConfig();
   const svc = config.services[name];
   if (!svc) throw new Error(`Service "${name}" not found`);
   if (patch.baseUrl !== undefined) svc.baseUrl = patch.baseUrl;
@@ -135,7 +132,7 @@ export function updateService(name: string, patch: { baseUrl?: string; authType?
 }
 
 export function deleteService(name: string): JaneeConfigView {
-  const config = loadConfig();
+  const config = loadYAMLConfig();
   if (!config.services[name]) throw new Error(`Service "${name}" not found`);
   delete config.services[name];
   // Remove capabilities that referenced this service
@@ -154,7 +151,7 @@ export function addCapability(name: string, capConfig: CapabilityConfig): JaneeC
 const CAP_FIELDS = ['service', 'ttl', 'mode', 'requiresReason', 'rules', 'allowedAgents', 'allowCommands', 'workDir', 'timeout'] as const;
 
 export function updateCapability(name: string, patch: Partial<CapabilityConfig>): JaneeConfigView {
-  const config = loadConfig();
+  const config = loadYAMLConfig();
   const cap = config.capabilities[name];
   if (!cap) throw new Error(`Capability "${name}" not found`);
   for (const key of CAP_FIELDS) {
@@ -165,7 +162,7 @@ export function updateCapability(name: string, patch: Partial<CapabilityConfig>)
 }
 
 export function deleteCapability(name: string): JaneeConfigView {
-  const config = loadConfig();
+  const config = loadYAMLConfig();
   if (!config.capabilities[name]) throw new Error(`Capability "${name}" not found`);
   delete config.capabilities[name];
   saveYAMLConfig(config);
@@ -173,7 +170,7 @@ export function deleteCapability(name: string): JaneeConfigView {
 }
 
 export function updateCapabilityAgents(capName: string, agents: string[]): JaneeConfigView {
-  const config = loadConfig();
+  const config = loadYAMLConfig();
   const cap = config.capabilities[capName];
   if (!cap) throw new Error(`Capability "${capName}" not found`);
   cap.allowedAgents = agents.length > 0 ? agents : undefined;
