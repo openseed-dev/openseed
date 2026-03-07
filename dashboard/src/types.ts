@@ -146,6 +146,14 @@ export interface GitHubAppInfo {
   created_at?: string;
 }
 
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  isDefault: boolean;
+  inputCostPerMillion: number | null;
+  outputCostPerMillion: number | null;
+}
+
 export interface GitHubInstallation {
   id: number;
   account: { login: string };

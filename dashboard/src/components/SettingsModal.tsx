@@ -94,6 +94,7 @@ function LimitsSection() {
 
 function NarratorSection() {
   const config = useStore(s => s.narratorConfig);
+  const models = useStore(s => s.models);
   const loadNarratorConfig = useStore(s => s.loadNarratorConfig);
   const [enabled, setEnabled] = useState(true);
   const [model, setModel] = useState('claude-sonnet-4-6');
@@ -140,9 +141,9 @@ function NarratorSection() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
-              <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
-              <SelectItem value="claude-haiku-4-5">claude-haiku-4-5</SelectItem>
+              {models.map(m => (
+                <SelectItem key={m.id} value={m.id}>{m.id}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

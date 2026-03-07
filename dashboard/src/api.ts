@@ -5,6 +5,7 @@ import type {
   GenomeInfo,
   GlobalBudget,
   MindData,
+  ModelInfo,
   NarrationEntry,
   NarratorConfig,
   OrchestratorHealth,
@@ -85,6 +86,11 @@ export async function fetchNarration(limit = 50): Promise<NarrationEntry[]> {
 
 export async function fetchGenomes(): Promise<GenomeInfo[]> {
   const res = await fetch('/api/genomes').then(requireOk);
+  return res.json();
+}
+
+export async function fetchModels(): Promise<ModelInfo[]> {
+  const res = await fetch('/api/models').then(requireOk);
   return res.json();
 }
 

@@ -6,15 +6,21 @@ import {
 import fsSync from 'node:fs';
 import path from 'node:path';
 
+import {
+  BOARD_DIR,
+  MAIL_DIR,
+} from '../shared/paths.js';
 import { Event } from '../shared/types.js';
-import { getJaneeAuthorityUrl, getJaneeRunnerKey } from './janee.js';
 import {
   getCurrentSHA,
   getLastGoodSHA,
   resetToSHA,
   setLastGoodSHA,
 } from './git.js';
-import { BOARD_DIR, MAIL_DIR } from '../shared/paths.js';
+import {
+  getJaneeAuthorityUrl,
+  getJaneeRunnerKey,
+} from './janee.js';
 
 const HEALTH_GATE_MS = 10_000;
 const ROLLBACK_TIMEOUT_MS = 60_000;

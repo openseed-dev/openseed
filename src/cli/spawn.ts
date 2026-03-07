@@ -1,9 +1,8 @@
+import {
+  getModelIds,
+  isKnownModel,
+} from '../shared/models.js';
 import { spawnCreature } from '../shared/spawn.js';
-
-const KNOWN_MODELS = [
-  'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5',
-  'gpt-5.2', 'gpt-5.2-codex', 'gpt-5-mini',
-];
 
 interface SpawnOptions {
   name: string;
@@ -13,8 +12,8 @@ interface SpawnOptions {
 }
 
 export async function spawn(opts: SpawnOptions): Promise<void> {
-  if (opts.model && !KNOWN_MODELS.includes(opts.model)) {
-    console.error(`unknown model "${opts.model}". known models: ${KNOWN_MODELS.join(', ')}`);
+  if (opts.model && !isKnownModel(opts.model)) {
+    console.error(`unknown model "${opts.model}". known models: ${getModelIds().join(', ')}`);
     process.exit(1);
   }
 

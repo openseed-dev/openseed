@@ -21,6 +21,10 @@ import {
   sendMessage,
 } from '../shared/mail.js';
 import {
+  getAllModels,
+  isKnownModel,
+} from '../shared/models.js';
+import {
   BUNDLED_GENOMES_DIR,
   CREATURES_DIR,
   GENOMES_DIR,
@@ -39,6 +43,7 @@ import {
 import {
   CostTracker,
   initPricing,
+  lookupPricing,
 } from './costs.js';
 import { EventStore } from './events.js';
 import {
@@ -692,6 +697,22 @@ export class Orchestrator {
         return;
       }
 
+      if (p === '/api/models' && req.method === 'GET') {
+        const models = getAllModels().map(m => {
+          const pricing = lookupPricing(m.id);
+          return {
+            id: m.id,
+            provider: m.provider,
+            isDefault: m.isDefault ?? false,
+            inputCostPerMillion: pricing ? +(pricing.input * 1_000_000).toFixed(2) : null,
+            outputCostPerMillion: pricing ? +(pricing.output * 1_000_000).toFixed(2) : null,
+          };
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(models));
+        return;
+      }
+
       // -- GitHub App routes --
 
       if (p === '/api/github-apps' && req.method === 'GET') {
@@ -902,6 +923,7 @@ export class Orchestrator {
           const model = (body.model || '').trim() || undefined;
           if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error('invalid name (lowercase alphanumeric + hyphens)');
           if (genome !== "dreamer" && !/^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*$/.test(genome)) throw new Error(`invalid genome name`);
+          if (model && !isKnownModel(model)) throw new Error(`unsupported model "${model}"`);
           const dir = path.join(CREATURES_DIR, name);
           try { await fs.access(dir); throw new Error(`creature "${name}" already exists`); } catch (e) { if (e instanceof Error && e.message.includes('already exists')) throw e; }
 

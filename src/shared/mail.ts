@@ -8,9 +8,9 @@
  * Each message file contains a MailMessage JSON object.
  */
 
-import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 /** Validates a creature name. Rejects path traversal and weird chars. */
 const VALID_NAME = /^[a-z0-9][a-z0-9-]*$/;

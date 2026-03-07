@@ -1,6 +1,18 @@
 import { create } from 'zustand';
-import type { CreatureInfo, CreatureEvent, BudgetInfo, GlobalBudget, NarratorConfig, NarrationEntry, MindData, GenomeInfo, OrchestratorHealth } from './types';
+
 import * as api from './api';
+import type {
+  BudgetInfo,
+  CreatureEvent,
+  CreatureInfo,
+  GenomeInfo,
+  GlobalBudget,
+  MindData,
+  ModelInfo,
+  NarrationEntry,
+  NarratorConfig,
+  OrchestratorHealth,
+} from './types';
 
 interface ShareData {
   name: string;
@@ -30,6 +42,7 @@ interface AppState {
   totalCost: number;
 
   genomes: GenomeInfo[];
+  models: ModelInfo[];
   lastIntentMap: Record<string, string>;
   creatureEvents: CreatureEvent[];
   narratorConfig: NarratorConfig | null;
@@ -47,6 +60,7 @@ interface AppActions {
   loadGlobalBudget: () => Promise<void>;
   loadNarratorConfig: () => Promise<void>;
   loadGenomes: () => Promise<void>;
+  loadModels: () => Promise<void>;
   loadHealth: () => Promise<void>;
   selectCreature: (name: string | null) => Promise<void>;
   handleSSEEvent: (ev: CreatureEvent) => void;
@@ -85,6 +99,7 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
   usageData: {},
   totalCost: 0,
   genomes: [],
+  models: [],
   lastIntentMap: {},
   creatureEvents: [],
   narratorConfig: null,
@@ -175,6 +190,12 @@ export const useStore = create<AppState & AppActions>()((set, get) => ({
   loadGenomes: async () => {
     try {
       set({ genomes: await api.fetchGenomes() });
+    } catch {}
+  },
+
+  loadModels: async () => {
+    try {
+      set({ models: await api.fetchModels() });
     } catch {}
   },
 

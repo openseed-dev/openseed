@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { useStore } from '@/state';
+
+import {
+  PanelLeft,
+  Settings,
+} from 'lucide-react';
+
 import * as api from '@/api';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Settings, PanelLeft } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { useStore } from '@/state';
 
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -20,8 +25,14 @@ function StatusDot({ status }: { status: string }) {
   return <span className={`w-2 h-2 rounded-full shrink-0 ${colors[status] || 'bg-text-muted'}`} />;
 }
 
+function formatCost(input: number | null, output: number | null): string {
+  if (input == null || output == null) return '';
+  return ` ($${input}/$${output})`;
+}
+
 function SpawnForm({ onClose }: { onClose: () => void }) {
   const genomes = useStore(s => s.genomes);
+  const models = useStore(s => s.models);
   const refresh = useStore(s => s.refresh);
   const selectCreature = useStore(s => s.selectCreature);
   const [name, setName] = useState('');
@@ -73,13 +84,18 @@ function SpawnForm({ onClose }: { onClose: () => void }) {
         className="bg-white border border-input text-text-primary px-2 py-1.5 rounded text-xs font-sans focus:outline-none focus:border-ring"
         value={model} onChange={(e) => setModel(e.target.value)}
       >
-        <option value="">model (default: opus)</option>
-        <option value="claude-opus-4-6">claude-opus-4-6 ($5/$25)</option>
-        <option value="claude-sonnet-4-6">claude-sonnet-4-6 ($3/$15)</option>
-        <option value="claude-haiku-4-5">claude-haiku-4-5 ($1/$5)</option>
-        <option value="gpt-5.2">gpt-5.2 ($1.75/$14)</option>
-        <option value="gpt-5.2-codex">gpt-5.2-codex ($1.75/$14)</option>
-        <option value="gpt-5-mini">gpt-5-mini ($0.25/$2)</option>
+        {models.length > 0 ? (
+          <>
+            <option value="">model (default: {models.find(m => m.isDefault)?.id ?? 'opus'})</option>
+            {models.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.id}{formatCost(m.inputCostPerMillion, m.outputCostPerMillion)}
+              </option>
+            ))}
+          </>
+        ) : (
+          <option value="">model (loading...)</option>
+        )}
       </select>
       <textarea
         className="bg-white border border-input text-text-primary px-2 py-1.5 rounded text-xs font-sans resize-y min-h-12 focus:outline-none focus:border-ring"

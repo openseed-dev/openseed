@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { Overview } from '@/components/Overview';
+import {
+  useEffect,
+  useRef,
+} from 'react';
+
 import { CreatureDetail } from '@/components/CreatureDetail';
-import { ShareModal } from '@/components/ShareModal';
+import { Overview } from '@/components/Overview';
 import { SettingsModal } from '@/components/SettingsModal';
+import { ShareModal } from '@/components/ShareModal';
+import { Sidebar } from '@/components/Sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useStore } from '@/state';
 
@@ -31,7 +35,7 @@ export function App() {
   const tab = useStore(s => s.selectedTab);
   const evLen = useStore(s => s.creatureEvents.length);
   const degraded = useStore(s => s.health.status !== 'healthy');
-  const { refresh, loadNarration, loadRecentEvents, loadGenomes, loadGlobalBudget, loadHealth, handleSSEEvent } = useStore();
+  const { refresh, loadNarration, loadRecentEvents, loadGenomes, loadModels, loadGlobalBudget, loadHealth, handleSSEEvent } = useStore();
 
   const showSidebar = sel !== null || sbOpen;
 
@@ -40,6 +44,7 @@ export function App() {
       .then(() => Promise.all([loadRecentEvents(), loadNarration()]))
       .then(() => {});
     loadGenomes();
+    loadModels();
     loadGlobalBudget();
     loadHealth();
     const interval = setInterval(refresh, 30000);
