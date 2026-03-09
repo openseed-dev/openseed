@@ -1,8 +1,8 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from "node:fs/promises";
+import path from "node:path";
 
-import { Event } from '../shared/types.js';
-import { stripImageData } from '../shared/image-utils.js';
+import { Event } from "../shared/types.js";
+import { stripImageData } from "../shared/image-utils.js";
 
 export class EventStore {
   private eventsFile: string;
@@ -43,9 +43,45 @@ export class EventStore {
       .map((line) => JSON.parse(line));
   }
 
+  /**
+   * Read the last N events from the log without loading the entire file.
+   *
+   * Reads 64KB chunks backwards from the end of the file, collecting
+   * complete JSON lines until we have enough. For small files this is
+   * equivalent to readAll().slice(-n); for large files it avoids loading
+   * potentially hundreds of MB into memory.
+   */
   async readRecent(n: number): Promise<Event[]> {
-    const all = await this.readAll();
-    return all.slice(-n);
+    const fd = await fs.open(this.eventsFile, "r");
+    try {
+      const { size } = await fd.stat();
+      if (size === 0) return [];
+
+      // Read from the tail, collecting raw buffers until we have enough
+      // newlines. We decode only after concatenation so multibyte UTF-8
+      // sequences split across chunk boundaries are handled correctly.
+      const CHUNK = 64 * 1024; // 64KB
+      let offset = size;
+      const bufs: Buffer[] = [];
+      let newlineCount = 0;
+
+      while (offset > 0 && newlineCount <= n) {
+        const chunkSize = Math.min(CHUNK, offset);
+        offset -= chunkSize;
+        const buf = Buffer.alloc(chunkSize);
+        await fd.read(buf, 0, chunkSize, offset);
+        bufs.unshift(buf);
+        for (let i = 0; i < buf.length; i++) {
+          if (buf[i] === 0x0a) newlineCount++;
+        }
+      }
+
+      const text = Buffer.concat(bufs).toString("utf-8");
+      const lines = text.split("\n").filter((l) => l.trim());
+      return lines.slice(-n).map((l) => JSON.parse(l));
+    } finally {
+      await fd.close();
+    }
   }
 
   subscribe(fn: (event: Event) => void) {
