@@ -28,10 +28,21 @@ const OPENSEED_HOME = process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || 
 const ROLLBACK_DIR = path.join(OPENSEED_HOME, 'rollbacks');
 const MAX_LOG_LINES = 50;
 const MAX_CONSECUTIVE_FAILURES = 5;
+
 const MAX_FAILURE_BACKOFF_MS = 30_000;
 
 const IS_DOCKER = process.env.OPENSEED_DOCKER === '1' || process.env.ITSALIVE_DOCKER === '1';
 const HOST_PATH = process.env.OPENSEED_HOST_PATH || process.env.ITSALIVE_HOST_PATH || OPENSEED_HOME;
+
+/** Rewrite an internal container path to the host path for Docker bind mounts. */
+function toHostPath(p: string): string {
+  if (!IS_DOCKER) return p;
+  const result = p.replace(OPENSEED_HOME, HOST_PATH);
+  if (result === p) {
+    console.warn(`[supervisor] WARNING: path substitution did not change "${p}" — bind mount may fail`);
+  }
+  return result;
+}
 
 export type CreatureStatus = 'stopped' | 'starting' | 'running' | 'sleeping' | 'error';
 
@@ -257,24 +268,14 @@ export class CreatureSupervisor {
 
     // When the orchestrator runs in Docker, creature bind mounts must use the
     // real host path (docker socket operates on the host, not inside our container).
-    const hostDir = IS_DOCKER
-      ? dir.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
-      : dir;
-
-    const hostBoardDir = IS_DOCKER
-      ? BOARD_DIR.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
-      : BOARD_DIR;
-    if (IS_DOCKER && hostBoardDir === BOARD_DIR) {
-      console.warn(`[${name}] WARNING: board dir path substitution did not change the path — bind mount may fail`);
-    }
+    const hostDir = toHostPath(dir);
+    const hostBoardDir = toHostPath(BOARD_DIR);
 
     const mailbox = path.join(MAIL_DIR, name);
     fsSync.mkdirSync(path.join(mailbox, 'inbox'), { recursive: true });
     fsSync.mkdirSync(path.join(mailbox, 'sent'), { recursive: true });
     fsSync.mkdirSync(path.join(mailbox, 'archived'), { recursive: true });
-    const hostMailbox = IS_DOCKER
-      ? mailbox.replace(process.env.OPENSEED_HOME || process.env.ITSALIVE_HOME || '/data', HOST_PATH)
-      : mailbox;
+    const hostMailbox = toHostPath(mailbox);
 
     const orchestratorUrl = IS_DOCKER
       ? `http://openseed:${orchestratorPort}`
