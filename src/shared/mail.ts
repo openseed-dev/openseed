@@ -85,6 +85,7 @@ export function sendMessage(
 ): MailMessage {
   validateCreatureName(from);
   validateCreatureName(to);
+  if (from === to) throw new Error('a creature cannot send mail to itself');
 
   const d = getDb();
   const id = crypto.randomUUID();
