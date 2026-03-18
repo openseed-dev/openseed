@@ -212,10 +212,13 @@ export async function fetchBoardPosts(opts?: { limit?: number; before?: string; 
   if (opts?.author) params.set('author', opts.author);
   const qs = params.toString();
   const res = await fetch(`/api/board${qs ? `?${qs}` : ''}`).then(requireOk);
-  return res.json();
+  const data = await res.json();
+  return data.posts;
 }
 
 export async function fetchBoardPost(id: string): Promise<import('./types').BoardPost> {
   const res = await fetch(`/api/board/${id}`).then(requireOk);
-  return res.json();
+  const data = await res.json();
+  // Thread envelope: { post, replies, reply_count }
+  return { ...data.post, replies: data.replies };
 }

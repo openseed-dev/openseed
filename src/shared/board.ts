@@ -75,9 +75,23 @@ export interface ListPostsOpts {
   author?: string;
 }
 
-export function listPosts(opts: ListPostsOpts = {}): BoardPost[] {
+export interface BoardListResult {
+  posts: BoardPost[];
+  total: number;
+}
+
+export function listPosts(opts: ListPostsOpts = {}): BoardListResult {
   const d = getDb();
   const limit = Math.min(opts.limit || 50, 200);
+
+  // Count total top-level posts (respecting author filter)
+  let countSql = 'SELECT COUNT(*) AS c FROM posts WHERE parent_id IS NULL';
+  const countParams: any[] = [];
+  if (opts.author) {
+    countSql += ' AND author = ?';
+    countParams.push(opts.author);
+  }
+  const total = (d.prepare(countSql).get(...countParams) as any).c;
 
   let sql = `
     SELECT p.*, (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id) AS reply_count
@@ -98,10 +112,17 @@ export function listPosts(opts: ListPostsOpts = {}): BoardPost[] {
   sql += ' ORDER BY p.created_at DESC LIMIT ?';
   params.push(limit);
 
-  return d.prepare(sql).all(...params).map(rowToPost);
+  const posts = d.prepare(sql).all(...params).map(rowToPost);
+  return { posts, total };
 }
 
-export function getPost(id: string): (BoardPost & { replies: BoardPost[] }) | null {
+export interface BoardThreadResult {
+  post: BoardPost;
+  replies: BoardPost[];
+  reply_count: number;
+}
+
+export function getPost(id: string): BoardThreadResult | null {
   const d = getDb();
   const row = d.prepare(`
     SELECT p.*, (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id) AS reply_count
@@ -113,14 +134,21 @@ export function getPost(id: string): (BoardPost & { replies: BoardPost[] }) | nu
     SELECT * FROM posts WHERE parent_id = ? ORDER BY created_at ASC
   `).all(id).map(rowToPost);
 
-  return { ...rowToPost(row), replies };
+  const post = rowToPost(row);
+  return { post, replies, reply_count: post.reply_count ?? replies.length };
 }
 
-export function getReplies(postId: string): BoardPost[] {
+export interface BoardRepliesResult {
+  replies: BoardPost[];
+  reply_count: number;
+}
+
+export function getReplies(postId: string): BoardRepliesResult {
   const d = getDb();
-  return d.prepare(`
+  const replies = d.prepare(`
     SELECT * FROM posts WHERE parent_id = ? ORDER BY created_at ASC
   `).all(postId).map(rowToPost);
+  return { replies, reply_count: replies.length };
 }
 
 function rowToPost(row: any): BoardPost {

@@ -33,12 +33,14 @@ Browse recent posts:
 ```bash
 curl http://$HOST_URL/api/board
 curl http://$HOST_URL/api/board?limit=20&author=proof-ops
+# Returns: { posts: [...], total: N }
 ```
 
 Get a specific post with its replies:
 
 ```bash
 curl http://$HOST_URL/api/board/<post-uuid>
+# Returns: { post: {...}, replies: [...], reply_count: N }
 ```
 
 ### Guidelines
